@@ -118,6 +118,72 @@ export const ProductProvenanceResponseSchema = z.object({
   offset: z.number().int().nonnegative(),
 }).strict();
 
+export const IdentityProductSummarySchema = z.object({
+  id: z.string().uuid(),
+  canonical_key: z.string().min(1),
+  title: z.string().min(1),
+  status: z.string().min(1),
+}).strict();
+
+export const IdentitySignalSchema = z.object({
+  kind: z.string().min(1).max(80),
+  value: z.string().max(500).nullable(),
+  weight_basis_points: z.number().int().min(0).max(10000),
+}).strict();
+
+export const ProductIdentityCandidateSchema = z.object({
+  id: z.string().uuid(),
+  left_product: IdentityProductSummarySchema,
+  right_product: IdentityProductSummarySchema,
+  match_type: z.enum(["deterministic", "fuzzy"]),
+  score_basis_points: z.number().int().min(0).max(10000),
+  signals: z.array(IdentitySignalSchema),
+  algorithm_version: z.string().min(1),
+  status: z.enum(["pending", "accepted", "rejected", "superseded"]),
+  resolved_by_user_id: z.string().uuid().nullable(),
+  resolved_at: z.string().datetime().nullable(),
+  resolution_reason: z.string().nullable(),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+}).strict();
+
+export const ProductIdentityCandidateListResponseSchema = z.object({
+  items: z.array(ProductIdentityCandidateSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().min(1).max(200),
+  offset: z.number().int().nonnegative(),
+}).strict();
+
+export const IdentityCandidateRefreshResponseSchema = z.object({
+  products_considered: z.number().int().nonnegative(),
+  candidates_created: z.number().int().nonnegative(),
+  candidates_updated: z.number().int().nonnegative(),
+  candidates_superseded: z.number().int().nonnegative(),
+  truncated: z.boolean(),
+  algorithm_version: z.string().min(1),
+}).strict();
+
+export const ProductIdentityMemberSchema = z.object({
+  product: IdentityProductSummarySchema,
+  linked_by_user_id: z.string().uuid().nullable(),
+  link_reason: z.string().min(1),
+  linked_at: z.string().datetime(),
+}).strict();
+
+export const ProductIdentitySchema = z.object({
+  identity_id: z.string().uuid(),
+  status: z.enum(["active", "dissolved"]),
+  members: z.array(ProductIdentityMemberSchema),
+  created_at: z.string().datetime(),
+  updated_at: z.string().datetime(),
+}).strict();
+
+export const UnlinkProductResponseSchema = z.object({
+  identity_id: z.string().uuid(),
+  product_id: z.string().uuid(),
+  dissolved: z.boolean(),
+}).strict();
+
 export type ProductAttribute = z.infer<typeof ProductAttributeSchema>;
 export type ProductImage = z.infer<typeof ProductImageSchema>;
 export type ProductVariant = z.infer<typeof ProductVariantSchema>;
@@ -128,3 +194,14 @@ export type EvidenceReference = z.infer<typeof EvidenceReferenceSchema>;
 export type ProductProvenanceResponse = z.infer<
   typeof ProductProvenanceResponseSchema
 >;
+export type IdentityProductSummary = z.infer<typeof IdentityProductSummarySchema>;
+export type IdentitySignal = z.infer<typeof IdentitySignalSchema>;
+export type ProductIdentityCandidate = z.infer<typeof ProductIdentityCandidateSchema>;
+export type ProductIdentityCandidateListResponse = z.infer<
+  typeof ProductIdentityCandidateListResponseSchema
+>;
+export type IdentityCandidateRefreshResponse = z.infer<
+  typeof IdentityCandidateRefreshResponseSchema
+>;
+export type ProductIdentity = z.infer<typeof ProductIdentitySchema>;
+export type UnlinkProductResponse = z.infer<typeof UnlinkProductResponseSchema>;
