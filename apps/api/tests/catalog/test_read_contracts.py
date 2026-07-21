@@ -134,7 +134,6 @@ def test_product_detail_groups_current_values_and_preserves_states() -> None:
 
 def test_warning_signal_covers_confidence_and_value_state() -> None:
     base = {
-        "id": uuid.uuid4(),
         "workspace_id": uuid.uuid4(),
         "product_id": uuid.uuid4(),
         "variant_id": None,
@@ -147,6 +146,7 @@ def test_warning_signal_covers_confidence_and_value_state() -> None:
     assert not _is_warning(
         ProductAttribute(
             **base,
+            id=uuid.uuid4(),
             value_state="present",
             confidence="high",
         )
