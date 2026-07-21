@@ -5,7 +5,6 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +21,6 @@ from catora_api.db.models.catalog import (
 )
 from catora_api.normalization.adapters import normalize_source_records
 from catora_api.normalization.types import (
-    NormalizationBatch,
     NormalizedAttribute,
     NormalizedImage,
     NormalizedProduct,
@@ -87,7 +85,8 @@ class CatalogNormalizationService:
         source: CatalogSource,
         job: IngestionJob,
     ) -> NormalizationSummary:
-        if source.workspace_id != job.workspace_id:
+        workspace_id = source.workspace_id
+        if workspace_id != job.workspace_id:
             raise ValueError("Source and job belong to different workspaces")
         if source.id != job.catalog_source_id:
             raise ValueError("Job does not belong to source")
@@ -96,7 +95,7 @@ class CatalogNormalizationService:
             await session.scalars(
                 select(SourceRecord)
                 .where(
-                    SourceRecord.workspace_id == source.workspace_id,
+                    SourceRecord.workspace_id == workspace_id,
                     SourceRecord.catalog_source_id == source.id,
                     SourceRecord.ingestion_job_id == job.id,
                 )
@@ -108,32 +107,30 @@ class CatalogNormalizationService:
         for candidate in batch.products:
             await self._persist_product(
                 session,
-                source=source,
+                workspace_id=workspace_id,
                 candidate=candidate,
                 counters=counters,
             )
         await session.commit()
-        return counters.summary(
-            rejected_records=len(batch.rejected_record_ids)
-        )
+        return counters.summary(rejected_records=len(batch.rejected_record_ids))
 
     async def _persist_product(
         self,
         session: AsyncSession,
         *,
-        source: CatalogSource,
+        workspace_id: uuid.UUID,
         candidate: NormalizedProduct,
         counters: _Counters,
     ) -> None:
         product = await session.scalar(
             select(Product).where(
-                Product.workspace_id == source.workspace_id,
+                Product.workspace_id == workspace_id,
                 Product.canonical_key == candidate.canonical_key,
             )
         )
         if product is None:
             product = Product(
-                workspace_id=source.workspace_id,
+                workspace_id=workspace_id,
                 canonical_key=candidate.canonical_key,
                 title=candidate.title,
                 status="active",
@@ -142,13 +139,20 @@ class CatalogNormalizationService:
             await session.flush()
             counters.products_created += 1
         else:
+            changed = (
+                product.title != candidate.title
+                or product.status != "active"
+                or product.deleted_at is not None
+            )
             product.title = candidate.title
             product.status = "active"
             product.deleted_at = None
-            counters.products_updated += 1
+            if changed:
+                counters.products_updated += 1
 
         await self._ensure_evidence(
             session,
+            workspace_id=workspace_id,
             source_record_id=candidate.source_record_id,
             product_id=product.id,
             field_path=candidate.title_field_path,
@@ -156,7 +160,7 @@ class CatalogNormalizationService:
         )
         product_attribute_ids = await self._sync_attributes(
             session,
-            workspace_id=source.workspace_id,
+            workspace_id=workspace_id,
             product=product,
             variant=None,
             candidates=candidate.attributes,
@@ -164,6 +168,7 @@ class CatalogNormalizationService:
         )
         await self._sync_attribute_evidence(
             session,
+            workspace_id=workspace_id,
             product=product,
             variant=None,
             candidates=candidate.attributes,
@@ -175,7 +180,8 @@ class CatalogNormalizationService:
             for variant in (
                 await session.scalars(
                     select(ProductVariant).where(
-                        ProductVariant.product_id == product.id
+                        ProductVariant.workspace_id == workspace_id,
+                        ProductVariant.product_id == product.id,
                     )
                 )
             ).all()
@@ -188,7 +194,7 @@ class CatalogNormalizationService:
             variant = existing_variants.get(variant_candidate.canonical_key)
             if variant is None:
                 variant = ProductVariant(
-                    workspace_id=source.workspace_id,
+                    workspace_id=workspace_id,
                     product_id=product.id,
                     canonical_key=variant_candidate.canonical_key,
                     sku=variant_candidate.sku,
@@ -199,14 +205,23 @@ class CatalogNormalizationService:
                 await session.flush()
                 counters.variants_created += 1
             else:
+                option_values = dict(variant_candidate.option_values)
+                changed = (
+                    variant.sku != variant_candidate.sku
+                    or variant.title != variant_candidate.title
+                    or variant.option_values != option_values
+                    or variant.deleted_at is not None
+                )
                 variant.sku = variant_candidate.sku
                 variant.title = variant_candidate.title
-                variant.option_values = dict(variant_candidate.option_values)
+                variant.option_values = option_values
                 variant.deleted_at = None
-                counters.variants_updated += 1
+                if changed:
+                    counters.variants_updated += 1
             variant_by_key[variant_candidate.canonical_key] = variant
             await self._ensure_evidence(
                 session,
+                workspace_id=workspace_id,
                 source_record_id=variant_candidate.source_record_id,
                 product_id=product.id,
                 variant_id=variant.id,
@@ -215,7 +230,7 @@ class CatalogNormalizationService:
             )
             variant_attribute_ids = await self._sync_attributes(
                 session,
-                workspace_id=source.workspace_id,
+                workspace_id=workspace_id,
                 product=product,
                 variant=variant,
                 candidates=variant_candidate.attributes,
@@ -223,6 +238,7 @@ class CatalogNormalizationService:
             )
             await self._sync_attribute_evidence(
                 session,
+                workspace_id=workspace_id,
                 product=product,
                 variant=variant,
                 candidates=variant_candidate.attributes,
@@ -233,10 +249,11 @@ class CatalogNormalizationService:
         for canonical_key, variant in existing_variants.items():
             if canonical_key not in desired_variant_keys and variant.deleted_at is None:
                 variant.deleted_at = retired_at
+                counters.variants_updated += 1
 
         await self._sync_images(
             session,
-            workspace_id=source.workspace_id,
+            workspace_id=workspace_id,
             product=product,
             candidates=candidate.images,
             variants=variant_by_key,
@@ -254,7 +271,8 @@ class CatalogNormalizationService:
         counters: _Counters,
     ) -> dict[str, uuid.UUID]:
         query = select(ProductAttribute).where(
-            ProductAttribute.product_id == product.id
+            ProductAttribute.workspace_id == workspace_id,
+            ProductAttribute.product_id == product.id,
         )
         if variant is None:
             query = query.where(ProductAttribute.variant_id.is_(None))
@@ -286,6 +304,15 @@ class CatalogNormalizationService:
                 await session.flush()
                 counters.attributes_created += 1
             else:
+                changed = (
+                    attribute.value != candidate.value
+                    or attribute.value_type != candidate.value_type
+                    or attribute.unit != candidate.unit
+                    or attribute.locale != candidate.locale
+                    or attribute.value_state != "present"
+                    or attribute.transformer_version != TRANSFORMER_VERSION
+                    or attribute.confidence != candidate.confidence
+                )
                 attribute.value = candidate.value
                 attribute.value_type = candidate.value_type
                 attribute.unit = candidate.unit
@@ -293,7 +320,8 @@ class CatalogNormalizationService:
                 attribute.value_state = "present"
                 attribute.transformer_version = TRANSFORMER_VERSION
                 attribute.confidence = candidate.confidence
-                counters.attributes_updated += 1
+                if changed:
+                    counters.attributes_updated += 1
             attribute_ids[candidate.key] = attribute.id
 
         for key, attribute in existing.items():
@@ -312,6 +340,7 @@ class CatalogNormalizationService:
         self,
         session: AsyncSession,
         *,
+        workspace_id: uuid.UUID,
         product: Product,
         variant: ProductVariant | None,
         candidates: tuple[NormalizedAttribute, ...],
@@ -320,6 +349,7 @@ class CatalogNormalizationService:
         for candidate in candidates:
             await self._ensure_evidence(
                 session,
+                workspace_id=workspace_id,
                 source_record_id=candidate.source_record_id,
                 product_id=product.id,
                 variant_id=variant.id if variant else None,
@@ -343,17 +373,18 @@ class CatalogNormalizationService:
             for image in (
                 await session.scalars(
                     select(ProductImage).where(
-                        ProductImage.product_id == product.id
+                        ProductImage.workspace_id == workspace_id,
+                        ProductImage.product_id == product.id,
                     )
                 )
             ).all()
         }
         for candidate in candidates:
-            variant = (
-                variants.get(candidate.variant_key)
-                if candidate.variant_key
-                else None
-            )
+            variant = None
+            if candidate.variant_key:
+                variant = variants.get(candidate.variant_key)
+                if variant is None:
+                    raise ValueError("Image references an unknown normalized variant")
             key = (candidate.url, variant.id if variant else None)
             image = existing.get(key)
             if image is None:
@@ -375,6 +406,7 @@ class CatalogNormalizationService:
                 image.position = candidate.position
             await self._ensure_evidence(
                 session,
+                workspace_id=workspace_id,
                 source_record_id=candidate.source_record_id,
                 product_id=product.id,
                 variant_id=variant.id if variant else None,
@@ -386,6 +418,7 @@ class CatalogNormalizationService:
         self,
         session: AsyncSession,
         *,
+        workspace_id: uuid.UUID,
         source_record_id: uuid.UUID,
         product_id: uuid.UUID,
         field_path: str,
@@ -393,7 +426,8 @@ class CatalogNormalizationService:
         variant_id: uuid.UUID | None = None,
         attribute_id: uuid.UUID | None = None,
     ) -> None:
-        query = select(EvidenceReference.id).where(
+        query = select(EvidenceReference).where(
+            EvidenceReference.workspace_id == workspace_id,
             EvidenceReference.source_record_id == source_record_id,
             EvidenceReference.product_id == product_id,
             EvidenceReference.field_path == field_path,
@@ -406,10 +440,10 @@ class CatalogNormalizationService:
             query = query.where(EvidenceReference.attribute_id.is_(None))
         else:
             query = query.where(EvidenceReference.attribute_id == attribute_id)
-        if await session.scalar(query) is not None:
-            return
+
         checksum_payload = json.dumps(
             {
+                "workspace_id": str(workspace_id),
                 "source_record_id": str(source_record_id),
                 "product_id": str(product_id),
                 "variant_id": str(variant_id) if variant_id else None,
@@ -420,17 +454,21 @@ class CatalogNormalizationService:
             sort_keys=True,
             separators=(",", ":"),
         )
-        session.add(
-            EvidenceReference(
-                workspace_id=cast(uuid.UUID, product_id and source_record_id),
-                source_record_id=source_record_id,
-                product_id=product_id,
-                variant_id=variant_id,
-                attribute_id=attribute_id,
-                field_path=field_path,
-                excerpt=excerpt,
-                checksum=hashlib.sha256(
-                    checksum_payload.encode("utf-8")
-                ).hexdigest(),
+        checksum = hashlib.sha256(checksum_payload.encode("utf-8")).hexdigest()
+        evidence = await session.scalar(query)
+        if evidence is None:
+            session.add(
+                EvidenceReference(
+                    workspace_id=workspace_id,
+                    source_record_id=source_record_id,
+                    product_id=product_id,
+                    variant_id=variant_id,
+                    attribute_id=attribute_id,
+                    field_path=field_path,
+                    excerpt=excerpt,
+                    checksum=checksum,
+                )
             )
-        )
+            return
+        evidence.excerpt = excerpt
+        evidence.checksum = checksum
