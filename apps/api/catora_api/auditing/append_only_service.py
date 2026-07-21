@@ -8,10 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.auditing.lifecycle import next_finding_status
-from catora_api.auditing.service import _database_value
+from catora_api.auditing.service import AuditConfigurationError, _database_value
 from catora_api.auditing.stateful_service import StatefulAuditRunService
 from catora_api.auditing.types import FindingCandidate
-from catora_api.db.models.audit import AuditFinding, AuditRun
+from catora_api.db.models.audit import AuditFinding, AuditRun, RuleVersion
 
 
 class AppendOnlyAuditRunService(StatefulAuditRunService):
@@ -24,6 +24,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
     ) -> tuple[list[str], int]:
         previous_findings = await _run_findings(session, run)
         latest_history = await _latest_history(session, run=run, findings=findings)
+        category_keys = await _category_keys(session, findings)
         now = datetime.now(UTC)
         statuses: list[str] = []
         resolved_count = 0
@@ -52,6 +53,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
             session.add(
                 _finding_from_candidate(
                     candidate,
+                    category_key=category_keys[candidate.rule_version_id],
                     run=run,
                     historical=historical,
                     status=status,
@@ -71,6 +73,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
     ) -> tuple[list[str], int]:
         previous_findings = await _run_findings(session, run)
         latest_history = await _latest_history(session, run=run, findings=findings)
+        category_keys = await _category_keys(session, findings)
         now = datetime.now(UTC)
         statuses: list[str] = []
         resolved_count = 0
@@ -111,6 +114,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
             session.add(
                 _finding_from_candidate(
                     candidate,
+                    category_key=category_keys[candidate.rule_version_id],
                     run=run,
                     historical=historical,
                     status=status,
@@ -170,9 +174,45 @@ async def _latest_history(
     return latest
 
 
+async def _category_keys(
+    session: AsyncSession,
+    findings: Mapping[str, FindingCandidate],
+) -> dict[uuid.UUID, str]:
+    rule_version_ids = sorted(
+        {candidate.rule_version_id for candidate in findings.values()},
+        key=str,
+    )
+    if not rule_version_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(RuleVersion.id, RuleVersion.specification).where(
+                RuleVersion.id.in_(rule_version_ids),
+                RuleVersion.is_immutable.is_(True),
+            )
+        )
+    ).all()
+    category_keys: dict[uuid.UUID, str] = {}
+    for rule_version_id, specification in rows:
+        category_key = specification.get("category_key")
+        if not isinstance(category_key, str) or not category_key:
+            raise AuditConfigurationError(
+                f"Rule version {rule_version_id} has no immutable category key"
+            )
+        category_keys[rule_version_id] = category_key
+    missing = set(rule_version_ids) - set(category_keys)
+    if missing:
+        raise AuditConfigurationError(
+            "Audit finding rule versions are missing category snapshots: "
+            + ", ".join(sorted(str(item) for item in missing))
+        )
+    return category_keys
+
+
 def _finding_from_candidate(
     candidate: FindingCandidate,
     *,
+    category_key: str,
     run: AuditRun,
     historical: AuditFinding | None,
     status: str,
@@ -190,6 +230,7 @@ def _finding_from_candidate(
         explanation=candidate.explanation,
         fingerprint=candidate.fingerprint,
         status=status,
+        category_key=category_key,
         field_key=candidate.field_key,
         affected_value=_database_value(candidate.affected_value),
         business_impact=candidate.business_impact,
@@ -230,6 +271,7 @@ def _copy_finding(
         explanation=finding.explanation,
         fingerprint=finding.fingerprint,
         status=status,
+        category_key=finding.category_key,
         field_key=finding.field_key,
         affected_value=finding.affected_value,
         business_impact=finding.business_impact,
