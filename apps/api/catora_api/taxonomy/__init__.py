@@ -1,7 +1,7 @@
 from catora_api.taxonomy.compiler import (
     TaxonomyCompilePlan,
-    TaxonomyCompileSummary,
     TaxonomyCompiler,
+    TaxonomyCompileSummary,
     TaxonomyImmutabilityError,
     build_compile_plan,
     taxonomy_fingerprint,
