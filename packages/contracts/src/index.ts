@@ -1,3 +1,5 @@
+export * from "./catalog";
+
 import { z } from "zod";
 
 export const HealthResponseSchema = z.object({
