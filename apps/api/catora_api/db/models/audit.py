@@ -8,11 +8,13 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -55,6 +57,12 @@ class AuditRun(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
             "progress_current >= 0 AND progress_total >= 0 "
             "AND progress_current <= progress_total",
             name="valid_progress",
+        ),
+        Index(
+            "uq_audit_runs_active_workspace",
+            "workspace_id",
+            unique=True,
+            postgresql_where=text("status IN ('queued','running')"),
         ),
     )
     requested_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
