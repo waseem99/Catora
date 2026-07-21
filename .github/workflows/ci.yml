@@ -21,7 +21,21 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
-      - run: npm run lint
+      - name: Run web lint
+        shell: bash
+        run: |
+          set +e
+          npm run lint > web-lint-report.txt 2>&1
+          status=$?
+          cat web-lint-report.txt
+          exit "$status"
+      - name: Upload web lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-lint-report
+          path: web-lint-report.txt
+          retention-days: 3
       - run: npm run typecheck
       - run: npm run test
       - run: npm run build
@@ -105,7 +119,21 @@ jobs:
           python-version: '3.13'
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
-      - run: python -m pytest apps/api/tests
+      - name: Run API tests
+        shell: bash
+        run: |
+          set +e
+          python -m pytest apps/api/tests > pytest-report.txt 2>&1
+          status=$?
+          cat pytest-report.txt
+          exit "$status"
+      - name: Upload pytest report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-report
+          path: pytest-report.txt
+          retention-days: 3
       - run: cd apps/api && alembic upgrade head && alembic downgrade -1
 
   security:
