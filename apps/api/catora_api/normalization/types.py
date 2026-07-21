@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Literal
 
 type JsonScalar = str | int | float | bool | None
-type JsonValue = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
+type JsonValue = JsonScalar | Sequence[JsonScalar] | Mapping[str, JsonScalar]
 type Confidence = Literal["high", "medium", "low"]
 
 
@@ -39,7 +40,7 @@ class NormalizedVariant:
     source_record_id: uuid.UUID
     sku: str | None = None
     title: str | None = None
-    option_values: dict[str, JsonScalar] = field(default_factory=dict)
+    option_values: Mapping[str, JsonScalar] = field(default_factory=dict)
     attributes: tuple[NormalizedAttribute, ...] = ()
 
 
