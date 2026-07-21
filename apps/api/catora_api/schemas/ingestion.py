@@ -69,7 +69,7 @@ class ShopifySourceCreateRequest(IngestionModel):
     shop_domain: str = Field(min_length=5, max_length=255)
     credential_ref: str = Field(
         pattern=r"^env:CATORA_CONNECTOR_SECRET_[A-Z0-9_]+$",
-        min_length=35,
+        min_length=29,
         max_length=255,
     )
     api_version: str = Field(default="2026-07", pattern=r"^\d{4}-(01|04|07|10)$")
