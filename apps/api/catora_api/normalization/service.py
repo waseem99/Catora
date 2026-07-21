@@ -24,7 +24,6 @@ from catora_api.normalization.types import (
     NormalizedAttribute,
     NormalizedImage,
     NormalizedProduct,
-    NormalizedVariant,
 )
 
 TRANSFORMER_VERSION = "catalog-normalizer-v1"
