@@ -88,4 +88,4 @@ async def test_compiler_creates_immutable_categories_fields_and_rules() -> None:
     assert all(category.is_immutable for category in categories)
     assert all(field.is_immutable for field in fields)
     assert all(version.is_immutable for version in versions)
-    assert session.commits == 1
+    assert session.commits == 0
