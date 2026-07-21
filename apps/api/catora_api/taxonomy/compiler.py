@@ -247,22 +247,26 @@ class TaxonomyCompiler:
         categories: Sequence[Category],
     ) -> None:
         expected_categories = {item.key: item for item in plan.categories}
-        existing_by_key = {item.key: item for item in categories}
-        if set(existing_by_key) != set(expected_categories):
+        existing_categories = {item.key: item for item in categories}
+        if set(existing_categories) != set(expected_categories):
             raise TaxonomyImmutabilityError(
                 f"taxonomy {plan.version} already exists with a different category set"
             )
-        key_by_id = {item.id: item.key for item in categories}
-        for key, category in existing_by_key.items():
-            expected = expected_categories[key]
-            parent_key = key_by_id.get(category.parent_id) if category.parent_id else None
+        category_key_by_id = {item.id: item.key for item in categories}
+        for category_key, category_record in existing_categories.items():
+            expected_category = expected_categories[category_key]
+            parent_key = (
+                category_key_by_id.get(category_record.parent_id)
+                if category_record.parent_id
+                else None
+            )
             if (
-                category.label != expected.label
-                or parent_key != expected.parent_key
-                or not category.is_immutable
+                category_record.label != expected_category.label
+                or parent_key != expected_category.parent_key
+                or not category_record.is_immutable
             ):
                 raise TaxonomyImmutabilityError(
-                    f"taxonomy category {key!r}@{plan.version} has immutable drift"
+                    f"taxonomy category {category_key!r}@{plan.version} has immutable drift"
                 )
 
         category_ids = [item.id for item in categories]
@@ -275,7 +279,6 @@ class TaxonomyCompiler:
                 )
             )
         ).all()
-        category_key_by_id = {item.id: item.key for item in categories}
         existing_fields = {
             (category_key_by_id[field.category_id], field.key): field for field in fields
         }
@@ -288,17 +291,17 @@ class TaxonomyCompiler:
             raise TaxonomyImmutabilityError(
                 f"taxonomy {plan.version} already exists with a different field set"
             )
-        for key, field in existing_fields.items():
-            expected = expected_fields[key]
+        for field_identity, field_record in existing_fields.items():
+            expected_field = expected_fields[field_identity]
             if (
-                field.label != expected.field_label
-                or field.data_type != expected.data_type
-                or not field.is_immutable
-                or _canonical_json(field.specification)
-                != _canonical_json(expected.specification)
+                field_record.label != expected_field.field_label
+                or field_record.data_type != expected_field.data_type
+                or not field_record.is_immutable
+                or _canonical_json(field_record.specification)
+                != _canonical_json(expected_field.specification)
             ):
                 raise TaxonomyImmutabilityError(
-                    f"taxonomy field {key!r}@{plan.version} has immutable drift"
+                    f"taxonomy field {field_identity!r}@{plan.version} has immutable drift"
                 )
         await self._verify_existing_rules(
             session,
