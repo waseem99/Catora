@@ -34,6 +34,7 @@ from catora_api.db.models.reporting import (
     ProductCohort,
     ReportJob,
 )
+from catora_api.db.models.taxonomy import ProductCategoryTag
 from catora_api.db.models.workflow import (
     ChangeSet,
     ChangeSetItem,
@@ -71,6 +72,7 @@ __all__ = [
     "PasswordResetToken",
     "Product",
     "ProductAttribute",
+    "ProductCategoryTag",
     "ProductCohort",
     "ProductIdentityCandidate",
     "ProductIdentityMembership",
