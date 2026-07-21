@@ -81,3 +81,9 @@ class ProductIdentityView(BaseModel):
     members: list[ProductIdentityMemberView]
     created_at: datetime
     updated_at: datetime
+
+
+class UnlinkProductResponse(BaseModel):
+    identity_id: uuid.UUID
+    product_id: uuid.UUID
+    dissolved: bool
