@@ -60,7 +60,11 @@ class IngestionService:
         job.started_at = job.started_at or self.now()
         await session.commit()
 
-        validation = await connector.validate()
+        try:
+            validation = await connector.validate()
+        except Exception as exc:
+            await self._record_failure(session, job, exc)
+            raise
         job.warning_count += len(validation.warnings)
         if not validation.valid:
             job.status = "failed"
@@ -114,22 +118,13 @@ class IngestionService:
                 )
                 await session.commit()
         except Exception as exc:
-            job_id = job.id
-            checkpoint_snapshot = dict(job.checkpoint)
-            await session.rollback()
-            persisted_job = await session.get(IngestionJob, job_id)
-            if persisted_job is None:
-                raise RuntimeError("Ingestion job disappeared while recording failure") from exc
-            persisted_job.status = "failed"
-            persisted_job.completed_at = self.now()
-            persisted_job.checkpoint = self._merge_checkpoint(
-                checkpoint_snapshot,
-                error_type=type(exc).__name__,
-                error_message=str(exc)[:500],
+            await self._record_failure(
+                session,
+                job,
+                exc,
                 duplicate_count=duplicate_count,
                 rejection_samples=rejection_samples,
             )
-            await session.commit()
             raise
 
         job.status = "partially_completed" if job.rejection_count else "completed"
@@ -143,6 +138,34 @@ class IngestionService:
         source.status = "active" if job.status in {"completed", "partially_completed"} else source.status
         await session.commit()
         return self._summary(job, duplicate_count=duplicate_count)
+
+    async def _record_failure(
+        self,
+        session: AsyncSession,
+        job: IngestionJob,
+        exc: Exception,
+        *,
+        duplicate_count: int | None = None,
+        rejection_samples: list[dict[str, Any]] | None = None,
+    ) -> None:
+        job_id = job.id
+        checkpoint_snapshot = dict(job.checkpoint)
+        await session.rollback()
+        persisted_job = await session.get(IngestionJob, job_id)
+        if persisted_job is None:
+            raise RuntimeError("Ingestion job disappeared while recording failure") from exc
+        updates: dict[str, object] = {
+            "error_type": type(exc).__name__,
+            "error_message": str(exc)[:500],
+        }
+        if duplicate_count is not None:
+            updates["duplicate_count"] = duplicate_count
+        if rejection_samples is not None:
+            updates["rejection_samples"] = rejection_samples
+        persisted_job.status = "failed"
+        persisted_job.completed_at = self.now()
+        persisted_job.checkpoint = self._merge_checkpoint(checkpoint_snapshot, **updates)
+        await session.commit()
 
     async def _persist_page(
         self,
