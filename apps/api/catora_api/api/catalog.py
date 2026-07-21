@@ -7,6 +7,7 @@ from typing import Annotated, cast
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.selectable import Exists
 
 from catora_api.auth.dependencies import (
     AuthContextDependency,
@@ -67,8 +68,9 @@ async def list_products(
     if product_status is not None:
         product_filter = product_filter.where(Product.status == product_status)
         count_filter = count_filter.where(Product.status == product_status)
-    if query:
-        pattern = f"%{_escape_like(query.strip())}%"
+    search_text = query.strip() if query else ""
+    if search_text:
+        pattern = f"%{_escape_like(search_text)}%"
         variant_match = exists(
             select(1).where(
                 ProductVariant.workspace_id == workspace_id,
@@ -500,7 +502,7 @@ def _image_view(image: ProductImage) -> ProductImageView:
     return ProductImageView.model_validate(image)
 
 
-def _warning_exists(workspace_id: uuid.UUID) -> exists:
+def _warning_exists(workspace_id: uuid.UUID) -> Exists:
     return exists(
         select(1)
         .select_from(ProductAttribute)
