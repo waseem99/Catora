@@ -252,6 +252,10 @@ def downgrade() -> None:
         "requested_by_user_id",
     ):
         op.drop_column("audit_runs", column_name)
+    op.execute(
+        "UPDATE audit_runs SET source_snapshot_hash = repeat('0', 64) "
+        "WHERE source_snapshot_hash IS NULL"
+    )
     op.alter_column(
         "audit_runs",
         "source_snapshot_hash",
