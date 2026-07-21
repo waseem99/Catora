@@ -6,7 +6,10 @@ from typing import Any
 
 from catora_api.connectors.base import CatalogConnector
 from catora_api.connectors.csv import CsvCatalogConnector, CsvMapping
-from catora_api.connectors.shopify import ShopifyCatalogConnector, ShopifyConnectorConfig
+from catora_api.connectors.shopify import (
+    ShopifyCatalogConnector,
+    ShopifyConnectorConfig,
+)
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.secrets import EnvironmentSecretResolver, SecretResolver
 from catora_api.storage import ObjectStorage
@@ -22,12 +25,14 @@ async def connector_for_source(
     if source.source_type == "csv":
         return await _csv_connector(config, storage)
     if source.source_type == "shopify":
-        return _shopify_connector(source, config, secret_resolver or EnvironmentSecretResolver())
+        resolver = secret_resolver or EnvironmentSecretResolver()
+        return _shopify_connector(source, config, resolver)
     raise ValueError(f"Unsupported source type '{source.source_type}'")
 
 
 async def _csv_connector(
-    config: Mapping[str, Any], storage: ObjectStorage
+    config: Mapping[str, Any],
+    storage: ObjectStorage,
 ) -> CsvCatalogConnector:
     object_key = config.get("object_key")
     mapping = config.get("mapping")
@@ -60,9 +65,13 @@ def _shopify_connector(
     updated_after: datetime | None = None
     if isinstance(updated_after_value, str) and updated_after_value:
         try:
-            updated_after = datetime.fromisoformat(updated_after_value.replace("Z", "+00:00"))
+            updated_after = datetime.fromisoformat(
+                updated_after_value.replace("Z", "+00:00")
+            )
         except ValueError as exc:
-            raise ValueError("Shopify incremental timestamp is invalid") from exc
+            raise ValueError(
+                "Shopify incremental timestamp is invalid"
+            ) from exc
     elif updated_after_value is not None:
         raise ValueError("Shopify incremental timestamp is invalid")
 
