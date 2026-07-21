@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import case, select
+from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 
 from catora_api.auditing.service import (
@@ -25,6 +25,7 @@ from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models import AuditEvent, AuditFinding, AuditRun
 from catora_api.schemas.audits import (
+    AuditFindingListResponse,
     AuditFindingView,
     AuditRunCreateRequest,
     AuditRunView,
@@ -203,7 +204,7 @@ async def cancel_audit_run(
 
 @router.get(
     "/workspaces/{workspace_id}/audit-runs/{run_id}/findings",
-    response_model=list[AuditFindingView],
+    response_model=AuditFindingListResponse,
 )
 async def list_audit_findings(
     workspace_id: uuid.UUID,
@@ -229,7 +230,7 @@ async def list_audit_findings(
     product_id: Annotated[uuid.UUID | None, Query()] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
-) -> list[AuditFindingView]:
+) -> AuditFindingListResponse:
     await auth_service.membership(session, context.user.id, workspace_id)
     run_exists = await session.scalar(
         select(AuditRun.id).where(
@@ -259,6 +260,14 @@ async def list_audit_findings(
     if product_id is not None:
         query = query.where(AuditFinding.product_id == product_id)
 
+    total = int(
+        (
+            await session.scalar(
+                select(func.count()).select_from(query.order_by(None).subquery())
+            )
+        )
+        or 0
+    )
     severity_order = case(
         (AuditFinding.severity == "critical", 0),
         (AuditFinding.severity == "high", 1),
@@ -279,4 +288,9 @@ async def list_audit_findings(
             .limit(limit)
         )
     ).all()
-    return [AuditFindingView.model_validate(finding) for finding in findings]
+    return AuditFindingListResponse(
+        items=[AuditFindingView.model_validate(finding) for finding in findings],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
