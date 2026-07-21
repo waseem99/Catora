@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from catora_api import __version__
 from catora_api.api import (
+    audits_router,
     auth_router,
     catalog_identity_router,
     catalog_router,
@@ -69,6 +70,7 @@ app.include_router(public_catalog_router)
 app.include_router(catalog_router)
 app.include_router(catalog_identity_router)
 app.include_router(taxonomy_router)
+app.include_router(audits_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
