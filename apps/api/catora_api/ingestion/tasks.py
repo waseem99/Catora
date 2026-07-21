@@ -10,6 +10,7 @@ from catora_api.database import SessionFactory
 from catora_api.db.models.catalog import CatalogSource, IngestionJob
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.ingestion.service import IngestionService
+from catora_api.normalization.service import CatalogNormalizationService
 from catora_api.storage import ObjectStorage
 
 
@@ -34,7 +35,10 @@ async def _run_ingestion_job(job_id: uuid.UUID) -> None:
             return
 
         try:
-            connector = await connector_for_source(source, ObjectStorage(get_settings()))
+            connector = await connector_for_source(
+                source,
+                ObjectStorage(get_settings()),
+            )
         except Exception as exc:
             job.status = "failed"
             job.checkpoint = {
@@ -55,3 +59,29 @@ async def _run_ingestion_job(job_id: uuid.UUID) -> None:
             connector=connector,
             should_cancel=should_cancel,
         )
+        if job.status not in {"completed", "partially_completed"}:
+            return
+
+        try:
+            summary = await CatalogNormalizationService().normalize_job(
+                session,
+                source=source,
+                job=job,
+            )
+        except Exception as exc:
+            checkpoint = dict(job.checkpoint)
+            checkpoint.update(
+                {
+                    "normalization_error_type": type(exc).__name__,
+                    "normalization_error_message": str(exc)[:500],
+                }
+            )
+            job.checkpoint = checkpoint
+            job.status = "failed"
+            await session.commit()
+            raise
+
+        checkpoint = dict(job.checkpoint)
+        checkpoint["normalization"] = summary.as_dict()
+        job.checkpoint = checkpoint
+        await session.commit()
