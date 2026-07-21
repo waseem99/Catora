@@ -94,9 +94,13 @@ def test_finding_query_index_matches_supported_filters() -> None:
 def test_finding_endpoint_exposes_complete_filter_contract() -> None:
     path = "/api/v1/workspaces/{workspace_id}/audit-runs/{run_id}/findings"
     operation = app.openapi()["paths"][path]["get"]
-    parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+    query_and_path_parameter_names = {
+        parameter["name"]
+        for parameter in operation["parameters"]
+        if parameter["in"] in {"query", "path"}
+    }
 
-    assert parameter_names == {
+    assert query_and_path_parameter_names == {
         "workspace_id",
         "run_id",
         "status",
