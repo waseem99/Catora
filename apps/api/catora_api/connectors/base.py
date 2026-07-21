@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, AsyncIterator, Mapping
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
