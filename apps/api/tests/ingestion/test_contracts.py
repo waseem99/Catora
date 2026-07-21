@@ -4,12 +4,14 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
+from catora_api.connectors.public_catalog import PublicCatalogConnector
 from catora_api.connectors.shopify import ShopifyCatalogConnector
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.schemas.ingestion import (
     CsvMappingRequest,
     CsvSourceCreateRequest,
+    PublicCatalogSourceCreateRequest,
     ShopifySourceCreateRequest,
 )
 from catora_api.secrets import SecretValue
@@ -100,6 +102,58 @@ def test_shopify_source_contract_rejects_unsafe_values() -> None:
         )
 
 
+def test_public_source_contract_requires_same_host_and_authorization() -> None:
+    request = PublicCatalogSourceCreateRequest(
+        name="Public catalog",
+        source_type="urls",
+        product_urls=[
+            "https://SHOP.example.com/products/one",
+            "https://shop.example.com/products/two",
+        ],
+        authorized_domain_confirmed=True,
+    )
+
+    assert request.product_urls == [
+        "https://shop.example.com/products/one",
+        "https://shop.example.com/products/two",
+    ]
+
+    with pytest.raises(ValidationError):
+        PublicCatalogSourceCreateRequest(
+            name="Unauthorized",
+            source_type="urls",
+            product_urls=["https://shop.example.com/products/one"],
+            authorized_domain_confirmed=False,
+        )
+    with pytest.raises(ValidationError):
+        PublicCatalogSourceCreateRequest(
+            name="Cross host",
+            source_type="urls",
+            product_urls=[
+                "https://shop.example.com/products/one",
+                "https://other.example.com/products/two",
+            ],
+            authorized_domain_confirmed=True,
+        )
+
+
+def test_public_source_contract_requires_correct_shape() -> None:
+    with pytest.raises(ValidationError):
+        PublicCatalogSourceCreateRequest(
+            name="Invalid sitemap",
+            source_type="sitemap",
+            product_urls=["https://shop.example.com/products/one"],
+            authorized_domain_confirmed=True,
+        )
+    with pytest.raises(ValidationError):
+        PublicCatalogSourceCreateRequest(
+            name="Invalid URLs",
+            source_type="urls",
+            start_url="https://shop.example.com/sitemap.xml",
+            authorized_domain_confirmed=True,
+        )
+
+
 @pytest.mark.asyncio
 async def test_factory_builds_csv_connector_from_source_config() -> None:
     source = CatalogSource(
@@ -154,3 +208,34 @@ async def test_factory_builds_shopify_connector_from_secret_reference() -> None:
     ]
     assert "resolved-token" not in repr(connector.config)
     assert "access_token" not in source.config
+
+
+@pytest.mark.asyncio
+async def test_factory_builds_bounded_public_catalog_connector() -> None:
+    source = CatalogSource(
+        id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
+        name="Public catalog",
+        source_type="urls",
+        status="draft",
+        config={
+            "start_url": None,
+            "product_urls": [
+                "https://shop.example.com/products/one"
+            ],
+            "authorized_domain_confirmed": True,
+            "max_products": 25,
+            "max_sitemaps": 5,
+            "crawl_delay_seconds": 1.0,
+        },
+    )
+
+    connector = await connector_for_source(
+        source,
+        FakeStorage(),  # type: ignore[arg-type]
+    )
+
+    assert isinstance(connector, PublicCatalogConnector)
+    assert connector.source_type == "urls"
+    assert connector.config.max_products == 25
+    assert connector.config.authorized_domain_confirmed is True
