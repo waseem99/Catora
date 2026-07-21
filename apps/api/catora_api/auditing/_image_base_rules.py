@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from catora_api.auditing import _image_base_rules as _base
-from catora_api.auditing.image_rules import (
-    evaluate_image_quality_rule,
-    is_image_quality_rule,
+from catora_api.auditing import _relational_rules as _base
+from catora_api.auditing.content_rules import (
+    evaluate_content_quality_rule,
+    is_content_quality_rule,
 )
 from catora_api.auditing.types import ProductAuditSnapshot, RuleEvaluation
 
@@ -18,12 +18,12 @@ def evaluate_product(
     snapshot: ProductAuditSnapshot,
     rules: tuple[TaxonomyFieldRule, ...],
 ) -> tuple[RuleEvaluation, ...]:
-    base_rules = tuple(rule for rule in rules if not is_image_quality_rule(rule))
-    image_rules = tuple(rule for rule in rules if is_image_quality_rule(rule))
-    evaluations = list(_base.evaluate_product(snapshot, base_rules))
+    standard_rules = tuple(rule for rule in rules if not is_content_quality_rule(rule))
+    content_rules = tuple(rule for rule in rules if is_content_quality_rule(rule))
+    evaluations = list(_base.evaluate_product(snapshot, standard_rules))
     evaluations.extend(
-        evaluate_image_quality_rule(snapshot, rule)
-        for rule in image_rules
+        evaluate_content_quality_rule(snapshot, rule)
+        for rule in content_rules
         if rule.category_key == snapshot.category_key
     )
     return tuple(evaluations)
