@@ -25,6 +25,11 @@ def test_csv_source_contract_strips_mapping_columns() -> None:
     assert request.mapping.title == "title"
 
 
+def test_csv_source_contract_rejects_blank_required_column() -> None:
+    with pytest.raises(ValidationError):
+        CsvMappingRequest(product_id="   ", title="title")
+
+
 def test_csv_source_contract_rejects_multi_character_delimiter() -> None:
     with pytest.raises(ValidationError):
         CsvSourceCreateRequest(
