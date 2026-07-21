@@ -3,10 +3,20 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Literal
+from typing import Any, Literal, cast
+
+from catora_api.normalization.types import (
+    Confidence,
+    JsonValue,
+    NormalizationBatch,
+    NormalizedAttribute,
+    NormalizedProduct,
+    NormalizedVariant,
+)
 
 Quantity = Literal["length", "mass"]
 type ScalarValue = str | int | float | bool | None
@@ -63,6 +73,11 @@ _UNIT_ALIASES = {
 _TRUE_VALUES = frozenset({"true", "yes", "y", "1", "on"})
 _FALSE_VALUES = frozenset({"false", "no", "n", "0", "off"})
 _CURRENCY_PATTERN = re.compile(r"^[A-Z]{3}$")
+_CONFIDENCE_ORDER: dict[Confidence, int] = {
+    "high": 3,
+    "medium": 2,
+    "low": 1,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,7 +85,7 @@ class ParsedValue:
     value: NormalizedValue
     value_type: str
     unit: str | None = None
-    confidence: Literal["high", "medium", "low"] = "high"
+    confidence: Confidence = "high"
     warning: str | None = None
 
 
@@ -261,6 +276,149 @@ def normalize_typed_value(
             value_type=normalized_hint,
         )
     return None
+
+
+def normalize_batch_values(
+    batch: NormalizationBatch,
+    *,
+    source_config: Mapping[str, Any],
+) -> NormalizationBatch:
+    aliases = _alias_config(source_config)
+    products = tuple(_normalize_product(product, aliases) for product in batch.products)
+    return replace(batch, products=products)
+
+
+def _normalize_product(
+    product: NormalizedProduct,
+    aliases: dict[str, dict[str, str]],
+) -> NormalizedProduct:
+    product_attributes, product_warnings = _normalize_attributes(
+        product.attributes,
+        aliases,
+    )
+    variants: list[NormalizedVariant] = []
+    warnings = list(product.warnings)
+    warnings.extend(product_warnings)
+    for variant in product.variants:
+        variant_attributes, variant_warnings = _normalize_attributes(
+            variant.attributes,
+            aliases,
+        )
+        variants.append(replace(variant, attributes=variant_attributes))
+        warnings.extend(variant_warnings)
+    return replace(
+        product,
+        attributes=product_attributes,
+        variants=tuple(variants),
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
+
+
+def _normalize_attributes(
+    attributes: tuple[NormalizedAttribute, ...],
+    aliases: dict[str, dict[str, str]],
+) -> tuple[tuple[NormalizedAttribute, ...], tuple[str, ...]]:
+    normalized: list[NormalizedAttribute] = []
+    warnings: list[str] = []
+    for attribute in attributes:
+        hint = _attribute_hint(attribute)
+        if hint is None:
+            normalized.append(attribute)
+            continue
+        choice_aliases = aliases.get(hint)
+        if hint in {"color", "material"} and choice_aliases is None:
+            choice_aliases = {}
+        parsed = normalize_typed_value(
+            attribute.value,
+            hint=hint,
+            aliases=choice_aliases,
+        )
+        if parsed is None:
+            normalized.append(attribute)
+            warnings.append(f"unparsed_{hint}:{attribute.key}")
+            continue
+        normalized.append(
+            replace(
+                attribute,
+                value=cast(JsonValue, parsed.value),
+                value_type=parsed.value_type,
+                unit=parsed.unit,
+                confidence=_lower_confidence(
+                    attribute.confidence,
+                    parsed.confidence,
+                ),
+            )
+        )
+        if parsed.warning:
+            warnings.append(f"{parsed.warning}:{attribute.key}")
+    return tuple(normalized), tuple(warnings)
+
+
+def _attribute_hint(attribute: NormalizedAttribute) -> str | None:
+    value_type = attribute.value_type.casefold().replace("-", "_")
+    if value_type in {
+        "boolean",
+        "bool",
+        "currency",
+        "currency_code",
+        "date",
+        "iso_date",
+        "dimension",
+        "dimensions",
+        "length",
+        "distance",
+        "mass",
+        "weight",
+        "decimal",
+        "price",
+        "number",
+        "number_decimal",
+    }:
+        return value_type
+
+    key = attribute.key.casefold().replace("-", "_")
+    leaf = key.rsplit(".", 1)[-1]
+    if leaf in {"price", "compare_at_price"}:
+        return "decimal"
+    if leaf in {"currency", "currency_code", "price_currency"}:
+        return "currency"
+    if leaf in {"available", "available_for_sale", "is_available"}:
+        return "boolean"
+    if leaf in {"weight", "mass"}:
+        return "weight"
+    if leaf in {"height", "width", "depth", "length"}:
+        return "length"
+    if leaf in {"dimensions", "dimension", "size"}:
+        return "dimensions"
+    if leaf in {"color", "colour"}:
+        return "color"
+    if leaf in {"material", "fabric"}:
+        return "material"
+    if leaf == "date" or leaf.endswith("_date"):
+        return "date"
+    return None
+
+
+def _alias_config(source_config: Mapping[str, Any]) -> dict[str, dict[str, str]]:
+    configured = source_config.get("normalization_aliases")
+    if not isinstance(configured, dict):
+        return {}
+    aliases: dict[str, dict[str, str]] = {}
+    for group, values in configured.items():
+        if not isinstance(group, str) or not isinstance(values, dict):
+            continue
+        normalized_values = {
+            _choice_key(key): value.strip()
+            for key, value in values.items()
+            if isinstance(key, str) and isinstance(value, str) and value.strip()
+        }
+        if normalized_values:
+            aliases[_choice_key(group)] = normalized_values
+    return aliases
+
+
+def _lower_confidence(left: Confidence, right: Confidence) -> Confidence:
+    return left if _CONFIDENCE_ORDER[left] <= _CONFIDENCE_ORDER[right] else right
 
 
 def _measurement_text(value: object) -> str | None:
