@@ -148,7 +148,12 @@ def _default_resolve_host(host: str) -> Awaitable[Sequence[str]]:
             443,
             type=socket.SOCK_STREAM,
         )
-        return tuple(sorted({record[4][0] for record in records}))
+        addresses: set[str] = set()
+        for record in records:
+            address = record[4][0]
+            if isinstance(address, str):
+                addresses.add(address)
+        return tuple(sorted(addresses))
 
     return resolve()
 
@@ -496,6 +501,11 @@ class PublicCatalogConnector(CatalogConnector):
     def _parse_sitemap(
         content: bytes,
     ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        lowered = content.lower()
+        if b"<!doctype" in lowered or b"<!entity" in lowered:
+            raise PublicCatalogConnectorError(
+                "Sitemap XML declarations are not allowed"
+            )
         try:
             root = ElementTree.fromstring(content)
         except ElementTree.ParseError as exc:
