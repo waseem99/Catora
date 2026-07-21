@@ -56,7 +56,7 @@ class CatalogConnector(ABC):
         """Validate configuration and report discoverable schema details."""
 
     @abstractmethod
-    async def pages(
+    def pages(
         self,
         *,
         checkpoint: Mapping[str, Any] | None = None,
