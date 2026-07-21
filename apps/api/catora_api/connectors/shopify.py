@@ -172,12 +172,18 @@ class ShopifyConnectorConfig:
     def __post_init__(self) -> None:
         domain = self.shop_domain.strip().lower()
         parsed = urlparse(domain if "://" in domain else f"https://{domain}")
-        if parsed.scheme != "https" or not parsed.hostname or parsed.path not in {"", "/"}:
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.path not in {"", "/"}
+        ):
             raise ValueError("Shopify shop domain must be an HTTPS hostname")
         if not parsed.hostname.endswith(".myshopify.com"):
             raise ValueError("Shopify shop domain must use the myshopify.com hostname")
         if parsed.port is not None or parsed.query or parsed.fragment:
-            raise ValueError("Shopify shop domain must not include ports, query, or fragments")
+            raise ValueError(
+                "Shopify shop domain must not include ports, query, or fragments"
+            )
         if not _API_VERSION_PATTERN.fullmatch(self.api_version):
             raise ValueError("Invalid Shopify API version")
         if self.updated_after is not None and self.updated_after.tzinfo is None:
@@ -188,7 +194,10 @@ class ShopifyConnectorConfig:
 
     @property
     def endpoint(self) -> str:
-        return f"https://{self.shop_domain}/admin/api/{self.api_version}/graphql.json"
+        return (
+            f"https://{self.shop_domain}/admin/api/"
+            f"{self.api_version}/graphql.json"
+        )
 
 
 class ShopifyCatalogConnector(CatalogConnector):
@@ -219,7 +228,8 @@ class ShopifyCatalogConnector(CatalogConnector):
     async def validate(self) -> ConnectorValidation:
         try:
             payload = await self._graphql(VALIDATION_QUERY, {})
-            shop = self._mapping(self._mapping(payload.get("data")).get("shop"))
+            data = self._mapping(payload.get("data"))
+            shop = self._mapping(data.get("shop"))
             if not shop.get("id") or not shop.get("myshopifyDomain"):
                 return ConnectorValidation(
                     valid=False,
@@ -227,7 +237,11 @@ class ShopifyCatalogConnector(CatalogConnector):
                 )
             return ConnectorValidation(
                 valid=True,
-                discovered_fields=("shop.id", "shop.name", "shop.myshopifyDomain"),
+                discovered_fields=(
+                    "shop.id",
+                    "shop.name",
+                    "shop.myshopifyDomain",
+                ),
             )
         except ShopifyAuthorizationError:
             return ConnectorValidation(
@@ -250,7 +264,11 @@ class ShopifyCatalogConnector(CatalogConnector):
             raise ValueError("page_size must be positive")
         effective_page_size = min(page_size, 10)
         cursor_value = (checkpoint or {}).get("cursor")
-        cursor = cursor_value if isinstance(cursor_value, str) and cursor_value else None
+        cursor = (
+            cursor_value
+            if isinstance(cursor_value, str) and cursor_value
+            else None
+        )
         search_query = self._incremental_query()
 
         while True:
@@ -262,7 +280,8 @@ class ShopifyCatalogConnector(CatalogConnector):
                     "query": search_query,
                 },
             )
-            products = self._mapping(self._mapping(response.get("data")).get("products"))
+            data = self._mapping(response.get("data"))
+            products = self._mapping(data.get("products"))
             edges = products.get("edges")
             if not isinstance(edges, list):
                 raise ShopifyConnectorError("Shopify products response was invalid")
@@ -274,7 +293,9 @@ class ShopifyCatalogConnector(CatalogConnector):
                 node = self._mapping(edge.get("node"))
                 product_id = node.get("id")
                 if not isinstance(product_id, str) or not product_id:
-                    raise ShopifyConnectorError("Shopify product response was invalid")
+                    raise ShopifyConnectorError(
+                        "Shopify product response was invalid"
+                    )
                 edge_cursor = edge.get("cursor")
                 if isinstance(edge_cursor, str) and edge_cursor:
                     end_cursor = edge_cursor
@@ -291,13 +312,18 @@ class ShopifyCatalogConnector(CatalogConnector):
                     ensure_ascii=False,
                     separators=(",", ":"),
                 )
+                content_hash = hashlib.sha256(
+                    stable_payload.encode("utf-8")
+                ).hexdigest()
                 records.append(
                     ConnectorRecord(
                         external_id=product_id,
                         record_type="product",
                         payload=record_payload,
-                        content_hash=hashlib.sha256(stable_payload.encode("utf-8")).hexdigest(),
-                        source_updated_at=self._parse_datetime(node.get("updatedAt")),
+                        content_hash=content_hash,
+                        source_updated_at=self._parse_datetime(
+                            node.get("updatedAt")
+                        ),
                         warnings=warnings,
                     )
                 )
@@ -319,13 +345,21 @@ class ShopifyCatalogConnector(CatalogConnector):
                 break
             next_cursor = page_info.get("endCursor")
             if not isinstance(next_cursor, str) or not next_cursor:
-                raise ShopifyConnectorError("Shopify pagination cursor was missing")
+                raise ShopifyConnectorError(
+                    "Shopify pagination cursor was missing"
+                )
             cursor = next_cursor
 
-    async def _graphql(self, query: str, variables: Mapping[str, Any]) -> dict[str, Any]:
+    async def _graphql(
+        self,
+        query: str,
+        variables: Mapping[str, Any],
+    ) -> dict[str, Any]:
         headers = {
             "Content-Type": "application/json",
-            "X-Shopify-Access-Token": self.config.access_token.get_secret_value(),
+            "X-Shopify-Access-Token": (
+                self.config.access_token.get_secret_value()
+            ),
         }
         request_payload = {"query": query, "variables": dict(variables)}
         try:
@@ -337,14 +371,18 @@ class ShopifyCatalogConnector(CatalogConnector):
                     timeout=self.config.timeout_seconds,
                 )
             else:
-                async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
+                async with httpx.AsyncClient(
+                    timeout=self.config.timeout_seconds
+                ) as client:
                     response = await client.post(
                         self.config.endpoint,
                         headers=headers,
                         json=request_payload,
                     )
             if response.status_code in {401, 403}:
-                raise ShopifyAuthorizationError("Shopify authorization failed")
+                raise ShopifyAuthorizationError(
+                    "Shopify authorization failed"
+                )
             response.raise_for_status()
             body = response.json()
         except ShopifyAuthorizationError:
@@ -357,15 +395,21 @@ class ShopifyCatalogConnector(CatalogConnector):
         errors = body.get("errors")
         if isinstance(errors, list) and errors:
             error_text = " ".join(
-                str(self._mapping(item).get("message", "")) for item in errors
+                str(self._mapping(item).get("message", ""))
+                for item in errors
             ).lower()
             if "access denied" in error_text or "unauthorized" in error_text:
-                raise ShopifyAuthorizationError("Shopify authorization failed")
+                raise ShopifyAuthorizationError(
+                    "Shopify authorization failed"
+                )
             raise ShopifyConnectorError("Shopify GraphQL request failed")
         await self._apply_throttle(self._mapping(body.get("extensions")))
         return cast(dict[str, Any], body)
 
-    async def _apply_throttle(self, extensions: Mapping[str, Any]) -> None:
+    async def _apply_throttle(
+        self,
+        extensions: Mapping[str, Any],
+    ) -> None:
         cost = self._mapping(extensions.get("cost"))
         throttle = self._mapping(cost.get("throttleStatus"))
         requested = self._number(cost.get("requestedQueryCost"))
@@ -381,7 +425,10 @@ class ShopifyCatalogConnector(CatalogConnector):
         if restore_rate <= 0:
             return
         wait_seconds = max(0.0, (requested - available) / restore_rate)
-        bounded_wait = min(wait_seconds, self._max_throttle_wait_seconds)
+        bounded_wait = min(
+            wait_seconds,
+            self._max_throttle_wait_seconds,
+        )
         if bounded_wait > 0:
             await self._sleep(bounded_wait)
 
@@ -392,14 +439,27 @@ class ShopifyCatalogConnector(CatalogConnector):
     def _updated_after_text(self) -> str | None:
         if self.config.updated_after is None:
             return None
-        return self.config.updated_after.astimezone(UTC).isoformat().replace("+00:00", "Z")
+        normalized = self.config.updated_after.astimezone(UTC).isoformat()
+        return normalized.replace("+00:00", "Z")
 
     @staticmethod
-    def _nested_pagination_warnings(node: Mapping[str, Any]) -> tuple[str, ...]:
+    def _nested_pagination_warnings(
+        node: Mapping[str, Any],
+    ) -> tuple[str, ...]:
         warnings: list[str] = []
-        for connection_name in ("variants", "media", "collections", "metafields"):
-            connection = ShopifyCatalogConnector._mapping(node.get(connection_name))
-            page_info = ShopifyCatalogConnector._mapping(connection.get("pageInfo"))
+        connection_names = (
+            "variants",
+            "media",
+            "collections",
+            "metafields",
+        )
+        for connection_name in connection_names:
+            connection = ShopifyCatalogConnector._mapping(
+                node.get(connection_name)
+            )
+            page_info = ShopifyCatalogConnector._mapping(
+                connection.get("pageInfo")
+            )
             if page_info.get("hasNextPage") is True:
                 warnings.append(f"{connection_name}_truncated")
         return tuple(warnings)
@@ -411,15 +471,21 @@ class ShopifyCatalogConnector(CatalogConnector):
         try:
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
         except ValueError as exc:
-            raise ShopifyConnectorError("Shopify timestamp was invalid") from exc
+            raise ShopifyConnectorError(
+                "Shopify timestamp was invalid"
+            ) from exc
         if parsed.tzinfo is None:
             raise ShopifyConnectorError("Shopify timestamp was invalid")
         return parsed
 
     @staticmethod
     def _mapping(value: object) -> Mapping[str, Any]:
-        return cast(Mapping[str, Any], value) if isinstance(value, dict) else {}
+        if isinstance(value, dict):
+            return cast(Mapping[str, Any], value)
+        return {}
 
     @staticmethod
     def _number(value: object) -> float:
-        return float(value) if isinstance(value, int | float) else 0.0
+        if isinstance(value, int | float):
+            return float(value)
+        return 0.0
