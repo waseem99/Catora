@@ -12,6 +12,11 @@ from catora_api.db.models.catalog import (
     SourceRecord,
     TaxonomyField,
 )
+from catora_api.db.models.catalog_identity import (
+    CommercialProductIdentity,
+    ProductIdentityCandidate,
+    ProductIdentityMembership,
+)
 from catora_api.db.models.identity import (
     Locale,
     Market,
@@ -49,6 +54,7 @@ __all__ = [
     "Category",
     "ChangeSet",
     "ChangeSetItem",
+    "CommercialProductIdentity",
     "EvidenceReference",
     "ExportArtifact",
     "IngestionJob",
@@ -66,6 +72,8 @@ __all__ = [
     "Product",
     "ProductAttribute",
     "ProductCohort",
+    "ProductIdentityCandidate",
+    "ProductIdentityMembership",
     "ProductImage",
     "ProductVariant",
     "Recommendation",
