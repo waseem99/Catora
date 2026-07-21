@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -15,7 +15,7 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError, ConflictError
-from catora_api.db.models import AuditEvent
+from catora_api.db.models import AuditEvent, Membership
 from catora_api.db.models.catalog import CatalogSource, IngestionJob, SourceRecord
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.schemas.ingestion import (
@@ -46,7 +46,7 @@ async def _membership(
     session: SessionDependency,
     auth_service: AuthServiceDependency,
     context: AuthContextDependency,
-) -> Any:
+) -> Membership:
     return await auth_service.membership(session, context.user.id, workspace_id)
 
 
@@ -60,7 +60,32 @@ def _source_view(source: CatalogSource) -> CatalogSourceView:
 
 
 def _job_view(job: IngestionJob) -> IngestionJobView:
-    return IngestionJobView.model_validate(job)
+    safe_checkpoint_keys = {
+        "connector",
+        "duplicate_count",
+        "validation_errors",
+        "validation_warnings",
+        "error_type",
+        "error_message",
+    }
+    safe_checkpoint = {
+        key: value for key, value in job.checkpoint.items() if key in safe_checkpoint_keys
+    }
+    return IngestionJobView(
+        id=job.id,
+        workspace_id=job.workspace_id,
+        catalog_source_id=job.catalog_source_id,
+        status=job.status,  # type: ignore[arg-type]
+        processed_count=job.processed_count,
+        success_count=job.success_count,
+        rejection_count=job.rejection_count,
+        warning_count=job.warning_count,
+        checkpoint=safe_checkpoint,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
 
 
 @router.put(
@@ -84,11 +109,16 @@ async def upload_csv(
         context=context,
     )
     _require_source_write(membership.role)
-    content = await request.body()
-    if not content:
+    content_buffer = bytearray()
+    async for chunk in request.stream():
+        if len(content_buffer) + len(chunk) > settings.max_catalog_upload_bytes:
+            raise HTTPException(
+                status_code=413, detail="CSV upload exceeds configured size limit"
+            )
+        content_buffer.extend(chunk)
+    if not content_buffer:
         raise HTTPException(status_code=400, detail="CSV upload cannot be empty")
-    if len(content) > settings.max_catalog_upload_bytes:
-        raise HTTPException(status_code=413, detail="CSV upload exceeds configured size limit")
+    content = bytes(content_buffer)
     content_type = request.headers.get("content-type", "text/csv").split(";", 1)[0]
     if content_type not in {"text/csv", "application/csv", "application/vnd.ms-excel"}:
         raise HTTPException(status_code=415, detail="Upload must use a CSV content type")
