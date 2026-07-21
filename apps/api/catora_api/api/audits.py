@@ -6,8 +6,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from catora_api.auditing.service import (
+    ACTIVE_AUDIT_STATUSES,
     AuditConfigurationError,
     AuditRunConflictError,
     AuditRunNotFoundError,
@@ -68,6 +70,20 @@ async def create_audit_run(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except AuditConfigurationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except IntegrityError as exc:
+        await session.rollback()
+        active_run_id = await session.scalar(
+            select(AuditRun.id).where(
+                AuditRun.workspace_id == workspace_id,
+                AuditRun.status.in_(ACTIVE_AUDIT_STATUSES),
+            )
+        )
+        if active_run_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="An audit run is already active for this workspace",
+            ) from exc
+        raise
 
     session.add(
         AuditEvent(
