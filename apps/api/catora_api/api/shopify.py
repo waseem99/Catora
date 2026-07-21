@@ -13,7 +13,10 @@ from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models import AuditEvent
 from catora_api.db.models.catalog import CatalogSource
-from catora_api.schemas.ingestion import CatalogSourceView, ShopifySourceCreateRequest
+from catora_api.schemas.ingestion import (
+    CatalogSourceView,
+    ShopifySourceCreateRequest,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["shopify catalog ingestion"])
 
@@ -30,7 +33,11 @@ async def create_shopify_catalog_source(
     auth_service: AuthServiceDependency,
     context: CsrfContextDependency,
 ) -> CatalogSourceView:
-    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    membership = await auth_service.membership(
+        session,
+        context.user.id,
+        workspace_id,
+    )
     if not can(Role(membership.role), "sources.write"):
         raise AuthorizationError("Catalog source management permission required")
 
