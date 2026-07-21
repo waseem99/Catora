@@ -80,6 +80,7 @@ def _finding(
         fingerprint="a" * 64,
         status=status,
         category_key="sofas_sectionals",
+        market_codes=["AE", "SA"],
         field_key="width_mm",
         affected_value=None,
         business_impact="data_quality",
@@ -123,6 +124,7 @@ async def test_full_run_resolution_is_appended_without_mutating_previous_run() -
     assert resolved.previous_finding_id == previous.id
     assert resolved.status == "resolved"
     assert resolved.category_key == "sofas_sectionals"
+    assert resolved.market_codes == ["AE", "SA"]
     assert resolved.resolved_at is not None
 
 
@@ -156,6 +158,7 @@ async def test_incremental_run_carries_unchanged_finding_forward() -> None:
     assert carried.product_id == product_id
     assert carried.status == "ongoing"
     assert carried.category_key == "sofas_sectionals"
+    assert carried.market_codes == ["AE", "SA"]
     assert carried.resolved_at is None
 
 

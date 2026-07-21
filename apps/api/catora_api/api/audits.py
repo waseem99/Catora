@@ -222,6 +222,10 @@ async def list_audit_findings(
         str | None,
         Query(pattern=r"^[a-z][a-z0-9_]*$"),
     ] = None,
+    market_code: Annotated[
+        str | None,
+        Query(alias="market", pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]{0,34}$"),
+    ] = None,
     business_impact: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
     remediation_type: Annotated[
         str | None,
@@ -253,6 +257,8 @@ async def list_audit_findings(
         query = query.where(AuditFinding.category_key == category_key)
     if field_key is not None:
         query = query.where(AuditFinding.field_key == field_key)
+    if market_code is not None:
+        query = query.where(AuditFinding.market_codes.contains([market_code]))
     if business_impact is not None:
         query = query.where(AuditFinding.business_impact == business_impact)
     if remediation_type is not None:

@@ -119,6 +119,11 @@ class AuditFinding(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Ba
             "field_key",
             "remediation_type",
         ),
+        Index(
+            "ix_audit_findings_market_codes",
+            "market_codes",
+            postgresql_using="gin",
+        ),
     )
     audit_run_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
@@ -142,6 +147,12 @@ class AuditFinding(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Ba
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="new")
     category_key: Mapped[str] = mapped_column(
         String(150), nullable=False, default="unknown", server_default="unknown"
+    )
+    market_codes: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=LIST_DEFAULT,
+        server_default=text("'[]'::jsonb"),
     )
     field_key: Mapped[str] = mapped_column(String(150), nullable=False)
     affected_value: Mapped[

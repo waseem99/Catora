@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,8 @@ from catora_api.auditing.service import AuditConfigurationError, _database_value
 from catora_api.auditing.stateful_service import StatefulAuditRunService
 from catora_api.auditing.types import FindingCandidate
 from catora_api.db.models.audit import AuditFinding, AuditRun, RuleVersion
+from catora_api.db.models.catalog import CatalogSource, EvidenceReference, SourceRecord
+from catora_api.db.models.identity import Market
 
 
 class AppendOnlyAuditRunService(StatefulAuditRunService):
@@ -25,6 +28,11 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
         previous_findings = await _run_findings(session, run)
         latest_history = await _latest_history(session, run=run, findings=findings)
         category_keys = await _category_keys(session, findings)
+        market_codes = await _market_codes(
+            session,
+            workspace_id=cast(uuid.UUID, run.workspace_id),
+            findings=findings,
+        )
         now = datetime.now(UTC)
         statuses: list[str] = []
         resolved_count = 0
@@ -54,6 +62,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
                 _finding_from_candidate(
                     candidate,
                     category_key=category_keys[candidate.rule_version_id],
+                    market_codes=market_codes[candidate.product_id],
                     run=run,
                     historical=historical,
                     status=status,
@@ -74,6 +83,11 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
         previous_findings = await _run_findings(session, run)
         latest_history = await _latest_history(session, run=run, findings=findings)
         category_keys = await _category_keys(session, findings)
+        market_codes = await _market_codes(
+            session,
+            workspace_id=cast(uuid.UUID, run.workspace_id),
+            findings=findings,
+        )
         now = datetime.now(UTC)
         statuses: list[str] = []
         resolved_count = 0
@@ -115,6 +129,7 @@ class AppendOnlyAuditRunService(StatefulAuditRunService):
                 _finding_from_candidate(
                     candidate,
                     category_key=category_keys[candidate.rule_version_id],
+                    market_codes=market_codes[candidate.product_id],
                     run=run,
                     historical=historical,
                     status=status,
@@ -209,10 +224,60 @@ async def _category_keys(
     return category_keys
 
 
+async def _market_codes(
+    session: AsyncSession,
+    *,
+    workspace_id: uuid.UUID,
+    findings: Mapping[str, FindingCandidate],
+) -> dict[uuid.UUID, list[str]]:
+    product_ids = sorted(
+        {candidate.product_id for candidate in findings.values()},
+        key=str,
+    )
+    if not product_ids:
+        return {}
+    rows = (
+        await session.execute(
+            select(EvidenceReference.product_id, Market.code)
+            .join(
+                SourceRecord,
+                SourceRecord.id == EvidenceReference.source_record_id,
+            )
+            .join(
+                CatalogSource,
+                CatalogSource.id == SourceRecord.catalog_source_id,
+            )
+            .join(
+                Market,
+                Market.storefront_id == CatalogSource.storefront_id,
+            )
+            .where(
+                EvidenceReference.workspace_id == workspace_id,
+                EvidenceReference.product_id.in_(product_ids),
+                SourceRecord.workspace_id == workspace_id,
+                CatalogSource.workspace_id == workspace_id,
+                Market.workspace_id == workspace_id,
+            )
+            .distinct()
+        )
+    ).all()
+    codes_by_product: dict[uuid.UUID, set[str]] = {
+        product_id: set() for product_id in product_ids
+    }
+    for product_id, market_code in rows:
+        if product_id is not None:
+            codes_by_product[product_id].add(market_code)
+    return {
+        product_id: sorted(market_codes)
+        for product_id, market_codes in codes_by_product.items()
+    }
+
+
 def _finding_from_candidate(
     candidate: FindingCandidate,
     *,
     category_key: str,
+    market_codes: list[str],
     run: AuditRun,
     historical: AuditFinding | None,
     status: str,
@@ -231,6 +296,7 @@ def _finding_from_candidate(
         fingerprint=candidate.fingerprint,
         status=status,
         category_key=category_key,
+        market_codes=list(market_codes),
         field_key=candidate.field_key,
         affected_value=_database_value(candidate.affected_value),
         business_impact=candidate.business_impact,
@@ -272,6 +338,7 @@ def _copy_finding(
         fingerprint=finding.fingerprint,
         status=status,
         category_key=finding.category_key,
+        market_codes=list(finding.market_codes),
         field_key=finding.field_key,
         affected_value=finding.affected_value,
         business_impact=finding.business_impact,
