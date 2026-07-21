@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from catora_api.auditing import _duplicate_base_rules as _base
-from catora_api.auditing.duplicate_rules import (
-    evaluate_duplicate_content_rule,
-    is_duplicate_content_rule,
+from catora_api.auditing import _structured_base_rules as _base
+from catora_api.auditing.structured_rules import (
+    evaluate_structured_data_rule,
+    is_structured_data_rule,
 )
 from catora_api.auditing.types import ProductAuditSnapshot, RuleEvaluation
 
@@ -18,13 +18,14 @@ def evaluate_product(
     snapshot: ProductAuditSnapshot,
     rules: tuple[TaxonomyFieldRule, ...],
 ) -> tuple[RuleEvaluation, ...]:
-    base_rules = tuple(rule for rule in rules if not is_duplicate_content_rule(rule))
-    duplicate_rules = tuple(rule for rule in rules if is_duplicate_content_rule(rule))
+    base_rules = tuple(rule for rule in rules if not is_structured_data_rule(rule))
+    structured_rules = tuple(rule for rule in rules if is_structured_data_rule(rule))
     evaluations = list(_base.evaluate_product(snapshot, base_rules))
     evaluations.extend(
-        evaluate_duplicate_content_rule(snapshot, rule)
-        for rule in duplicate_rules
+        evaluation
+        for rule in structured_rules
         if rule.category_key == snapshot.category_key
+        for evaluation in evaluate_structured_data_rule(snapshot, rule)
     )
     return tuple(evaluations)
 
