@@ -56,7 +56,7 @@ def test_csv_source_contract_rejects_multi_character_delimiter() -> None:
         )
 
 
-def test_shopify_source_contract_normalizes_domain_without_accepting_raw_token() -> None:
+def test_shopify_source_contract_normalizes_domain_without_raw_token() -> None:
     request = ShopifySourceCreateRequest(
         name="Primary Shopify store",
         shop_domain="https://Demo-Store.myshopify.com/",
@@ -115,7 +115,10 @@ async def test_factory_builds_csv_connector_from_source_config() -> None:
         },
     )
 
-    connector = await connector_for_source(source, FakeStorage())  # type: ignore[arg-type]
+    connector = await connector_for_source(
+        source,
+        FakeStorage(),  # type: ignore[arg-type]
+    )
 
     assert connector.source_type == "csv"
     assert connector.mapping.product_id == "id"  # type: ignore[attr-defined]
@@ -146,6 +149,8 @@ async def test_factory_builds_shopify_connector_from_secret_reference() -> None:
 
     assert isinstance(connector, ShopifyCatalogConnector)
     assert connector.config.updated_after is not None
-    assert resolver.references == ["env:CATORA_CONNECTOR_SECRET_SHOPIFY_DEMO"]
+    assert resolver.references == [
+        "env:CATORA_CONNECTOR_SECRET_SHOPIFY_DEMO"
+    ]
     assert "resolved-token" not in repr(connector.config)
     assert "access_token" not in source.config
