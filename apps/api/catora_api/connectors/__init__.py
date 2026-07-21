@@ -7,6 +7,11 @@ from catora_api.connectors.base import (
     ConnectorValidation,
 )
 from catora_api.connectors.csv import CsvCatalogConnector, CsvMapping
+from catora_api.connectors.public_catalog import (
+    PublicCatalogConnector,
+    PublicCatalogConnectorConfig,
+    PublicCatalogConnectorError,
+)
 from catora_api.connectors.registry import ConnectorRegistry
 from catora_api.connectors.shopify import (
     SHOPIFY_API_VERSION,
@@ -27,6 +32,9 @@ __all__ = [
     "ConnectorValidation",
     "CsvCatalogConnector",
     "CsvMapping",
+    "PublicCatalogConnector",
+    "PublicCatalogConnectorConfig",
+    "PublicCatalogConnectorError",
     "ShopifyAuthorizationError",
     "ShopifyCatalogConnector",
     "ShopifyConnectorConfig",
