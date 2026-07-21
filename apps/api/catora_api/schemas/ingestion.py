@@ -72,14 +72,19 @@ class ShopifySourceCreateRequest(IngestionModel):
         min_length=29,
         max_length=255,
     )
-    api_version: str = Field(default="2026-07", pattern=r"^\d{4}-(01|04|07|10)$")
+    api_version: str = Field(
+        default="2026-07",
+        pattern=r"^\d{4}-(01|04|07|10)$",
+    )
     updated_after: datetime | None = None
 
     @field_validator("shop_domain")
     @classmethod
     def normalize_shop_domain(cls, value: str) -> str:
         normalized = value.strip().lower()
-        parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
+        parsed = urlparse(
+            normalized if "://" in normalized else f"https://{normalized}"
+        )
         if (
             parsed.scheme != "https"
             or not parsed.hostname
@@ -89,7 +94,9 @@ class ShopifySourceCreateRequest(IngestionModel):
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("shop_domain must be a myshopify.com HTTPS hostname")
+            raise ValueError(
+                "shop_domain must be a myshopify.com HTTPS hostname"
+            )
         return parsed.hostname
 
     @field_validator("updated_after")
