@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Literal, TypeAlias
+from typing import Literal
 
-JsonScalar: TypeAlias = str | int | float | bool | None
-JsonValue: TypeAlias = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
-Confidence: TypeAlias = Literal["high", "medium", "low"]
+type JsonScalar = str | int | float | bool | None
+type JsonValue = JsonScalar | list[JsonScalar] | dict[str, JsonScalar]
+type Confidence = Literal["high", "medium", "low"]
 
 
 @dataclass(frozen=True, slots=True)
