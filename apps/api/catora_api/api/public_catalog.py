@@ -43,6 +43,7 @@ async def create_public_catalog_source(
             "Catalog source management permission required"
         )
 
+    alias_config = payload.normalization_aliases.model_dump()
     source = CatalogSource(
         workspace_id=workspace_id,
         name=payload.name,
@@ -57,6 +58,7 @@ async def create_public_catalog_source(
             "max_products": payload.max_products,
             "max_sitemaps": payload.max_sitemaps,
             "crawl_delay_seconds": payload.crawl_delay_seconds,
+            "normalization_aliases": alias_config,
         },
     )
     session.add(source)
@@ -73,6 +75,9 @@ async def create_public_catalog_source(
                 "name": source.name,
                 "host": _source_host(payload),
                 "max_products": payload.max_products,
+                "normalization_alias_groups": [
+                    key for key, values in alias_config.items() if values
+                ],
             },
         )
     )
