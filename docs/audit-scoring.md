@@ -14,6 +14,18 @@ The first engine version consumes compiled `taxonomy_field_requirement` rules. E
 
 A missing variant scope is reported explicitly. Values are never coerced during audit execution. Type, unit, range, enum, URL, date, length and pattern checks operate on the normalized canonical value supplied to the engine.
 
+## Relational consistency constraints
+
+Immutable rule specifications may add explicit relational constraints without executing arbitrary code:
+
+- `less_than_or_equal_to_field` compares a numeric value with another canonical field in the same product or variant scope;
+- `greater_than_or_equal_to_field` performs the inverse numeric comparison;
+- `matches_product_field` requires a variant-scoped value to equal the named canonical product value, including its canonical type, unit and locale.
+
+Numeric relationships are compared only when both canonical values are present and use the same unit. A missing related value produces a `not_evaluated` contribution rather than an invented pass or failure. Incomparable values and unit mismatches produce explicit deterministic failure codes. Relationship findings use the `cross_field_consistency` check key and the `reconcile_related_values` remediation type.
+
+The bundled furniture taxonomy remains version `1.0.0` and is unchanged by this executor capability. Relational constraints must be present in an immutable rule specification before they contribute to an audit.
+
 ## Severity weights
 
 | Severity | Weight |
