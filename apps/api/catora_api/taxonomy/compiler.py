@@ -57,48 +57,40 @@ class TaxonomyCompileSummary:
 
 
 def build_compile_plan(package: TaxonomyPackage) -> TaxonomyCompilePlan:
-    field_definitions = {field.key: field for field in package.fields}
-    category_definitions = {category.key: category for category in package.categories}
-    resolved = resolve_categories(package)
+    fields_by_key = {field.key: field for field in package.fields}
+    definitions = {category.key: category for category in package.categories}
     fingerprint = taxonomy_fingerprint(package)
-    category_plans: list[CompiledCategoryPlan] = []
-    for category in sorted(
-        resolved.values(), key=lambda item: (len(item.parent_chain), item.key)
-    ):
-        definition = category_definitions[category.key]
-        fields = tuple(
-            _field_plan(
-                package=package,
-                category=category,
-                field=field_definitions[field_key],
-                fingerprint=fingerprint,
-            )
-            for field_key in sorted(field_definitions)
+    categories = tuple(
+        CompiledCategoryPlan(
+            key=category.key,
+            label=category.label,
+            parent_key=definitions[category.key].parent_key,
+            depth=len(category.parent_chain),
+            fields=tuple(
+                _field_plan(
+                    package=package,
+                    category=category,
+                    field=fields_by_key[field_key],
+                    fingerprint=fingerprint,
+                )
+                for field_key in sorted(fields_by_key)
+            ),
         )
-        category_plans.append(
-            CompiledCategoryPlan(
-                key=category.key,
-                label=category.label,
-                parent_key=definition.parent_key,
-                depth=len(category.parent_chain),
-                fields=fields,
-            )
+        for category in sorted(
+            resolve_categories(package).values(),
+            key=lambda item: (len(item.parent_chain), item.key),
         )
+    )
     return TaxonomyCompilePlan(
         vertical=package.vertical,
         version=package.version,
         fingerprint=fingerprint,
-        categories=tuple(category_plans),
+        categories=categories,
     )
 
 
 def taxonomy_fingerprint(package: TaxonomyPackage) -> str:
-    payload = json.dumps(
-        package.model_dump(mode="json"),
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    )
+    payload = _canonical_json(package.model_dump(mode="json"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -111,27 +103,27 @@ class TaxonomyCompiler:
         package: TaxonomyPackage,
     ) -> TaxonomyCompileSummary:
         plan = build_compile_plan(package)
-        existing_categories = (
+        existing = (
             await session.scalars(
                 select(Category).where(
                     Category.workspace_id == workspace_id,
-                    Category.taxonomy_version == package.version,
+                    Category.taxonomy_version == plan.version,
                 )
             )
         ).all()
-        if existing_categories:
+        if existing:
             await self._verify_existing(
                 session,
                 workspace_id=workspace_id,
                 plan=plan,
-                categories=existing_categories,
+                categories=existing,
             )
             return TaxonomyCompileSummary(0, 0, 0, 0, plan.fingerprint)
 
-        categories_created = 0
-        fields_created = 0
-        rule_definitions_created = 0
-        rule_versions_created = 0
+        category_count = 0
+        field_count = 0
+        definition_count = 0
+        version_count = 0
         categories_by_key: dict[str, Category] = {}
         for category_plan in plan.categories:
             parent = (
@@ -150,7 +142,7 @@ class TaxonomyCompiler:
             session.add(category)
             await session.flush()
             categories_by_key[category_plan.key] = category
-            categories_created += 1
+            category_count += 1
 
             for field_plan in category_plan.fields:
                 session.add(
@@ -165,68 +157,86 @@ class TaxonomyCompiler:
                         is_immutable=True,
                     )
                 )
-                fields_created += 1
-
+                field_count += 1
                 if field_plan.requirement not in {"required", "recommended"}:
                     continue
-                rule_key = _rule_key(category_plan.key, field_plan.field_key)
-                definition = await session.scalar(
-                    select(RuleDefinition).where(
-                        RuleDefinition.workspace_id == workspace_id,
-                        RuleDefinition.key == rule_key,
-                    )
+                created_definition, created_version = await self._ensure_rule(
+                    session,
+                    workspace_id=workspace_id,
+                    taxonomy_version=plan.version,
+                    category_plan=category_plan,
+                    field_plan=field_plan,
                 )
-                if definition is None:
-                    definition = RuleDefinition(
-                        workspace_id=workspace_id,
-                        key=rule_key,
-                        name=f"{category_plan.label}: {field_plan.field_label}",
-                        rule_type="taxonomy_field_requirement",
-                        description=(
-                            f"Checks {field_plan.requirement} field "
-                            f"{field_plan.field_key} for {category_plan.key}."
-                        ),
-                    )
-                    session.add(definition)
-                    await session.flush()
-                    rule_definitions_created += 1
-                else:
-                    _verify_rule_definition(definition, rule_key=rule_key)
+                definition_count += int(created_definition)
+                version_count += int(created_version)
 
-                rule_specification = _rule_specification(field_plan)
-                existing_version = await session.scalar(
-                    select(RuleVersion).where(
-                        RuleVersion.rule_definition_id == definition.id,
-                        RuleVersion.version == plan.version,
-                    )
-                )
-                if existing_version is None:
-                    session.add(
-                        RuleVersion(
-                            workspace_id=workspace_id,
-                            rule_definition_id=definition.id,
-                            version=plan.version,
-                            specification=rule_specification,
-                            is_immutable=True,
-                        )
-                    )
-                    rule_versions_created += 1
-                elif _canonical_json(existing_version.specification) != _canonical_json(
-                    rule_specification
-                ):
-                    raise TaxonomyImmutabilityError(
-                        f"rule version {rule_key!r}@{plan.version} already exists with "
-                        "different immutable content"
-                    )
-
-        await session.commit()
+        await session.flush()
         return TaxonomyCompileSummary(
-            categories_created=categories_created,
-            fields_created=fields_created,
-            rule_definitions_created=rule_definitions_created,
-            rule_versions_created=rule_versions_created,
+            categories_created=category_count,
+            fields_created=field_count,
+            rule_definitions_created=definition_count,
+            rule_versions_created=version_count,
             fingerprint=plan.fingerprint,
         )
+
+    async def _ensure_rule(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        taxonomy_version: str,
+        category_plan: CompiledCategoryPlan,
+        field_plan: CompiledFieldPlan,
+    ) -> tuple[bool, bool]:
+        rule_key = _rule_key(category_plan.key, field_plan.field_key)
+        definition = await session.scalar(
+            select(RuleDefinition).where(
+                RuleDefinition.workspace_id == workspace_id,
+                RuleDefinition.key == rule_key,
+            )
+        )
+        created_definition = definition is None
+        if definition is None:
+            definition = RuleDefinition(
+                workspace_id=workspace_id,
+                key=rule_key,
+                name=f"{category_plan.label}: {field_plan.field_label}",
+                rule_type="taxonomy_field_requirement",
+                description=(
+                    f"Checks {field_plan.requirement} field "
+                    f"{field_plan.field_key} for {category_plan.key}."
+                ),
+            )
+            session.add(definition)
+            await session.flush()
+        else:
+            _verify_rule_definition(definition, rule_key=rule_key)
+
+        expected = _rule_specification(field_plan)
+        version = await session.scalar(
+            select(RuleVersion).where(
+                RuleVersion.rule_definition_id == definition.id,
+                RuleVersion.version == taxonomy_version,
+            )
+        )
+        if version is None:
+            session.add(
+                RuleVersion(
+                    workspace_id=workspace_id,
+                    rule_definition_id=definition.id,
+                    version=taxonomy_version,
+                    specification=expected,
+                    is_immutable=True,
+                )
+            )
+            return created_definition, True
+        if not version.is_immutable or _canonical_json(version.specification) != _canonical_json(
+            expected
+        ):
+            raise TaxonomyImmutabilityError(
+                f"rule version {rule_key!r}@{taxonomy_version} has immutable drift"
+            )
+        return created_definition, False
 
     async def _verify_existing(
         self,
@@ -236,13 +246,13 @@ class TaxonomyCompiler:
         plan: TaxonomyCompilePlan,
         categories: Sequence[Category],
     ) -> None:
-        expected_categories = {category.key: category for category in plan.categories}
-        existing_by_key = {category.key: category for category in categories}
+        expected_categories = {item.key: item for item in plan.categories}
+        existing_by_key = {item.key: item for item in categories}
         if set(existing_by_key) != set(expected_categories):
             raise TaxonomyImmutabilityError(
                 f"taxonomy {plan.version} already exists with a different category set"
             )
-        key_by_id = {category.id: category.key for category in categories}
+        key_by_id = {item.id: item.key for item in categories}
         for key, category in existing_by_key.items():
             expected = expected_categories[key]
             parent_key = key_by_id.get(category.parent_id) if category.parent_id else None
@@ -255,7 +265,7 @@ class TaxonomyCompiler:
                     f"taxonomy category {key!r}@{plan.version} has immutable drift"
                 )
 
-        category_ids = [category.id for category in categories]
+        category_ids = [item.id for item in categories]
         fields = (
             await session.scalars(
                 select(TaxonomyField).where(
@@ -265,7 +275,7 @@ class TaxonomyCompiler:
                 )
             )
         ).all()
-        category_key_by_id = {category.id: category.key for category in categories}
+        category_key_by_id = {item.id: item.key for item in categories}
         existing_fields = {
             (category_key_by_id[field.category_id], field.key): field for field in fields
         }
@@ -290,7 +300,6 @@ class TaxonomyCompiler:
                 raise TaxonomyImmutabilityError(
                     f"taxonomy field {key!r}@{plan.version} has immutable drift"
                 )
-
         await self._verify_existing_rules(
             session,
             workspace_id=workspace_id,
@@ -304,53 +313,47 @@ class TaxonomyCompiler:
         workspace_id: uuid.UUID,
         plan: TaxonomyCompilePlan,
     ) -> None:
-        expected_rules = {
+        expected = {
             _rule_key(category.key, field.field_key): _rule_specification(field)
             for category in plan.categories
             for field in category.fields
             if field.requirement in {"required", "recommended"}
         }
-        if not expected_rules:
-            return
-
         definitions = (
             await session.scalars(
                 select(RuleDefinition).where(
                     RuleDefinition.workspace_id == workspace_id,
-                    RuleDefinition.key.in_(sorted(expected_rules)),
+                    RuleDefinition.key.in_(sorted(expected)),
                 )
             )
         ).all()
-        definitions_by_key = {definition.key: definition for definition in definitions}
-        if set(definitions_by_key) != set(expected_rules):
+        by_key = {definition.key: definition for definition in definitions}
+        if set(by_key) != set(expected):
             raise TaxonomyImmutabilityError(
                 f"taxonomy {plan.version} already exists with a different rule set"
             )
-        for rule_key, definition in definitions_by_key.items():
+        for rule_key, definition in by_key.items():
             _verify_rule_definition(definition, rule_key=rule_key)
 
-        definition_key_by_id = {definition.id: definition.key for definition in definitions}
+        key_by_id = {definition.id: definition.key for definition in definitions}
         versions = (
             await session.scalars(
                 select(RuleVersion).where(
                     RuleVersion.workspace_id == workspace_id,
-                    RuleVersion.rule_definition_id.in_(list(definition_key_by_id)),
+                    RuleVersion.rule_definition_id.in_(list(key_by_id)),
                     RuleVersion.version == plan.version,
                 )
             )
         ).all()
-        versions_by_key = {
-            definition_key_by_id[version.rule_definition_id]: version for version in versions
-        }
-        if set(versions_by_key) != set(expected_rules):
+        versions_by_key = {key_by_id[item.rule_definition_id]: item for item in versions}
+        if set(versions_by_key) != set(expected):
             raise TaxonomyImmutabilityError(
                 f"taxonomy {plan.version} already exists with incomplete rule versions"
             )
         for rule_key, version in versions_by_key.items():
             if (
                 not version.is_immutable
-                or _canonical_json(version.specification)
-                != _canonical_json(expected_rules[rule_key])
+                or _canonical_json(version.specification) != _canonical_json(expected[rule_key])
             ):
                 raise TaxonomyImmutabilityError(
                     f"rule version {rule_key!r}@{plan.version} has immutable drift"
@@ -365,8 +368,7 @@ def _field_plan(
     fingerprint: str,
 ) -> CompiledFieldPlan:
     requirement = category.requirements[field.key]
-    payload = field.model_dump(mode="json")
-    specification = cast(dict[str, object], payload)
+    specification = cast(dict[str, object], field.model_dump(mode="json"))
     specification.update(
         {
             "vertical": package.vertical,
