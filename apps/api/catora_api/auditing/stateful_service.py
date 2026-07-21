@@ -4,6 +4,7 @@ import hashlib
 import uuid
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -273,12 +274,15 @@ class StatefulAuditRunService(AuditRunService):
     ) -> AuditRun | None:
         if run.previous_run_id is None:
             return None
-        return await session.scalar(
-            select(AuditRun).where(
-                AuditRun.id == run.previous_run_id,
-                AuditRun.workspace_id == run.workspace_id,
-                AuditRun.status == "completed",
-            )
+        return cast(
+            AuditRun | None,
+            await session.scalar(
+                select(AuditRun).where(
+                    AuditRun.id == run.previous_run_id,
+                    AuditRun.workspace_id == run.workspace_id,
+                    AuditRun.status == "completed",
+                )
+            ),
         )
 
     async def _select_headers(
