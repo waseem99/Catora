@@ -19,14 +19,20 @@ class ScalarCollection:
 
 
 class BaselineSession:
-    def __init__(self, scalar_values: list[object | None]) -> None:
+    def __init__(
+        self,
+        scalar_values: list[object | None],
+        *,
+        rule_version_ids: list[uuid.UUID] | None = None,
+    ) -> None:
         self._scalar_values = iter(scalar_values)
+        self._rule_version_ids = rule_version_ids or [uuid.uuid4()]
 
     async def scalar(self, _statement: object) -> object | None:
         return next(self._scalar_values)
 
     async def scalars(self, _statement: object) -> ScalarCollection:
-        return ScalarCollection([uuid.uuid4()])
+        return ScalarCollection(list(self._rule_version_ids))
 
 
 class ChangeSession:
@@ -53,7 +59,10 @@ def _previous_run(*, hashes: dict[str, str]) -> AuditRun:
         progress_current=1,
         progress_total=1,
         cancellation_requested=False,
-        score_summary={"overall": {"contributions": []}},
+        score_summary={
+            "formula_version": "weighted-health-v1",
+            "overall": {"contributions": []},
+        },
         finding_counts={},
         failure_summary={},
         started_at=now,
@@ -71,6 +80,24 @@ async def test_incremental_run_requires_a_completed_baseline() -> None:
         await StatefulAuditRunService().create_run(
             session,  # type: ignore[arg-type]
             workspace_id=uuid.uuid4(),
+            requested_by_user_id=uuid.uuid4(),
+            taxonomy_version="1.0.0",
+            mode="incremental",
+        )
+
+
+@pytest.mark.asyncio
+async def test_incremental_run_rejects_rule_version_drift() -> None:
+    previous = _previous_run(hashes={str(uuid.uuid4()): "a" * 64})
+    session = BaselineSession(
+        [None, previous],
+        rule_version_ids=[uuid.uuid4()],
+    )
+
+    with pytest.raises(AuditConfigurationError, match="rule-version set"):
+        await StatefulAuditRunService().create_run(
+            session,  # type: ignore[arg-type]
+            workspace_id=previous.workspace_id,
             requested_by_user_id=uuid.uuid4(),
             taxonomy_version="1.0.0",
             mode="incremental",
