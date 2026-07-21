@@ -427,23 +427,30 @@ class AuditRunService:
 
         now = datetime.now(UTC)
         resolved_count = 0
-        for previous in previous_run_findings:
-            if previous.fingerprint not in findings and previous.status != "resolved":
-                previous.status = "resolved"
-                previous.resolved_at = now
-                previous.last_seen_at = now
+        for previous_run_finding in previous_run_findings:
+            if (
+                previous_run_finding.fingerprint not in findings
+                and previous_run_finding.status != "resolved"
+            ):
+                previous_run_finding.status = "resolved"
+                previous_run_finding.resolved_at = now
+                previous_run_finding.last_seen_at = now
                 resolved_count += 1
 
         statuses: list[str] = []
         for fingerprint, candidate in sorted(findings.items()):
-            previous = latest_history.get(fingerprint)
-            status = next_finding_status(previous.status if previous is not None else None)
+            historical = latest_history.get(fingerprint)
+            status = next_finding_status(
+                historical.status if historical is not None else None
+            )
             statuses.append(status)
             session.add(
                 AuditFinding(
                     workspace_id=run.workspace_id,
                     audit_run_id=run.id,
-                    previous_finding_id=previous.id if previous is not None else None,
+                    previous_finding_id=(
+                        historical.id if historical is not None else None
+                    ),
                     rule_version_id=candidate.rule_version_id,
                     product_id=candidate.product_id,
                     variant_id=candidate.variant_id,
@@ -467,7 +474,7 @@ class AuditRunService:
                         for item in candidate.evidence
                     ],
                     first_seen_at=(
-                        previous.first_seen_at if previous is not None else now
+                        historical.first_seen_at if historical is not None else now
                     ),
                     last_seen_at=now,
                     resolved_at=None,
