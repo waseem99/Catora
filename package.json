@@ -1,0 +1,26 @@
+{
+  "name": "catora",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "workspaces": [
+    "apps/web",
+    "packages/contracts",
+    "packages/browser-intelligence"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @catora/web",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "eslint": "9.39.2",
+    "typescript-eslint": "8.65.0",
+    "typescript": "5.9.3"
+  }
+}
