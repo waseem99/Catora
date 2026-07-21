@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.db.models.catalog import Category, Product, ProductAttribute
 from catora_api.db.models.taxonomy import ProductCategoryTag
-from catora_api.taxonomy.compiler import TaxonomyCompileSummary, TaxonomyCompiler
+from catora_api.taxonomy.compiler import TaxonomyCompiler, TaxonomyCompileSummary
 from catora_api.taxonomy.loader import load_bundled_taxonomy
 from catora_api.taxonomy.resolution import ClassificationResult, classify_product
 from catora_api.taxonomy.schema import TaxonomyPackage
@@ -142,7 +142,8 @@ class TaxonomyAssignmentService:
     ) -> ProductCategoryAssignment:
         if taxonomy_version != self.package.version:
             raise TaxonomyAssignmentConflictError(
-                f"Unsupported taxonomy version {taxonomy_version!r}; expected {self.package.version!r}"
+                "Unsupported taxonomy version "
+                f"{taxonomy_version!r}; expected {self.package.version!r}"
             )
         if primary_category_key in secondary_category_keys:
             raise TaxonomyAssignmentConflictError(
