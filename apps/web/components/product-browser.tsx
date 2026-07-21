@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import {
   ProductListResponseSchema,
   type ProductListResponse,
@@ -27,8 +27,6 @@ export function ProductBrowser({ workspaceId }: Props) {
     const controller = new AbortController();
     const hasWarnings =
       warningFilter === "all" ? undefined : warningFilter === "warnings";
-    setLoading(true);
-    setError(null);
     apiRequest<unknown>(
       catalogProductsPath(workspaceId, {
         query,
@@ -51,13 +49,28 @@ export function ProductBrowser({ workspaceId }: Props) {
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const nextQuery = draftQuery.trim();
+    if (nextQuery === query && offset === 0) return;
+    beginRequest();
     setOffset(0);
-    setQuery(draftQuery.trim());
+    setQuery(nextQuery);
   }
 
   function changeWarningFilter(value: WarningFilter) {
+    if (value === warningFilter && offset === 0) return;
+    beginRequest();
     setOffset(0);
     setWarningFilter(value);
+  }
+
+  function changePage(nextOffset: number) {
+    beginRequest();
+    setOffset(nextOffset);
+  }
+
+  function beginRequest() {
+    setLoading(true);
+    setError(null);
   }
 
   const start = response && response.total > 0 ? response.offset + 1 : 0;
@@ -145,7 +158,7 @@ export function ProductBrowser({ workspaceId }: Props) {
             <button
               className="secondary-button"
               disabled={!hasPrevious || loading}
-              onClick={() => setOffset(Math.max(0, offset - pageSize))}
+              onClick={() => changePage(Math.max(0, offset - pageSize))}
               type="button"
             >
               Previous
@@ -153,7 +166,7 @@ export function ProductBrowser({ workspaceId }: Props) {
             <button
               className="secondary-button"
               disabled={!hasNext || loading}
-              onClick={() => setOffset(offset + pageSize)}
+              onClick={() => changePage(offset + pageSize)}
               type="button"
             >
               Next
