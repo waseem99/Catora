@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import cast
@@ -23,7 +23,6 @@ from catora_api.db.models.catalog import (
 )
 from catora_api.normalization.adapters import normalize_source_records
 from catora_api.normalization.types import (
-    JsonScalar,
     JsonValue,
     NormalizedAttribute,
     NormalizedImage,
@@ -41,7 +40,7 @@ def _database_json_value(value: JsonValue) -> DatabaseJsonValue:
         return {key: item for key, item in value.items()}
     if isinstance(value, str | int | float | bool) or value is None:
         return value
-    return list(cast(Sequence[JsonScalar], value))
+    return list(value)
 
 
 @dataclass(frozen=True, slots=True)
