@@ -28,6 +28,25 @@ class IngestionModel(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
 
+class NormalizationAliasesRequest(IngestionModel):
+    color: dict[str, str] = Field(default_factory=dict, max_length=200)
+    material: dict[str, str] = Field(default_factory=dict, max_length=200)
+
+    @field_validator("color", "material")
+    @classmethod
+    def normalize_aliases(cls, values: dict[str, str]) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        for source, canonical in values.items():
+            source_key = " ".join(source.casefold().split())
+            canonical_value = " ".join(canonical.split())
+            if not source_key or not canonical_value:
+                raise ValueError("Normalization aliases cannot be blank")
+            if len(source_key) > 100 or len(canonical_value) > 100:
+                raise ValueError("Normalization aliases cannot exceed 100 characters")
+            normalized[source_key] = canonical_value
+        return normalized
+
+
 class CsvMappingRequest(IngestionModel):
     product_id: str = Field(min_length=1, max_length=200)
     title: str = Field(min_length=1, max_length=200)
@@ -83,6 +102,9 @@ class ShopifySourceCreateRequest(IngestionModel):
         pattern=r"^\d{4}-(01|04|07|10)$",
     )
     updated_after: datetime | None = None
+    normalization_aliases: NormalizationAliasesRequest = Field(
+        default_factory=NormalizationAliasesRequest
+    )
 
     @field_validator("shop_domain")
     @classmethod
@@ -135,6 +157,9 @@ class PublicCatalogSourceCreateRequest(IngestionModel):
     max_products: int = Field(default=100, ge=1, le=1000)
     max_sitemaps: int = Field(default=10, ge=1, le=50)
     crawl_delay_seconds: float = Field(default=0.5, ge=0, le=60)
+    normalization_aliases: NormalizationAliasesRequest = Field(
+        default_factory=NormalizationAliasesRequest
+    )
 
     @field_validator("start_url")
     @classmethod
