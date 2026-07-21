@@ -85,7 +85,7 @@ def test_sku_is_never_treated_as_globally_unique() -> None:
 
 def test_title_brand_similarity_produces_fuzzy_review_only() -> None:
     left = _profile("Cloud Sofa Three Seat", brands={"acme"})
-    right = _profile("Cloud Sofa 3 Seat", brands={"acme"})
+    right = _profile("Cloud Sofa Three-Seat", brands={"acme"})
 
     proposals = CatalogIdentityService()._proposals([left, right])
     proposal = proposals[_pair(left.product.id, right.product.id)]
