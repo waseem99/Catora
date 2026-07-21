@@ -25,8 +25,6 @@ export function ProductDetailPanel({ workspaceId, productId }: Props) {
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setError(null);
     Promise.all([
       apiRequest<unknown>(catalogProductPath(workspaceId, productId), {
         signal: controller.signal,
