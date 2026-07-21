@@ -315,7 +315,7 @@ class AuditRunService:
             )
         ).all()
         attribute_ids = [attribute.id for attribute in attributes]
-        evidence = []
+        evidence: Sequence[EvidenceReference] = ()
         if attribute_ids:
             evidence = (
                 await session.scalars(
@@ -390,9 +390,9 @@ class AuditRunService:
         run: AuditRun,
         findings: Mapping[str, FindingCandidate],
     ) -> tuple[list[str], int]:
-        previous_findings: list[AuditFinding] = []
+        previous_run_findings: list[AuditFinding] = []
         if run.previous_run_id is not None:
-            previous_findings = list(
+            previous_run_findings = list(
                 (
                     await session.scalars(
                         select(AuditFinding).where(
@@ -402,12 +402,32 @@ class AuditRunService:
                     )
                 ).all()
             )
-        previous_by_fingerprint = {
-            finding.fingerprint: finding for finding in previous_findings
-        }
+
+        latest_history: dict[str, AuditFinding] = {}
+        if findings:
+            historical_findings = (
+                await session.scalars(
+                    select(AuditFinding)
+                    .join(AuditRun, AuditRun.id == AuditFinding.audit_run_id)
+                    .where(
+                        AuditFinding.workspace_id == run.workspace_id,
+                        AuditFinding.fingerprint.in_(sorted(findings)),
+                        AuditRun.status == "completed",
+                        AuditRun.id != run.id,
+                    )
+                    .order_by(
+                        AuditFinding.fingerprint,
+                        AuditFinding.last_seen_at.desc(),
+                        AuditFinding.id.desc(),
+                    )
+                )
+            ).all()
+            for historical in historical_findings:
+                latest_history.setdefault(historical.fingerprint, historical)
+
         now = datetime.now(UTC)
         resolved_count = 0
-        for previous in previous_findings:
+        for previous in previous_run_findings:
             if previous.fingerprint not in findings and previous.status != "resolved":
                 previous.status = "resolved"
                 previous.resolved_at = now
@@ -416,7 +436,7 @@ class AuditRunService:
 
         statuses: list[str] = []
         for fingerprint, candidate in sorted(findings.items()):
-            previous = previous_by_fingerprint.get(fingerprint)
+            previous = latest_history.get(fingerprint)
             status = next_finding_status(previous.status if previous is not None else None)
             statuses.append(status)
             session.add(
