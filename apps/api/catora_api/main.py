@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
@@ -8,7 +7,7 @@ from typing import Any
 import boto3
 import redis.asyncio as redis
 import structlog
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
