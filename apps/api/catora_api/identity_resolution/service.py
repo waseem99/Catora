@@ -11,7 +11,7 @@ from difflib import SequenceMatcher
 from itertools import combinations
 from typing import cast
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.db.models.catalog import Product, ProductAttribute, ProductVariant
@@ -92,6 +92,19 @@ class CatalogIdentityService:
             products=products,
         )
         proposals = self._proposals(profiles)
+        active_identities = await self._active_identity_map(
+            session,
+            workspace_id=workspace_id,
+            product_ids=(product.id for product in products),
+        )
+        proposals = {
+            pair: proposal
+            for pair, proposal in proposals.items()
+            if not (
+                active_identities.get(pair[0]) is not None
+                and active_identities.get(pair[0]) == active_identities.get(pair[1])
+            )
+        }
         existing = (
             await session.scalars(
                 select(ProductIdentityCandidate).where(
@@ -176,7 +189,7 @@ class CatalogIdentityService:
     ) -> CommercialProductIdentity:
         if product_id == target_product_id:
             raise CatalogIdentityConflictError("A product cannot be linked to itself")
-        products = await self._products_by_ids(
+        products = await self.products_by_ids(
             session,
             workspace_id=workspace_id,
             product_ids=(product_id, target_product_id),
@@ -246,27 +259,46 @@ class CatalogIdentityService:
                 )
             )
 
+        pair = _pair(product_id, target_product_id)
+        selected_candidate: ProductIdentityCandidate | None = None
         if candidate_id is not None:
-            candidate = await self._candidate_or_error(
+            selected_candidate = await self._candidate_or_error(
                 session,
                 workspace_id=workspace_id,
                 candidate_id=candidate_id,
             )
-            if _pair(candidate.left_product_id, candidate.right_product_id) != _pair(
-                product_id,
-                target_product_id,
-            ):
+            if _pair(
+                selected_candidate.left_product_id,
+                selected_candidate.right_product_id,
+            ) != pair:
                 raise CatalogIdentityConflictError(
                     "Identity candidate does not describe the requested product pair"
                 )
-            if candidate.status not in {"pending", "accepted"}:
+            if selected_candidate.status not in {"pending", "accepted"}:
                 raise CatalogIdentityConflictError(
                     "Only pending identity candidates can be accepted"
                 )
+
+        pair_candidates = (
+            await session.scalars(
+                select(ProductIdentityCandidate).where(
+                    ProductIdentityCandidate.workspace_id == workspace_id,
+                    ProductIdentityCandidate.left_product_id == pair[0],
+                    ProductIdentityCandidate.right_product_id == pair[1],
+                    ProductIdentityCandidate.status == "pending",
+                )
+            )
+        ).all()
+        now = datetime.now(UTC)
+        for candidate in pair_candidates:
             candidate.status = "accepted"
             candidate.resolved_by_user_id = actor_user_id
-            candidate.resolved_at = datetime.now(UTC)
+            candidate.resolved_at = now
             candidate.resolution_reason = reason
+        if selected_candidate is not None and selected_candidate.status == "accepted":
+            selected_candidate.resolved_by_user_id = actor_user_id
+            selected_candidate.resolved_at = now
+            selected_candidate.resolution_reason = reason
 
         await session.flush()
         return identity
@@ -385,6 +417,26 @@ class CatalogIdentityService:
             for row in rows
         ]
         return identity, members
+
+    async def products_by_ids(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        product_ids: Iterable[uuid.UUID],
+    ) -> dict[uuid.UUID, Product]:
+        ids = tuple(product_ids)
+        products = (
+            await session.scalars(
+                select(Product).where(
+                    Product.workspace_id == workspace_id,
+                    Product.id.in_(ids),
+                    Product.deleted_at.is_(None),
+                    Product.status == "active",
+                )
+            )
+        ).all()
+        return {product.id: product for product in products}
 
     async def _profiles(
         self,
@@ -563,25 +615,29 @@ class CatalogIdentityService:
                 signals=signals,
             )
 
-    async def _products_by_ids(
+    async def _active_identity_map(
         self,
         session: AsyncSession,
         *,
         workspace_id: uuid.UUID,
         product_ids: Iterable[uuid.UUID],
-    ) -> dict[uuid.UUID, Product]:
+    ) -> dict[uuid.UUID, uuid.UUID]:
         ids = tuple(product_ids)
-        products = (
+        if not ids:
+            return {}
+        memberships = (
             await session.scalars(
-                select(Product).where(
-                    Product.workspace_id == workspace_id,
-                    Product.id.in_(ids),
-                    Product.deleted_at.is_(None),
-                    Product.status == "active",
+                select(ProductIdentityMembership).where(
+                    ProductIdentityMembership.workspace_id == workspace_id,
+                    ProductIdentityMembership.product_id.in_(ids),
+                    ProductIdentityMembership.unlinked_at.is_(None),
                 )
             )
         ).all()
-        return {product.id: product for product in products}
+        return {
+            membership.product_id: membership.identity_id
+            for membership in memberships
+        }
 
     async def _active_membership(
         self,
