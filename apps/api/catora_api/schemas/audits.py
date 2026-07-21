@@ -69,3 +69,10 @@ class AuditFindingView(BaseModel):
     resolved_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class AuditFindingListResponse(BaseModel):
+    items: list[AuditFindingView]
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=500)
