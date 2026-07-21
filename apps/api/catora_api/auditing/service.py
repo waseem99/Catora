@@ -422,8 +422,10 @@ class AuditRunService:
                     )
                 )
             ).all()
-            for historical in historical_findings:
-                latest_history.setdefault(historical.fingerprint, historical)
+            for historical_finding in historical_findings:
+                latest_history.setdefault(
+                    historical_finding.fingerprint, historical_finding
+                )
 
         now = datetime.now(UTC)
         resolved_count = 0
@@ -439,9 +441,9 @@ class AuditRunService:
 
         statuses: list[str] = []
         for fingerprint, candidate in sorted(findings.items()):
-            historical = latest_history.get(fingerprint)
+            latest_finding = latest_history.get(fingerprint)
             status = next_finding_status(
-                historical.status if historical is not None else None
+                latest_finding.status if latest_finding is not None else None
             )
             statuses.append(status)
             session.add(
@@ -449,7 +451,7 @@ class AuditRunService:
                     workspace_id=run.workspace_id,
                     audit_run_id=run.id,
                     previous_finding_id=(
-                        historical.id if historical is not None else None
+                        latest_finding.id if latest_finding is not None else None
                     ),
                     rule_version_id=candidate.rule_version_id,
                     product_id=candidate.product_id,
@@ -474,7 +476,9 @@ class AuditRunService:
                         for item in candidate.evidence
                     ],
                     first_seen_at=(
-                        historical.first_seen_at if historical is not None else now
+                        latest_finding.first_seen_at
+                        if latest_finding is not None
+                        else now
                     ),
                     last_seen_at=now,
                     resolved_at=None,
