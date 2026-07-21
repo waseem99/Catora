@@ -20,6 +20,7 @@ from catora_api.api import (
     ingestion_router,
     public_catalog_router,
     shopify_router,
+    taxonomy_router,
 )
 from catora_api.auth.service import (
     AuthenticationError,
@@ -67,6 +68,7 @@ app.include_router(shopify_router)
 app.include_router(public_catalog_router)
 app.include_router(catalog_router)
 app.include_router(catalog_identity_router)
+app.include_router(taxonomy_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
