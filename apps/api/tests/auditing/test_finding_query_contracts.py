@@ -9,6 +9,7 @@ from catora_api.auditing.service import AuditConfigurationError
 from catora_api.auditing.types import FindingCandidate
 from catora_api.db.models.audit import AuditFinding
 from catora_api.main import app
+from catora_api.schemas.audits import AuditFindingListResponse
 
 
 class RowResult:
@@ -105,6 +106,21 @@ def test_finding_endpoint_exposes_complete_filter_contract() -> None:
         "business_impact",
         "remediation_type",
         "product_id",
+        "offset",
+        "limit",
+    }
+
+
+def test_finding_endpoint_returns_reconcilable_pagination_metadata() -> None:
+    path = "/api/v1/workspaces/{workspace_id}/audit-runs/{run_id}/findings"
+    schema = app.openapi()["paths"][path]["get"]["responses"]["200"]["content"][
+        "application/json"
+    ]["schema"]
+
+    assert schema["$ref"].endswith("/AuditFindingListResponse")
+    assert set(AuditFindingListResponse.model_fields) == {
+        "items",
+        "total",
         "offset",
         "limit",
     }
