@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     s3_access_key: str = "catora"
     s3_secret_key: str = Field(default="change-me-in-production", repr=False)
     s3_bucket: str = "catora"
+    max_catalog_upload_bytes: int = 25 * 1024 * 1024
     cors_origins: list[str] = ["http://localhost:3000"]
     frontend_url: str = "http://localhost:3000"
     auth_token_pepper: str = Field(default="development-token-pepper-change-me", repr=False)
