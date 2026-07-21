@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 import pytest
 from pydantic import ValidationError
@@ -6,7 +7,11 @@ from pydantic import ValidationError
 from catora_api.connectors.shopify import ShopifyCatalogConnector
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.ingestion.factory import connector_for_source
-from catora_api.schemas.ingestion import CsvMappingRequest, CsvSourceCreateRequest
+from catora_api.schemas.ingestion import (
+    CsvMappingRequest,
+    CsvSourceCreateRequest,
+    ShopifySourceCreateRequest,
+)
 from catora_api.secrets import SecretValue
 
 
@@ -48,6 +53,50 @@ def test_csv_source_contract_rejects_multi_character_delimiter() -> None:
             object_key="workspaces/w/catalog.csv",
             delimiter=",,",
             mapping=CsvMappingRequest(product_id="id", title="title"),
+        )
+
+
+def test_shopify_source_contract_normalizes_domain_without_accepting_raw_token() -> None:
+    request = ShopifySourceCreateRequest(
+        name="Primary Shopify store",
+        shop_domain="https://Demo-Store.myshopify.com/",
+        credential_ref="env:CATORA_CONNECTOR_SECRET_DEMO",
+        updated_after="2026-07-01T00:00:00Z",
+    )
+
+    assert request.shop_domain == "demo-store.myshopify.com"
+    assert request.updated_after is not None
+
+    with pytest.raises(ValidationError):
+        ShopifySourceCreateRequest.model_validate(
+            {
+                "name": "Unsafe source",
+                "shop_domain": "demo-store.myshopify.com",
+                "credential_ref": "env:CATORA_CONNECTOR_SECRET_DEMO",
+                "access_token": "raw-token-must-not-be-accepted",
+            }
+        )
+
+
+def test_shopify_source_contract_rejects_unsafe_values() -> None:
+    with pytest.raises(ValidationError):
+        ShopifySourceCreateRequest(
+            name="Unsafe source",
+            shop_domain="https://example.com",
+            credential_ref="env:CATORA_CONNECTOR_SECRET_DEMO",
+        )
+    with pytest.raises(ValidationError):
+        ShopifySourceCreateRequest(
+            name="Unsafe source",
+            shop_domain="demo-store.myshopify.com",
+            credential_ref="env:SHOPIFY_TOKEN",
+        )
+    with pytest.raises(ValidationError):
+        ShopifySourceCreateRequest(
+            name="Unsafe source",
+            shop_domain="demo-store.myshopify.com",
+            credential_ref="env:CATORA_CONNECTOR_SECRET_DEMO",
+            updated_after=datetime(2026, 7, 1),
         )
 
 
