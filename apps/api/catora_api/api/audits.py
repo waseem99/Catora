@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from catora_api.auditing.service import (
-    ACTIVE_AUDIT_STATUSES,
     AuditConfigurationError,
     AuditRunConflictError,
     AuditRunNotFoundError,
@@ -231,25 +230,3 @@ async def list_audit_findings(
         )
     ).all()
     return [AuditFindingView.model_validate(finding) for finding in findings]
-
-
-@router.get(
-    "/workspaces/{workspace_id}/audit-runs/active/count",
-    response_model=int,
-)
-async def count_active_audit_runs(
-    workspace_id: uuid.UUID,
-    session: SessionDependency,
-    auth_service: AuthServiceDependency,
-    context: AuthContextDependency,
-) -> int:
-    await auth_service.membership(session, context.user.id, workspace_id)
-    active_ids = (
-        await session.scalars(
-            select(AuditRun.id).where(
-                AuditRun.workspace_id == workspace_id,
-                AuditRun.status.in_(ACTIVE_AUDIT_STATUSES),
-            )
-        )
-    ).all()
-    return len(active_ids)
