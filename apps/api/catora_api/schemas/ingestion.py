@@ -47,10 +47,11 @@ class CsvMappingRequest(IngestionModel):
         "availability",
         "category",
         "image_url",
+        mode="before",
     )
     @classmethod
-    def strip_column(cls, value: str | None) -> str | None:
-        return value.strip() if value is not None else None
+    def strip_column(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class CsvSourceCreateRequest(IngestionModel):
