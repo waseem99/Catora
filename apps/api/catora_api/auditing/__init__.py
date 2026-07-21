@@ -1,3 +1,4 @@
+from catora_api.auditing.lifecycle import finding_count_summary, next_finding_status
 from catora_api.auditing.rules import (
     SEVERITY_WEIGHTS,
     RuleSpecificationError,
@@ -12,6 +13,14 @@ from catora_api.auditing.scoring import (
     ScoreContribution,
     calculate_health_score,
 )
+from catora_api.auditing.service import (
+    ACTIVE_AUDIT_STATUSES,
+    AUDIT_BATCH_SIZE,
+    AuditConfigurationError,
+    AuditRunConflictError,
+    AuditRunNotFoundError,
+    AuditRunService,
+)
 from catora_api.auditing.types import (
     AttributeSnapshot,
     EvidenceSnapshot,
@@ -22,8 +31,14 @@ from catora_api.auditing.types import (
 )
 
 __all__ = [
+    "ACTIVE_AUDIT_STATUSES",
+    "AUDIT_BATCH_SIZE",
     "SEVERITY_WEIGHTS",
     "AttributeSnapshot",
+    "AuditConfigurationError",
+    "AuditRunConflictError",
+    "AuditRunNotFoundError",
+    "AuditRunService",
     "CatalogHealthScore",
     "DimensionScore",
     "EvidenceSnapshot",
@@ -37,5 +52,7 @@ __all__ = [
     "calculate_health_score",
     "evaluate_catalog",
     "evaluate_product",
+    "finding_count_summary",
     "finding_fingerprint",
+    "next_finding_status",
 ]
