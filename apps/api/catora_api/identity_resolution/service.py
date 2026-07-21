@@ -646,12 +646,15 @@ class CatalogIdentityService:
         workspace_id: uuid.UUID,
         product_id: uuid.UUID,
     ) -> ProductIdentityMembership | None:
-        return await session.scalar(
-            select(ProductIdentityMembership).where(
-                ProductIdentityMembership.workspace_id == workspace_id,
-                ProductIdentityMembership.product_id == product_id,
-                ProductIdentityMembership.unlinked_at.is_(None),
-            )
+        return cast(
+            ProductIdentityMembership | None,
+            await session.scalar(
+                select(ProductIdentityMembership).where(
+                    ProductIdentityMembership.workspace_id == workspace_id,
+                    ProductIdentityMembership.product_id == product_id,
+                    ProductIdentityMembership.unlinked_at.is_(None),
+                )
+            ),
         )
 
     async def _identity_or_error(
