@@ -57,6 +57,7 @@ class AuditFindingView(BaseModel):
     explanation: str
     fingerprint: str = Field(min_length=64, max_length=64)
     status: FindingStatus
+    category_key: str
     field_key: str
     affected_value: dict[str, object] | list[object] | str | int | float | bool | None
     business_impact: str
