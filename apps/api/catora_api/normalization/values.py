@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -38,6 +39,26 @@ _MASS_TO_G: dict[str, Decimal] = {
     "pound": Decimal("453.59237"),
     "pounds": Decimal("453.59237"),
     "oz": Decimal("28.349523125"),
+}
+_UNIT_ALIASES = {
+    "millimeter": "mm",
+    "millimeters": "mm",
+    "centimeter": "cm",
+    "centimeters": "cm",
+    "meter": "m",
+    "meters": "m",
+    "inch": "in",
+    "inches": "in",
+    "foot": "ft",
+    "feet": "ft",
+    "gram": "g",
+    "grams": "g",
+    "kilogram": "kg",
+    "kilograms": "kg",
+    "pound": "lb",
+    "pounds": "lb",
+    "ounce": "oz",
+    "ounces": "oz",
 }
 _TRUE_VALUES = frozenset({"true", "yes", "y", "1", "on"})
 _FALSE_VALUES = frozenset({"false", "no", "n", "0", "off"})
@@ -110,7 +131,7 @@ def normalize_measurement(
     *,
     expected_quantity: Quantity | None = None,
 ) -> ParsedValue | None:
-    text = _clean_scalar_text(value)
+    text = _measurement_text(value)
     if text is None:
         return None
     match = _MEASUREMENT_PATTERN.fullmatch(text)
@@ -225,13 +246,13 @@ def normalize_typed_value(
         return normalize_date(value)
     if normalized_hint in {"currency", "currency_code"}:
         return normalize_currency(value)
-    if normalized_hint in {"length", "distance"}:
+    if normalized_hint in {"length", "distance", "dimension"}:
         return normalize_measurement(value, expected_quantity="length")
     if normalized_hint in {"mass", "weight"}:
         return normalize_measurement(value, expected_quantity="mass")
-    if normalized_hint in {"dimensions", "dimension"}:
+    if normalized_hint in {"dimensions", "size"}:
         return normalize_dimensions(value)
-    if normalized_hint in {"decimal", "price", "number"}:
+    if normalized_hint in {"decimal", "price", "number", "number_decimal"}:
         return normalize_decimal(value)
     if aliases is not None and normalized_hint:
         return normalize_choice(
@@ -240,6 +261,25 @@ def normalize_typed_value(
             value_type=normalized_hint,
         )
     return None
+
+
+def _measurement_text(value: object) -> str | None:
+    if isinstance(value, dict):
+        raw_value = value.get("value")
+        raw_unit = value.get("unit")
+        number = _clean_scalar_text(raw_value)
+        unit = _clean_scalar_text(raw_unit)
+        if number is None or unit is None:
+            return None
+        canonical_unit = _UNIT_ALIASES.get(unit.casefold(), unit.casefold())
+        return f"{number} {canonical_unit}"
+    if isinstance(value, str) and value.lstrip().startswith("{"):
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return _clean_scalar_text(value)
+        return _measurement_text(decoded)
+    return _clean_scalar_text(value)
 
 
 def _clean_scalar_text(value: object) -> str | None:
