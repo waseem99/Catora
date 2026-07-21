@@ -134,7 +134,29 @@ jobs:
           name: pytest-report
           path: pytest-report.txt
           retention-days: 3
-      - run: cd apps/api && alembic upgrade head && alembic downgrade -1
+      - name: Run Alembic upgrade and downgrade
+        shell: bash
+        run: |
+          set +e
+          (
+            cd apps/api
+            alembic upgrade head
+            upgrade_status=$?
+            if [ "$upgrade_status" -ne 0 ]; then
+              exit "$upgrade_status"
+            fi
+            alembic downgrade -1
+          ) > migration-report.txt 2>&1
+          status=$?
+          cat migration-report.txt
+          exit "$status"
+      - name: Upload migration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-report
+          path: migration-report.txt
+          retention-days: 3
 
   security:
     runs-on: ubuntu-latest
