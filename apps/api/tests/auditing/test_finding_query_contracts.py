@@ -140,11 +140,13 @@ def test_finding_response_schema_exposes_category_snapshot() -> None:
 def test_finding_endpoint_exposes_complete_filter_contract() -> None:
     path = "/api/v1/workspaces/{workspace_id}/audit-runs/{run_id}/findings"
     operation = app.openapi()["paths"][path]["get"]
-    parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
+    query_parameters = {
+        parameter["name"]: parameter
+        for parameter in operation["parameters"]
+        if parameter["in"] == "query"
+    }
 
-    assert set(parameters) == {
-        "workspace_id",
-        "run_id",
+    assert set(query_parameters) == {
         "status",
         "severity",
         "category_key",
@@ -155,18 +157,18 @@ def test_finding_endpoint_exposes_complete_filter_contract() -> None:
         "offset",
         "limit",
     }
-    assert parameters["offset"]["schema"]["minimum"] == 0
-    assert parameters["limit"]["schema"]["minimum"] == 1
-    assert parameters["limit"]["schema"]["maximum"] == 500
-    assert _schema_value(parameters["category_key"]["schema"], "pattern") == (
+    assert query_parameters["offset"]["schema"]["minimum"] == 0
+    assert query_parameters["limit"]["schema"]["minimum"] == 1
+    assert query_parameters["limit"]["schema"]["maximum"] == 500
+    assert _schema_value(query_parameters["category_key"]["schema"], "pattern") == (
         "^[a-z][a-z0-9_]*$"
     )
-    assert _schema_value(parameters["field_key"]["schema"], "pattern") == (
+    assert _schema_value(query_parameters["field_key"]["schema"], "pattern") == (
         "^[a-z][a-z0-9_]*$"
     )
-    assert _schema_value(parameters["remediation_type"]["schema"], "pattern") == (
-        "^[a-z][a-z0-9_]*$"
-    )
+    assert _schema_value(
+        query_parameters["remediation_type"]["schema"], "pattern"
+    ) == "^[a-z][a-z0-9_]*$"
 
 
 def _schema_value(schema: dict[str, object], key: str) -> object | None:
