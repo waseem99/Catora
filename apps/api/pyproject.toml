@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "catora-api"
+version = "0.1.0"
+description = "Catora enterprise catalog intelligence API"
+requires-python = ">=3.13"
+dependencies = [
+  "alembic==1.16.5",
+  "asyncpg==0.30.0",
+  "boto3==1.40.6",
+  "celery==5.6.3",
+  "fastapi==0.139.2",
+  "pydantic-settings==2.10.1",
+  "redis==5.3.1",
+  "sqlalchemy==2.0.51",
+  "structlog==25.4.0",
+  "uvicorn[standard]==0.35.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx==0.28.1",
+  "mypy==1.17.1",
+  "pytest==8.4.1",
+  "pytest-asyncio==1.1.0",
+  "ruff==0.12.8"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["catora_api"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = []
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "celery", "celery.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

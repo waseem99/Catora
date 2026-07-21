@@ -1,0 +1,24 @@
+# Node
+node_modules/
+.next/
+coverage/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.py[cod]
+
+# Environment and runtime
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+
+# Generated artifacts
+artifacts/
+.minio/
