@@ -1,3 +1,11 @@
+from catora_api.taxonomy.assignment import (
+    CATEGORY_CLASSIFIER_VERSION,
+    ProductCategoryAssignment,
+    TaxonomyAssignmentConflictError,
+    TaxonomyAssignmentService,
+    TaxonomyCategoryNotFoundError,
+    TaxonomyProductNotFoundError,
+)
 from catora_api.taxonomy.compiler import (
     TaxonomyCompilePlan,
     TaxonomyCompileSummary,
@@ -20,14 +28,20 @@ from catora_api.taxonomy.resolution import (
 from catora_api.taxonomy.schema import TaxonomyPackage
 
 __all__ = [
+    "CATEGORY_CLASSIFIER_VERSION",
     "ClassificationResult",
+    "ProductCategoryAssignment",
     "ResolvedCategory",
+    "TaxonomyAssignmentConflictError",
+    "TaxonomyAssignmentService",
+    "TaxonomyCategoryNotFoundError",
     "TaxonomyCompilePlan",
     "TaxonomyCompileSummary",
     "TaxonomyCompiler",
     "TaxonomyImmutabilityError",
     "TaxonomyLoadError",
     "TaxonomyPackage",
+    "TaxonomyProductNotFoundError",
     "build_compile_plan",
     "classify_product",
     "load_bundled_taxonomy",
