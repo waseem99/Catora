@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any, AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Mapping
+from typing import Any
 
 import pytest
 
