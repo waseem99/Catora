@@ -8,9 +8,9 @@ from catora_api.auth.roles import Role, can
 from catora_api.db.models.catalog import Product
 from catora_api.identity_resolution.service import (
     CatalogIdentityService,
-    _ProductProfile,
     _identifier,
     _pair,
+    _ProductProfile,
 )
 from catora_api.main import app
 
