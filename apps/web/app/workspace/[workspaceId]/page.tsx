@@ -9,11 +9,15 @@ export default async function WorkspacePage({ params }: Props) {
       <p className="eyebrow">WORKSPACE READY</p>
       <h1>Catalog intelligence</h1>
       <p className="lede">
-        Review canonical products, normalization warnings and source evidence for this workspace.
+        Review canonical products, normalization warnings, identity candidates and source evidence
+        for this workspace.
       </p>
       <div className="actions">
         <Link className="primary" href={`/workspace/${workspaceId}/products`}>
           Browse products
+        </Link>
+        <Link className="secondary" href={`/workspace/${workspaceId}/identity-review`}>
+          Review identities
         </Link>
         <Link className="secondary" href={`/workspace/${workspaceId}/members`}>
           Manage access
