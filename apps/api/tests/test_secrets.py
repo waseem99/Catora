@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from catora_api.secrets import EnvironmentSecretResolver, SecretResolutionError, SecretValue
+from catora_api.secrets import (
+    EnvironmentSecretResolver,
+    SecretResolutionError,
+    SecretValue,
+)
 
 
 def test_secret_value_hides_contents_from_repr() -> None:
@@ -19,7 +23,9 @@ def test_environment_resolver_accepts_only_connector_secret_prefix(
     resolver = EnvironmentSecretResolver()
 
     assert (
-        resolver.resolve("env:CATORA_CONNECTOR_SECRET_DEMO").get_secret_value()
+        resolver.resolve(
+            "env:CATORA_CONNECTOR_SECRET_DEMO"
+        ).get_secret_value()
         == "token-value"
     )
 
