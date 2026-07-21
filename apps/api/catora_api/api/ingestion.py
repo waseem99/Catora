@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -73,7 +73,7 @@ def _job_view(job: IngestionJob) -> IngestionJobView:
     }
     return IngestionJobView(
         id=job.id,
-        workspace_id=job.workspace_id,
+        workspace_id=cast(uuid.UUID, job.workspace_id),
         catalog_source_id=job.catalog_source_id,
         status=job.status,  # type: ignore[arg-type]
         processed_count=job.processed_count,
