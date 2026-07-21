@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 AuditRunStatus = Literal["queued", "running", "completed", "failed", "cancelled"]
+AuditRunMode = Literal["full", "incremental"]
 FindingStatus = Literal["new", "ongoing", "regressed", "resolved"]
 Severity = Literal["critical", "high", "medium", "low", "informational"]
 
@@ -15,7 +16,7 @@ class AuditRunCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     taxonomy_version: str = Field(default="1.0.0", pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
-    mode: Literal["full"] = "full"
+    mode: AuditRunMode = "full"
 
 
 class AuditRunView(BaseModel):
@@ -26,9 +27,10 @@ class AuditRunView(BaseModel):
     requested_by_user_id: uuid.UUID | None
     previous_run_id: uuid.UUID | None
     taxonomy_version: str
-    mode: Literal["full"]
+    mode: AuditRunMode
     status: AuditRunStatus
     source_snapshot_hash: str | None
+    product_snapshot_hashes: dict[str, str]
     rule_version_set: list[str]
     progress_current: int = Field(ge=0)
     progress_total: int = Field(ge=0)
