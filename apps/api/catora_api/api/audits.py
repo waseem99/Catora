@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
@@ -107,7 +108,7 @@ async def list_audit_runs(
     session: SessionDependency,
     auth_service: AuthServiceDependency,
     context: AuthContextDependency,
-    limit: int = Query(default=50, ge=1, le=200),
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[AuditRunView]:
     await auth_service.membership(session, context.user.id, workspace_id)
     runs = (
@@ -192,11 +193,11 @@ async def list_audit_findings(
     session: SessionDependency,
     auth_service: AuthServiceDependency,
     context: AuthContextDependency,
-    finding_status: str | None = Query(default=None, alias="status"),
-    severity: str | None = Query(default=None),
-    business_impact: str | None = Query(default=None),
-    product_id: uuid.UUID | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
+    finding_status: Annotated[str | None, Query(alias="status")] = None,
+    severity: Annotated[str | None, Query()] = None,
+    business_impact: Annotated[str | None, Query()] = None,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[AuditFindingView]:
     await auth_service.membership(session, context.user.id, workspace_id)
     run_exists = await session.scalar(
