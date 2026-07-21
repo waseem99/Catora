@@ -31,15 +31,12 @@ def test_catalog_routes_are_mounted_as_read_only_gets() -> None:
         "/api/v1/workspaces/{workspace_id}/products/{product_id}/provenance",
     }
     router_paths = {route.path for route in catalog_router.routes}
-    app_routes = {
-        route.path: set(getattr(route, "methods", set()))
-        for route in app.routes
-    }
+    openapi_paths = app.openapi()["paths"]
 
     assert expected_paths <= router_paths, sorted(router_paths)
-    assert expected_paths <= set(app_routes), sorted(app_routes)
+    assert expected_paths <= set(openapi_paths), sorted(openapi_paths)
     for path in expected_paths:
-        assert app_routes[path] == {"GET"}
+        assert set(openapi_paths[path]) == {"get"}
 
 
 def test_like_search_escapes_wildcards_and_backslashes() -> None:
