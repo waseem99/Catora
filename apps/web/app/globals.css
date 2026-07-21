@@ -62,3 +62,53 @@ article p, .intelligence-section p { color: var(--muted); line-height: 1.55; }
   .actions { flex-direction: column; }
   .actions a { text-align: center; }
 }
+
+
+.auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 40px 20px; }
+.auth-panel { width: min(620px, 100%); border: 1px solid var(--border); border-radius: 18px; padding: 34px; background: var(--panel); }
+.auth-panel h1 { font-size: clamp(34px, 5vw, 52px); }
+.brand-link { display: inline-block; margin-bottom: 48px; font-size: 20px; font-weight: 800; text-decoration: none; }
+.auth-form { display: grid; gap: 18px; margin-top: 32px; }
+.auth-form label { display: grid; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.auth-form input { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 13px 14px; color: var(--text); background: var(--bg); font: inherit; }
+.auth-form input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.primary-button, .secondary-button { border-radius: 9px; padding: 12px 16px; font: inherit; font-weight: 800; cursor: pointer; }
+.primary-button { border: 0; color: #04110c; background: var(--accent); }
+.secondary-button { border: 1px solid var(--border); color: var(--text); background: var(--panel-2); }
+.primary-button:disabled { opacity: .6; cursor: wait; }
+.text-link { color: var(--accent); font-size: 14px; }
+.form-error { color: #ffb4ab; }
+.workspace-shell { padding-top: 72px; padding-bottom: 72px; }
+.workspace-panel { display: grid; gap: 36px; }
+.workspace-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.workspace-header h1 { margin: 8px 0; font-size: 42px; }
+.workspace-header p { color: var(--muted); }
+.workspace-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px; }
+.workspace-card { display: grid; gap: 10px; min-height: 180px; padding: 24px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); text-decoration: none; }
+.workspace-card span, .workspace-card small { color: var(--muted); }
+.workspace-card strong { font-size: 24px; }
+.loading-state { padding: 80px 0; color: var(--muted); }
+@media (max-width: 600px) { .workspace-header { flex-direction: column; } .auth-panel { padding: 24px; } }
+
+.setup-panel { width: min(820px, 100%); }
+.two-column-form { grid-template-columns: 1fr 1fr; }
+.full-row { grid-column: 1 / -1; }
+.form-success { color: var(--accent); }
+.member-panel { display: grid; gap: 28px; margin-top: 36px; }
+.member-panel header p { color: var(--muted); }
+.invite-row { display: grid; grid-template-columns: minmax(220px, 1fr) 180px auto; gap: 14px; align-items: end; padding: 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--panel); }
+.invite-row label { display: grid; gap: 8px; color: var(--muted); font-size: 14px; font-weight: 700; }
+.invite-row input, .invite-row select, .member-actions select { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; color: var(--text); background: var(--bg); font: inherit; }
+.member-list { display: grid; border-top: 1px solid var(--border); }
+.member-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+.member-row > div:first-child { display: grid; gap: 5px; }
+.member-row span { color: var(--muted); font-size: 14px; }
+.member-actions { display: flex; align-items: center; gap: 10px; }
+.danger-button { border: 1px solid #7d3c3c; border-radius: 9px; padding: 10px 12px; color: #ffd2cc; background: #351c1c; cursor: pointer; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (max-width: 700px) {
+  .two-column-form { grid-template-columns: 1fr; }
+  .full-row { grid-column: auto; }
+  .invite-row { grid-template-columns: 1fr; }
+  .member-row, .member-actions { align-items: stretch; flex-direction: column; }
+}

@@ -9,6 +9,7 @@ description = "Catora enterprise catalog intelligence API"
 requires-python = ">=3.13"
 dependencies = [
   "alembic==1.16.5",
+  "argon2-cffi==25.1.0",
   "asyncpg==0.30.0",
   "boto3==1.40.6",
   "celery==5.6.3",

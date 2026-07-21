@@ -1,4 +1,5 @@
 from catora_api.db.models.audit import AuditFinding, AuditRun, RuleDefinition, RuleVersion
+from catora_api.db.models.auth import AuthSession, Invitation, PasswordResetToken
 from catora_api.db.models.catalog import (
     CatalogSource,
     Category,
@@ -39,6 +40,7 @@ from catora_api.db.models.workflow import (
 )
 
 __all__ = [
+    "AuthSession",
     "AuditEvent",
     "AuditFinding",
     "AuditRun",
@@ -50,6 +52,7 @@ __all__ = [
     "EvidenceReference",
     "ExportArtifact",
     "IngestionJob",
+    "Invitation",
     "IntentProductMatch",
     "IntentRun",
     "Locale",
@@ -59,6 +62,7 @@ __all__ = [
     "MeasurementBaseline",
     "Membership",
     "Organization",
+    "PasswordResetToken",
     "Product",
     "ProductAttribute",
     "ProductCohort",

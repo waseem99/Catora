@@ -13,6 +13,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from catora_api import __version__
+from catora_api.api import auth_router
+from catora_api.auth.service import (
+    AuthenticationError,
+    AuthorizationError,
+    ConflictError,
+    InvalidTokenError,
+)
 from catora_api.config import Settings, get_settings
 from catora_api.database import check_database, engine
 
@@ -47,6 +54,7 @@ app = FastAPI(
     description="Enterprise ecommerce catalog intelligence API",
     lifespan=lifespan,
 )
+app.include_router(auth_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -54,6 +62,26 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(AuthenticationError)
+async def authentication_error(_: Request, exc: AuthenticationError) -> JSONResponse:
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuthorizationError)
+async def authorization_error(_: Request, exc: AuthorizationError) -> JSONResponse:
+    return JSONResponse(status_code=403, content={"detail": str(exc)})
+
+
+@app.exception_handler(ConflictError)
+async def conflict_error(_: Request, exc: ConflictError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+
+@app.exception_handler(InvalidTokenError)
+async def invalid_token_error(_: Request, exc: InvalidTokenError) -> JSONResponse:
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
 @app.middleware("http")
@@ -109,7 +137,7 @@ async def readiness() -> JSONResponse:
         try:
             await check()
             dependencies.append({"name": name, "status": "ok"})
-        except Exception as exc:
+        except Exception as exc:  # readiness must report dependency failure, not leak internals
             dependencies.append({"name": name, "status": "error", "detail": type(exc).__name__})
 
     ready = all(item["status"] == "ok" for item in dependencies)
