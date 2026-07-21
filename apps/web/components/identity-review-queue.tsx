@@ -16,6 +16,7 @@ import {
   refreshIdentityCandidatesPath,
   rejectIdentityCandidatePath,
 } from "@/lib/catalog";
+import styles from "./identity-review-queue.module.css";
 
 type Props = { workspaceId: string };
 
@@ -168,7 +169,7 @@ export function IdentityReviewQueue({ workspaceId }: Props) {
       </header>
 
       {!canManage ? (
-        <p className="read-only-note">
+        <p className={styles.readOnlyNote}>
           Candidate evidence is visible to workspace members. Only owners and admins can link or
           reject identities.
         </p>
@@ -181,11 +182,11 @@ export function IdentityReviewQueue({ workspaceId }: Props) {
         <span>Algorithmic suggestions only</span>
       </div>
 
-      <div className="identity-candidate-list">
+      <div className={styles.candidateList}>
         {response?.items.map((candidate) => (
-          <article className="identity-candidate" key={candidate.id}>
+          <article className={styles.candidate} key={candidate.id}>
             <header>
-              <div className="identity-pair">
+              <div className={styles.pair}>
                 <ProductReference
                   workspaceId={workspaceId}
                   product={candidate.left_product}
@@ -196,13 +197,13 @@ export function IdentityReviewQueue({ workspaceId }: Props) {
                   product={candidate.right_product}
                 />
               </div>
-              <div className="identity-score">
+              <div className={styles.score}>
                 <strong>{(candidate.score_basis_points / 100).toFixed(1)}%</strong>
                 <span>{candidate.match_type}</span>
               </div>
             </header>
 
-            <ul className="identity-signals" aria-label="Candidate evidence signals">
+            <ul className={styles.signals} aria-label="Candidate evidence signals">
               {candidate.signals.map((signal) => (
                 <li key={`${signal.kind}:${signal.value ?? ""}`}>
                   <strong>{signal.kind.replaceAll("_", " ")}</strong>
@@ -212,7 +213,7 @@ export function IdentityReviewQueue({ workspaceId }: Props) {
             </ul>
 
             {canManage ? (
-              <div className="identity-review-actions">
+              <div className={styles.actions}>
                 <label>
                   <span>Review reason</span>
                   <input
