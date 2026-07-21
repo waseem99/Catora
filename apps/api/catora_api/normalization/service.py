@@ -28,8 +28,9 @@ from catora_api.normalization.types import (
     NormalizedImage,
     NormalizedProduct,
 )
+from catora_api.normalization.values import normalize_batch_values
 
-TRANSFORMER_VERSION = "catalog-normalizer-v1"
+TRANSFORMER_VERSION = "catalog-normalizer-v2"
 type DatabaseJsonValue = (
     dict[str, object] | list[object] | str | int | float | bool | None
 )
@@ -115,7 +116,10 @@ class CatalogNormalizationService:
                 .order_by(SourceRecord.snapshot_at, SourceRecord.id)
             )
         ).all()
-        batch = normalize_source_records(source, records)
+        batch = normalize_batch_values(
+            normalize_source_records(source, records),
+            source_config=source.config,
+        )
         counters = _Counters()
         for candidate in batch.products:
             await self._persist_product(
