@@ -8,6 +8,7 @@ from typing import cast
 from catora_api.auditing.scoring import ScoreContribution
 from catora_api.auditing.types import ScoreDimension
 
+_SCORE_FORMULA_VERSION = "weighted-health-v1"
 _VALID_DIMENSIONS = frozenset(
     {
         "completeness",
@@ -27,6 +28,10 @@ class IncrementalStateError(ValueError):
 def score_contributions_from_summary(
     summary: Mapping[str, object],
 ) -> tuple[ScoreContribution, ...]:
+    if summary.get("formula_version") != _SCORE_FORMULA_VERSION:
+        raise IncrementalStateError(
+            "Previous score summary uses an unsupported formula version"
+        )
     overall = summary.get("overall")
     if not isinstance(overall, Mapping):
         raise IncrementalStateError("Previous score summary has no overall score payload")
