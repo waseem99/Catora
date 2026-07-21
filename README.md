@@ -67,6 +67,18 @@ Services:
 | MinIO console | http://localhost:9001 |
 | Mailpit | http://localhost:8025 |
 
+## CSV catalog ingestion
+
+The first usable ingestion path supports authenticated, tenant-scoped CSV uploads and resumable background processing.
+
+1. Upload raw CSV bytes to `PUT /api/v1/workspaces/{workspace_id}/catalog-uploads/csv` using a CSV content type.
+2. Create a source with `POST /api/v1/workspaces/{workspace_id}/catalog-sources`, supplying the returned object key and column mapping.
+3. Validate the source through `POST /api/v1/workspaces/{workspace_id}/catalog-sources/{source_id}/validate`.
+4. Queue ingestion through `POST /api/v1/workspaces/{workspace_id}/catalog-sources/{source_id}/jobs`.
+5. Inspect job status and raw source samples through the workspace ingestion endpoints.
+
+Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads default to a 25 MiB limit configured through `CATORA_MAX_CATALOG_UPLOAD_BYTES`.
+
 ## Validation
 
 ```bash
