@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,12 +23,25 @@ from catora_api.db.models.catalog import (
 )
 from catora_api.normalization.adapters import normalize_source_records
 from catora_api.normalization.types import (
+    JsonScalar,
+    JsonValue,
     NormalizedAttribute,
     NormalizedImage,
     NormalizedProduct,
 )
 
 TRANSFORMER_VERSION = "catalog-normalizer-v1"
+type DatabaseJsonValue = (
+    dict[str, object] | list[object] | str | int | float | bool | None
+)
+
+
+def _database_json_value(value: JsonValue) -> DatabaseJsonValue:
+    if isinstance(value, Mapping):
+        return {key: item for key, item in value.items()}
+    if isinstance(value, str | int | float | bool) or value is None:
+        return value
+    return list(cast(Sequence[JsonScalar], value))
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +99,7 @@ class CatalogNormalizationService:
         source: CatalogSource,
         job: IngestionJob,
     ) -> NormalizationSummary:
-        workspace_id = source.workspace_id
+        workspace_id = cast(uuid.UUID, source.workspace_id)
         if workspace_id != job.workspace_id:
             raise ValueError("Source and job belong to different workspaces")
         if source.id != job.catalog_source_id:
@@ -192,19 +207,26 @@ class CatalogNormalizationService:
         for variant_candidate in candidate.variants:
             variant = existing_variants.get(variant_candidate.canonical_key)
             if variant is None:
+                option_values: dict[str, object] = {
+                    key: value
+                    for key, value in variant_candidate.option_values.items()
+                }
                 variant = ProductVariant(
                     workspace_id=workspace_id,
                     product_id=product.id,
                     canonical_key=variant_candidate.canonical_key,
                     sku=variant_candidate.sku,
                     title=variant_candidate.title,
-                    option_values=dict(variant_candidate.option_values),
+                    option_values=option_values,
                 )
                 session.add(variant)
                 await session.flush()
                 counters.variants_created += 1
             else:
-                option_values = dict(variant_candidate.option_values)
+                option_values = {
+                    key: value
+                    for key, value in variant_candidate.option_values.items()
+                }
                 changed = (
                     variant.sku != variant_candidate.sku
                     or variant.title != variant_candidate.title
@@ -285,13 +307,14 @@ class CatalogNormalizationService:
         attribute_ids: dict[str, uuid.UUID] = {}
         for candidate in candidates:
             attribute = existing.get(candidate.key)
+            value = _database_json_value(candidate.value)
             if attribute is None:
                 attribute = ProductAttribute(
                     workspace_id=workspace_id,
                     product_id=product.id,
                     variant_id=variant.id if variant else None,
                     key=candidate.key,
-                    value=candidate.value,
+                    value=value,
                     value_type=candidate.value_type,
                     unit=candidate.unit,
                     locale=candidate.locale,
@@ -304,7 +327,7 @@ class CatalogNormalizationService:
                 counters.attributes_created += 1
             else:
                 changed = (
-                    attribute.value != candidate.value
+                    attribute.value != value
                     or attribute.value_type != candidate.value_type
                     or attribute.unit != candidate.unit
                     or attribute.locale != candidate.locale
@@ -312,7 +335,7 @@ class CatalogNormalizationService:
                     or attribute.transformer_version != TRANSFORMER_VERSION
                     or attribute.confidence != candidate.confidence
                 )
-                attribute.value = candidate.value
+                attribute.value = value
                 attribute.value_type = candidate.value_type
                 attribute.unit = candidate.unit
                 attribute.locale = candidate.locale
