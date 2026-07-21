@@ -3,7 +3,12 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from catora_api.api.catalog import _escape_like, _is_warning, _product_detail
+from catora_api.api.catalog import (
+    _escape_like,
+    _is_warning,
+    _product_detail,
+    router as catalog_router,
+)
 from catora_api.db.models.catalog import (
     Product,
     ProductAttribute,
@@ -18,21 +23,21 @@ def _now() -> datetime:
 
 
 def test_catalog_routes_are_mounted_as_read_only_gets() -> None:
-    routes = {
-        (route.path, method)
+    expected_paths = {
+        "/api/v1/workspaces/{workspace_id}/products",
+        "/api/v1/workspaces/{workspace_id}/products/{product_id}",
+        "/api/v1/workspaces/{workspace_id}/products/{product_id}/provenance",
+    }
+    router_paths = {route.path for route in catalog_router.routes}
+    app_routes = {
+        route.path: set(getattr(route, "methods", set()))
         for route in app.routes
-        for method in getattr(route, "methods", set())
     }
 
-    assert ("/api/v1/workspaces/{workspace_id}/products", "GET") in routes
-    assert (
-        "/api/v1/workspaces/{workspace_id}/products/{product_id}",
-        "GET",
-    ) in routes
-    assert (
-        "/api/v1/workspaces/{workspace_id}/products/{product_id}/provenance",
-        "GET",
-    ) in routes
+    assert expected_paths <= router_paths, sorted(router_paths)
+    assert expected_paths <= set(app_routes), sorted(app_routes)
+    for path in expected_paths:
+        assert app_routes[path] == {"GET"}
 
 
 def test_like_search_escapes_wildcards_and_backslashes() -> None:
