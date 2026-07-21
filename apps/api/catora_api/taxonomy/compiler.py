@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import cast
 
@@ -233,7 +234,7 @@ class TaxonomyCompiler:
         *,
         workspace_id: uuid.UUID,
         plan: TaxonomyCompilePlan,
-        categories: list[Category],
+        categories: Sequence[Category],
     ) -> None:
         expected_categories = {category.key: category for category in plan.categories}
         existing_by_key = {category.key: category for category in categories}
@@ -288,6 +289,71 @@ class TaxonomyCompiler:
             ):
                 raise TaxonomyImmutabilityError(
                     f"taxonomy field {key!r}@{plan.version} has immutable drift"
+                )
+
+        await self._verify_existing_rules(
+            session,
+            workspace_id=workspace_id,
+            plan=plan,
+        )
+
+    async def _verify_existing_rules(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        plan: TaxonomyCompilePlan,
+    ) -> None:
+        expected_rules = {
+            _rule_key(category.key, field.field_key): _rule_specification(field)
+            for category in plan.categories
+            for field in category.fields
+            if field.requirement in {"required", "recommended"}
+        }
+        if not expected_rules:
+            return
+
+        definitions = (
+            await session.scalars(
+                select(RuleDefinition).where(
+                    RuleDefinition.workspace_id == workspace_id,
+                    RuleDefinition.key.in_(sorted(expected_rules)),
+                )
+            )
+        ).all()
+        definitions_by_key = {definition.key: definition for definition in definitions}
+        if set(definitions_by_key) != set(expected_rules):
+            raise TaxonomyImmutabilityError(
+                f"taxonomy {plan.version} already exists with a different rule set"
+            )
+        for rule_key, definition in definitions_by_key.items():
+            _verify_rule_definition(definition, rule_key=rule_key)
+
+        definition_key_by_id = {definition.id: definition.key for definition in definitions}
+        versions = (
+            await session.scalars(
+                select(RuleVersion).where(
+                    RuleVersion.workspace_id == workspace_id,
+                    RuleVersion.rule_definition_id.in_(list(definition_key_by_id)),
+                    RuleVersion.version == plan.version,
+                )
+            )
+        ).all()
+        versions_by_key = {
+            definition_key_by_id[version.rule_definition_id]: version for version in versions
+        }
+        if set(versions_by_key) != set(expected_rules):
+            raise TaxonomyImmutabilityError(
+                f"taxonomy {plan.version} already exists with incomplete rule versions"
+            )
+        for rule_key, version in versions_by_key.items():
+            if (
+                not version.is_immutable
+                or _canonical_json(version.specification)
+                != _canonical_json(expected_rules[rule_key])
+            ):
+                raise TaxonomyImmutabilityError(
+                    f"rule version {rule_key!r}@{plan.version} has immutable drift"
                 )
 
 
