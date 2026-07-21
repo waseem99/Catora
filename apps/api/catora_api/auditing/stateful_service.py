@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.auditing.incremental import (
+    IncrementalStateError,
     catalog_snapshot_hash,
     merge_product_snapshot_hashes,
     merge_score_contributions,
@@ -95,6 +96,7 @@ class StatefulAuditRunService(AuditRunService):
             raise AuditConfigurationError(
                 "No compiled immutable taxonomy rules exist for this workspace and version"
             )
+        current_rule_version_set = [str(rule_id) for rule_id in rule_version_ids]
 
         previous = await session.scalar(
             select(AuditRun)
@@ -114,6 +116,14 @@ class StatefulAuditRunService(AuditRunService):
             raise AuditConfigurationError(
                 "Incremental audit requires a baseline created with snapshot state"
             )
+        if previous.rule_version_set != current_rule_version_set:
+            raise AuditConfigurationError(
+                "Incremental audit requires an unchanged rule-version set; run a full audit"
+            )
+        try:
+            score_contributions_from_summary(previous.score_summary)
+        except IncrementalStateError as exc:
+            raise AuditConfigurationError(str(exc)) from exc
 
         run = AuditRun(
             workspace_id=workspace_id,
@@ -124,7 +134,7 @@ class StatefulAuditRunService(AuditRunService):
             status="queued",
             source_snapshot_hash=None,
             product_snapshot_hashes={},
-            rule_version_set=[str(rule_id) for rule_id in rule_version_ids],
+            rule_version_set=current_rule_version_set,
             progress_current=0,
             progress_total=0,
             cancellation_requested=False,
