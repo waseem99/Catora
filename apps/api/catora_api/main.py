@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from catora_api import __version__
 from catora_api.api import (
     auth_router,
+    catalog_router,
     ingestion_router,
     public_catalog_router,
     shopify_router,
@@ -63,6 +64,7 @@ app.include_router(auth_router)
 app.include_router(ingestion_router)
 app.include_router(shopify_router)
 app.include_router(public_catalog_router)
+app.include_router(catalog_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -89,97 +91,53 @@ async def conflict_error(_: Request, exc: ConflictError) -> JSONResponse:
 
 @app.exception_handler(InvalidTokenError)
 async def invalid_token_error(_: Request, exc: InvalidTokenError) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"detail": str(exc)})
-
-
-@app.middleware("http")
-async def request_context(request: Request, call_next: Any) -> Response:
-    request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        request_id=request_id,
-        path=request.url.path,
-    )
-    response: Response = await call_next(request)
-    response.headers["x-request-id"] = request_id
-    response.headers["x-content-type-options"] = "nosniff"
-    response.headers["x-frame-options"] = "DENY"
-    response.headers["referrer-policy"] = "strict-origin-when-cross-origin"
-    return response
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
 
 
 @app.get("/health/live", tags=["health"])
 async def liveness() -> dict[str, str]:
-    return {
-        "status": "ok",
-        "service": "catora-api",
-        "version": __version__,
-    }
+    return {"status": "ok", "version": __version__}
 
 
-async def _check_redis(settings: Settings) -> None:
-    client = redis.from_url(  # type: ignore[no-untyped-call]
-        settings.redis_url,
-        socket_connect_timeout=2,
+@app.get("/health/ready", tags=["health"])
+async def readiness() -> JSONResponse:
+    checks = await asyncio.gather(
+        _timed_check("database", check_database),
+        _timed_check("redis", _check_redis),
+        _timed_check("object_storage", _check_object_storage),
     )
+    healthy = all(result["ok"] for result in checks)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"status": "ready" if healthy else "not_ready", "checks": checks},
+    )
+
+
+async def _timed_check(
+    name: str,
+    check: Callable[[], Awaitable[None]],
+) -> dict[str, Any]:
+    try:
+        await asyncio.wait_for(check(), timeout=settings.health_check_timeout_seconds)
+        return {"name": name, "ok": True}
+    except Exception as exc:
+        return {"name": name, "ok": False, "error": type(exc).__name__}
+
+
+async def _check_redis() -> None:
+    client = redis.from_url(settings.redis_url)
     try:
         await client.ping()
     finally:
         await client.aclose()
 
 
-async def _check_storage(settings: Settings) -> None:
-    def check() -> None:
-        client = boto3.client(
-            "s3",
-            endpoint_url=settings.s3_endpoint_url,
-            aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
-        )
-        client.list_buckets()
-
-    await asyncio.to_thread(check)
-
-
-@app.get("/health/ready", tags=["health"])
-async def readiness() -> JSONResponse:
-    checks: dict[str, Callable[[], Awaitable[None]]] = {
-        "postgres": check_database,
-        "redis": lambda: _check_redis(settings),
-        "object_storage": lambda: _check_storage(settings),
-    }
-    dependencies: list[dict[str, str]] = []
-    for name, check in checks.items():
-        try:
-            await check()
-            dependencies.append({"name": name, "status": "ok"})
-        except Exception as exc:
-            dependencies.append(
-                {
-                    "name": name,
-                    "status": "error",
-                    "detail": type(exc).__name__,
-                }
-            )
-
-    ready = all(item["status"] == "ok" for item in dependencies)
-    return JSONResponse(
-        status_code=(
-            status.HTTP_200_OK
-            if ready
-            else status.HTTP_503_SERVICE_UNAVAILABLE
-        ),
-        content={
-            "status": "ready" if ready else "not_ready",
-            "dependencies": dependencies,
-        },
+async def _check_object_storage() -> None:
+    client = boto3.client(
+        "s3",
+        endpoint_url=settings.s3_endpoint_url,
+        aws_access_key_id=settings.s3_access_key,
+        aws_secret_access_key=settings.s3_secret_key,
+        region_name=settings.s3_region,
     )
-
-
-@app.get("/api/v1/system/info", tags=["system"])
-async def system_info() -> dict[str, str]:
-    return {
-        "name": "Catora",
-        "version": __version__,
-        "environment": settings.environment,
-    }
+    await asyncio.to_thread(client.head_bucket, Bucket=settings.s3_bucket)
