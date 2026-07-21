@@ -27,9 +27,11 @@ class RecordingSession:
         return None
 
     def add(self, value: object) -> None:
-        if isinstance(value, Category | TaxonomyField | RuleDefinition | RuleVersion):
-            if value.id is None:
-                value.id = uuid.uuid4()
+        if (
+            isinstance(value, Category | TaxonomyField | RuleDefinition | RuleVersion)
+            and value.id is None
+        ):
+            value.id = uuid.uuid4()
         self.added.append(value)
 
     async def flush(self) -> None:
