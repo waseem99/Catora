@@ -4,8 +4,9 @@ import csv
 import hashlib
 import io
 import json
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, fields
-from typing import Any, AsyncIterator, Mapping
+from typing import Any
 
 from catora_api.connectors.base import (
     CatalogConnector,
@@ -60,6 +61,10 @@ class CsvCatalogConnector(CatalogConnector):
         self._mapping = mapping
         self._encoding = encoding
         self._delimiter = delimiter
+
+    @property
+    def mapping(self) -> CsvMapping:
+        return self._mapping
 
     def _text(self) -> str:
         if isinstance(self._content, str):
