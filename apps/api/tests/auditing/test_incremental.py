@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from catora_api.auditing.incremental import (
+    IncrementalStateError,
     catalog_snapshot_hash,
     merge_product_snapshot_hashes,
     merge_score_contributions,
@@ -57,6 +60,7 @@ def test_incremental_score_merge_matches_full_recomputation() -> None:
 
 def test_previous_score_summary_round_trips_contributions() -> None:
     summary = {
+        "formula_version": "weighted-health-v1",
         "overall": {
             "contributions": [
                 {
@@ -71,7 +75,7 @@ def test_previous_score_summary_round_trips_contributions() -> None:
                     "coverage_basis_points": 9000,
                 }
             ]
-        }
+        },
     }
 
     contributions = score_contributions_from_summary(summary)
@@ -79,6 +83,16 @@ def test_previous_score_summary_round_trips_contributions() -> None:
     assert len(contributions) == 1
     assert contributions[0].product_id == "p1"
     assert contributions[0].coverage_basis_points == 9000
+
+
+def test_previous_score_summary_rejects_formula_drift() -> None:
+    with pytest.raises(IncrementalStateError, match="formula version"):
+        score_contributions_from_summary(
+            {
+                "formula_version": "weighted-health-v2",
+                "overall": {"contributions": []},
+            }
+        )
 
 
 def test_snapshot_hash_merge_removes_deleted_and_updates_changed_products() -> None:
