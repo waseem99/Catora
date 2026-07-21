@@ -9,7 +9,7 @@ from typing import Literal
 
 Quantity = Literal["length", "mass"]
 type ScalarValue = str | int | float | bool | None
-type NormalizedValue = ScalarValue | dict[str, ScalarValue] | list[ScalarValue]
+type NormalizedValue = ScalarValue | list[ScalarValue] | dict[str, ScalarValue]
 
 _NUMBER_PATTERN = re.compile(r"^[+-]?(?:\d+(?:\.\d+)?|\.\d+)$")
 _MEASUREMENT_PATTERN = re.compile(
@@ -156,24 +156,33 @@ def normalize_dimensions(value: object) -> ParsedValue | None:
     if trailing_match is None:
         return None
     shared_unit = trailing_match.group("unit")
-    normalized_parts: list[dict[str, ScalarValue]] = []
-    for index, part in enumerate(parts):
-        candidate = part if index == len(parts) - 1 else f"{part} {shared_unit}"
-        normalized = normalize_measurement(candidate, expected_quantity="length")
+    canonical_values: list[str] = []
+    for part in parts:
+        normalized = normalize_measurement(part, expected_quantity="length")
+        if normalized is None:
+            normalized = normalize_measurement(
+                f"{part} {shared_unit}",
+                expected_quantity="length",
+            )
         if normalized is None or not isinstance(normalized.value, dict):
             return None
-        normalized_parts.append(normalized.value)
+        canonical_value = normalized.value.get("canonical_value")
+        if not isinstance(canonical_value, str):
+            return None
+        canonical_values.append(canonical_value)
 
+    normalized_dimensions: dict[str, ScalarValue] = {
+        "raw": text,
+        "quantity": "dimensions",
+        "canonical_unit": "mm",
+        "axis_1": canonical_values[0],
+        "axis_2": canonical_values[1],
+        "source_unit": shared_unit.casefold(),
+    }
+    if len(canonical_values) == 3:
+        normalized_dimensions["axis_3"] = canonical_values[2]
     return ParsedValue(
-        value={
-            "raw": text,
-            "quantity": "dimensions",
-            "canonical_unit": "mm",
-            "canonical_values": [
-                str(part["canonical_value"]) for part in normalized_parts
-            ],
-            "source_unit": shared_unit.casefold(),
-        },
+        value=normalized_dimensions,
         value_type="dimensions",
         unit="mm",
     )
