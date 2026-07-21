@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-SourceType = Literal["csv"]
 JobStatus = Literal[
     "queued",
     "validating",
@@ -56,11 +56,54 @@ class CsvMappingRequest(IngestionModel):
 
 class CsvSourceCreateRequest(IngestionModel):
     name: str = Field(min_length=2, max_length=200)
-    source_type: SourceType = "csv"
+    source_type: Literal["csv"] = "csv"
     object_key: str = Field(min_length=1, max_length=700)
     mapping: CsvMappingRequest
     encoding: str = Field(default="utf-8-sig", min_length=3, max_length=50)
     delimiter: str | None = Field(default=None, min_length=1, max_length=1)
+
+
+class ShopifySourceCreateRequest(IngestionModel):
+    name: str = Field(min_length=2, max_length=200)
+    source_type: Literal["shopify"] = "shopify"
+    shop_domain: str = Field(min_length=5, max_length=255)
+    credential_ref: str = Field(
+        pattern=r"^env:CATORA_CONNECTOR_SECRET_[A-Z0-9_]+$",
+        min_length=35,
+        max_length=255,
+    )
+    api_version: str = Field(default="2026-07", pattern=r"^\d{4}-(01|04|07|10)$")
+    updated_after: datetime | None = None
+
+    @field_validator("shop_domain")
+    @classmethod
+    def normalize_shop_domain(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or not parsed.hostname.endswith(".myshopify.com")
+            or parsed.path not in {"", "/"}
+            or parsed.port is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError("shop_domain must be a myshopify.com HTTPS hostname")
+        return parsed.hostname
+
+    @field_validator("updated_after")
+    @classmethod
+    def require_timezone(cls, value: datetime | None) -> datetime | None:
+        if value is not None and value.tzinfo is None:
+            raise ValueError("updated_after must be timezone-aware")
+        return value
+
+
+CatalogSourceCreateRequest = Annotated[
+    CsvSourceCreateRequest | ShopifySourceCreateRequest,
+    Field(discriminator="source_type"),
+]
 
 
 class CsvUploadResponse(IngestionModel):
