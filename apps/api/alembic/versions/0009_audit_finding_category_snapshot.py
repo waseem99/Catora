@@ -8,7 +8,6 @@ Create Date: 2026-07-21
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 
 revision: str = "0009"
@@ -30,10 +29,11 @@ def upgrade() -> None:
     op.execute(
         """
         UPDATE audit_findings AS finding
-        SET category_key = category.key
-        FROM products AS product
-        JOIN categories AS category ON category.id = product.primary_category_id
-        WHERE finding.product_id = product.id
+        SET category_key = rule_version.specification ->> 'category_key'
+        FROM rule_versions AS rule_version
+        WHERE finding.rule_version_id = rule_version.id
+          AND rule_version.is_immutable IS TRUE
+          AND COALESCE(rule_version.specification ->> 'category_key', '') <> ''
         """
     )
     op.create_index(
