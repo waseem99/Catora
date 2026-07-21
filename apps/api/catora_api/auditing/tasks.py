@@ -5,7 +5,7 @@ import uuid
 
 from celery import shared_task
 
-from catora_api.auditing.service import AuditRunService
+from catora_api.auditing.stateful_service import StatefulAuditRunService
 from catora_api.database import SessionFactory
 
 
@@ -16,4 +16,4 @@ def run_audit(run_id: str) -> None:
 
 async def _run_audit(run_id: uuid.UUID) -> None:
     async with SessionFactory() as session:
-        await AuditRunService().execute_run(session, run_id=run_id)
+        await StatefulAuditRunService().execute_run(session, run_id=run_id)
