@@ -17,7 +17,11 @@ from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models import AuditEvent
 from catora_api.db.models.catalog import Product
-from catora_api.db.models.catalog_identity import ProductIdentityCandidate
+from catora_api.db.models.catalog_identity import (
+    CommercialProductIdentity,
+    ProductIdentityCandidate,
+    ProductIdentityMembership,
+)
 from catora_api.identity_resolution import (
     ALGORITHM_VERSION,
     CatalogIdentityConflictError,
@@ -336,7 +340,7 @@ async def reject_identity_candidate(
         )
     )
     await session.commit()
-    products = await identity_service._products_by_ids(
+    products = await identity_service.products_by_ids(
         session,
         workspace_id=workspace_id,
         product_ids=(candidate.left_product_id, candidate.right_product_id),
@@ -387,27 +391,21 @@ def _candidate_view(
 
 
 def _identity_view(
-    identity: object,
-    members: list[tuple[object, Product]],
+    identity: CommercialProductIdentity,
+    members: list[tuple[ProductIdentityMembership, Product]],
 ) -> ProductIdentityView:
-    from catora_api.db.models.catalog_identity import (
-        CommercialProductIdentity,
-        ProductIdentityMembership,
-    )
-
-    typed_identity = cast(CommercialProductIdentity, identity)
     return ProductIdentityView(
-        identity_id=typed_identity.id,
-        status=cast(IdentityStatus, typed_identity.status),
+        identity_id=identity.id,
+        status=cast(IdentityStatus, identity.status),
         members=[
             ProductIdentityMemberView(
                 product=IdentityProductSummary.model_validate(product),
-                linked_by_user_id=cast(ProductIdentityMembership, membership).linked_by_user_id,
-                link_reason=cast(ProductIdentityMembership, membership).link_reason,
-                linked_at=cast(ProductIdentityMembership, membership).created_at,
+                linked_by_user_id=membership.linked_by_user_id,
+                link_reason=membership.link_reason,
+                linked_at=membership.created_at,
             )
             for membership, product in members
         ],
-        created_at=typed_identity.created_at,
-        updated_at=typed_identity.updated_at,
+        created_at=identity.created_at,
+        updated_at=identity.updated_at,
     )
