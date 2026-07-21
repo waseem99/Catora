@@ -13,6 +13,7 @@ from catora_api.db.models.catalog import CatalogSource, SourceRecord
 from catora_api.normalization.types import (
     Confidence,
     JsonScalar,
+    JsonValue,
     NormalizationBatch,
     NormalizedAttribute,
     NormalizedImage,
@@ -644,7 +645,7 @@ def _attribute(
     record: SourceRecord,
     *,
     key: str,
-    value: JsonScalar | list[JsonScalar] | dict[str, JsonScalar],
+    value: JsonValue,
     value_type: str,
     field_path: str,
     confidence: Confidence = "high",
