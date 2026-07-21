@@ -53,6 +53,7 @@ async def create_shopify_catalog_source(
             "updated_after": payload.updated_after.isoformat()
             if payload.updated_after is not None
             else None,
+            "normalization_aliases": payload.normalization_aliases.model_dump(),
         },
     )
     session.add(source)
@@ -69,6 +70,11 @@ async def create_shopify_catalog_source(
                 "name": source.name,
                 "shop_domain": payload.shop_domain,
                 "api_version": payload.api_version,
+                "normalization_alias_groups": [
+                    key
+                    for key, values in payload.normalization_aliases.model_dump().items()
+                    if values
+                ],
             },
         )
     )
