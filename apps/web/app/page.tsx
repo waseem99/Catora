@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BrowserIntelligenceCard } from "@/components/browser-intelligence-card";
 
 const capabilities = [
@@ -24,7 +25,7 @@ export default function Home() {
             AI shopping and multi-market operations.
           </p>
           <div className="actions">
-            <a className="primary" href="http://localhost:8000/docs">Open API</a>
+            <Link className="primary" href="/login">Open workspace</Link>
             <a className="secondary" href="https://github.com/waseem99/Catora/issues/1">View roadmap</a>
           </div>
         </div>

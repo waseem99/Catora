@@ -64,7 +64,15 @@ def test_required_domain_tables_are_registered() -> None:
 
 
 def test_business_tables_are_workspace_scoped() -> None:
-    exceptions = {"organizations", "workspaces", "users", "memberships", "system_metadata"}
+    exceptions = {
+        "organizations",
+        "workspaces",
+        "users",
+        "memberships",
+        "auth_sessions",
+        "password_reset_tokens",
+        "system_metadata",
+    }
     for name, table in Base.metadata.tables.items():
         if name in exceptions:
             continue

@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     s3_secret_key: str = Field(default="change-me-in-production", repr=False)
     s3_bucket: str = "catora"
     cors_origins: list[str] = ["http://localhost:3000"]
+    frontend_url: str = "http://localhost:3000"
+    auth_token_pepper: str = Field(default="development-token-pepper-change-me", repr=False)
+    session_cookie_name: str = "catora_session"
+    csrf_cookie_name: str = "catora_csrf"
+    session_ttl_hours: int = 12
+    invitation_ttl_hours: int = 72
+    password_reset_ttl_minutes: int = 30
+    smtp_host: str = "localhost"
+    smtp_port: int = 1025
+    smtp_from: str = "Catora <no-reply@catora.local>"
+    trust_proxy_headers: bool = False
 
     def validate_production(self) -> None:
         if self.environment != "production":
@@ -29,6 +40,8 @@ class Settings(BaseSettings):
         insecure = {"change-me-in-production", "test", "catora", ""}
         if self.s3_secret_key in insecure:
             raise ValueError("CATORA_S3_SECRET_KEY must be a production secret")
+        if self.auth_token_pepper in insecure or len(self.auth_token_pepper) < 32:
+            raise ValueError("CATORA_AUTH_TOKEN_PEPPER must be a production secret")
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Production database must use PostgreSQL")
 
