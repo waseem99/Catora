@@ -97,9 +97,12 @@ def _public_catalog_connector(
 ) -> PublicCatalogConnector:
     start_url = config.get("start_url")
     product_urls_value = config.get("product_urls", [])
-    if not isinstance(product_urls_value, list) or not all(
-        isinstance(value, str) for value in product_urls_value
-    ):
+    if not isinstance(product_urls_value, list):
+        raise ValueError("Public catalog product URLs are invalid")
+    product_urls = tuple(
+        value for value in product_urls_value if isinstance(value, str)
+    )
+    if len(product_urls) != len(product_urls_value):
         raise ValueError("Public catalog product URLs are invalid")
     authorized = config.get("authorized_domain_confirmed") is True
     max_products = config.get("max_products", 100)
@@ -117,7 +120,7 @@ def _public_catalog_connector(
         PublicCatalogConnectorConfig(
             source_type=source_type,
             start_url=start_url,
-            product_urls=tuple(product_urls_value),
+            product_urls=product_urls,
             authorized_domain_confirmed=authorized,
             max_products=max_products,
             max_sitemaps=max_sitemaps,
