@@ -1,3 +1,4 @@
+from catora_api.api.audit_rules import router as audit_rules_router
 from catora_api.api.audits import router as audits_router
 from catora_api.api.auth import router as auth_router
 from catora_api.api.catalog import router as catalog_router
@@ -8,6 +9,7 @@ from catora_api.api.shopify import router as shopify_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
 __all__ = [
+    "audit_rules_router",
     "audits_router",
     "auth_router",
     "catalog_identity_router",

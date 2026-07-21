@@ -2,13 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import uuid
-from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from catora_api.auditing._stateful_service import (
+    StatefulAuditRunService as _BaseStatefulAuditRunService,
+)
+from catora_api.auditing.custom_rules import (
+    CustomAuditRuleConfigurationError,
+    current_audit_rule_version_ids,
+    evaluate_custom_relationship_rules,
+    load_audit_rule_set,
+)
 from catora_api.auditing.incremental import (
     IncrementalStateError,
     catalog_snapshot_hash,
@@ -16,7 +23,7 @@ from catora_api.auditing.incremental import (
     merge_score_contributions,
     score_contributions_from_summary,
 )
-from catora_api.auditing.lifecycle import finding_count_summary, next_finding_status
+from catora_api.auditing.lifecycle import finding_count_summary
 from catora_api.auditing.rules import evaluate_product
 from catora_api.auditing.scoring import (
     calculate_health_from_contributions,
@@ -28,23 +35,14 @@ from catora_api.auditing.service import (
     AuditConfigurationError,
     AuditRunConflictError,
     AuditRunNotFoundError,
-    AuditRunService,
-    ProductHeader,
-    _database_value,
     _score_payload,
     _snapshot_bytes,
 )
-from catora_api.auditing.types import FindingCandidate, RuleEvaluation
-from catora_api.db.models.audit import AuditFinding, AuditRun, RuleDefinition, RuleVersion
-from catora_api.db.models.catalog import (
-    EvidenceReference,
-    Product,
-    ProductAttribute,
-    ProductVariant,
-)
+from catora_api.auditing.types import RuleEvaluation
+from catora_api.db.models.audit import AuditRun
 
 
-class StatefulAuditRunService(AuditRunService):
+class StatefulAuditRunService(_BaseStatefulAuditRunService):
     async def create_run(
         self,
         session: AsyncSession,
@@ -62,6 +60,12 @@ class StatefulAuditRunService(AuditRunService):
                 taxonomy_version=taxonomy_version,
                 mode="full",
             )
+            rule_version_ids = await current_audit_rule_version_ids(
+                session,
+                workspace_id=workspace_id,
+                taxonomy_version=taxonomy_version,
+            )
+            run.rule_version_set = [str(rule_id) for rule_id in rule_version_ids]
             run.product_snapshot_hashes = {}
             return run
         if mode != "incremental":
@@ -76,25 +80,14 @@ class StatefulAuditRunService(AuditRunService):
         if active_run_id is not None:
             raise AuditRunConflictError("An audit run is already active for this workspace")
 
-        rule_version_ids = (
-            await session.scalars(
-                select(RuleVersion.id)
-                .join(
-                    RuleDefinition,
-                    RuleDefinition.id == RuleVersion.rule_definition_id,
-                )
-                .where(
-                    RuleVersion.workspace_id == workspace_id,
-                    RuleVersion.version == taxonomy_version,
-                    RuleVersion.is_immutable.is_(True),
-                    RuleDefinition.rule_type == "taxonomy_field_requirement",
-                )
-                .order_by(RuleDefinition.key)
-            )
-        ).all()
+        rule_version_ids = await current_audit_rule_version_ids(
+            session,
+            workspace_id=workspace_id,
+            taxonomy_version=taxonomy_version,
+        )
         if not rule_version_ids:
             raise AuditConfigurationError(
-                "No compiled immutable taxonomy rules exist for this workspace and version"
+                "No immutable audit rules exist for this workspace and version"
             )
         current_rule_version_set = [str(rule_id) for rule_id in rule_version_ids]
 
@@ -169,7 +162,10 @@ class StatefulAuditRunService(AuditRunService):
         await session.commit()
 
         try:
-            rules = await self._load_rules(session, run)
+            try:
+                rule_set = await load_audit_rule_set(session, run)
+            except CustomAuditRuleConfigurationError as exc:
+                raise AuditConfigurationError(str(exc)) from exc
             all_headers = await self._load_product_headers(session, run)
             previous = await self._previous_run(session, run)
             selected_headers, target_product_ids = await self._select_headers(
@@ -204,7 +200,15 @@ class StatefulAuditRunService(AuditRunService):
                     current_hashes[str(snapshot.product_id)] = hashlib.sha256(
                         payload
                     ).hexdigest()
-                    evaluations.extend(evaluate_product(snapshot, rules))
+                    evaluations.extend(
+                        evaluate_product(snapshot, rule_set.field_rules)
+                    )
+                    evaluations.extend(
+                        evaluate_custom_relationship_rules(
+                            snapshot,
+                            rule_set.custom_relationship_rules,
+                        )
+                    )
                 run.progress_current = min(
                     deleted_count + offset + len(batch),
                     run.progress_total,
@@ -276,260 +280,3 @@ class StatefulAuditRunService(AuditRunService):
                 }
                 await session.commit()
             raise
-
-    async def _previous_run(
-        self,
-        session: AsyncSession,
-        run: AuditRun,
-    ) -> AuditRun | None:
-        if run.previous_run_id is None:
-            return None
-        return cast(
-            AuditRun | None,
-            await session.scalar(
-                select(AuditRun).where(
-                    AuditRun.id == run.previous_run_id,
-                    AuditRun.workspace_id == run.workspace_id,
-                    AuditRun.status == "completed",
-                )
-            ),
-        )
-
-    async def _select_headers(
-        self,
-        session: AsyncSession,
-        *,
-        run: AuditRun,
-        previous: AuditRun | None,
-        all_headers: Sequence[ProductHeader],
-    ) -> tuple[tuple[ProductHeader, ...], set[uuid.UUID]]:
-        if run.mode == "full":
-            product_ids = {product.id for product, _category in all_headers}
-            return tuple(all_headers), product_ids
-        if previous is None:
-            raise AuditConfigurationError("Incremental audit has no completed baseline")
-
-        target_product_ids = await self._changed_product_ids(
-            session,
-            run=run,
-            previous=previous,
-            current_product_ids={product.id for product, _category in all_headers},
-        )
-        selected = tuple(
-            header for header in all_headers if header[0].id in target_product_ids
-        )
-        return selected, target_product_ids
-
-    async def _changed_product_ids(
-        self,
-        session: AsyncSession,
-        *,
-        run: AuditRun,
-        previous: AuditRun,
-        current_product_ids: set[uuid.UUID],
-    ) -> set[uuid.UUID]:
-        cutoff = previous.started_at or previous.created_at
-        previous_product_ids: set[uuid.UUID] = set()
-        try:
-            previous_product_ids = {
-                uuid.UUID(product_id)
-                for product_id in previous.product_snapshot_hashes
-            }
-        except ValueError as exc:
-            raise AuditConfigurationError(
-                "Incremental baseline contains an invalid product identifier"
-            ) from exc
-
-        changed: set[uuid.UUID] = previous_product_ids - current_product_ids
-        product_queries = (
-            select(Product.id).where(
-                Product.workspace_id == run.workspace_id,
-                Product.updated_at > cutoff,
-            ),
-            select(ProductVariant.product_id).where(
-                ProductVariant.workspace_id == run.workspace_id,
-                ProductVariant.updated_at > cutoff,
-            ),
-            select(ProductAttribute.product_id).where(
-                ProductAttribute.workspace_id == run.workspace_id,
-                ProductAttribute.updated_at > cutoff,
-            ),
-        )
-        for statement in product_queries:
-            changed.update((await session.scalars(statement)).all())
-
-        direct_evidence_ids = (
-            await session.scalars(
-                select(EvidenceReference.product_id).where(
-                    EvidenceReference.workspace_id == run.workspace_id,
-                    EvidenceReference.product_id.is_not(None),
-                    EvidenceReference.updated_at > cutoff,
-                )
-            )
-        ).all()
-        changed.update(
-            product_id for product_id in direct_evidence_ids if product_id is not None
-        )
-        attribute_evidence_ids = (
-            await session.scalars(
-                select(ProductAttribute.product_id)
-                .join(
-                    EvidenceReference,
-                    EvidenceReference.attribute_id == ProductAttribute.id,
-                )
-                .where(
-                    ProductAttribute.workspace_id == run.workspace_id,
-                    EvidenceReference.workspace_id == run.workspace_id,
-                    EvidenceReference.updated_at > cutoff,
-                )
-            )
-        ).all()
-        changed.update(attribute_evidence_ids)
-        return changed
-
-    async def _reconcile_incremental_findings(
-        self,
-        session: AsyncSession,
-        *,
-        run: AuditRun,
-        findings: Mapping[str, FindingCandidate],
-        target_product_ids: set[uuid.UUID],
-    ) -> tuple[list[str], int]:
-        previous_run_findings: list[AuditFinding] = []
-        if run.previous_run_id is not None:
-            previous_run_findings = list(
-                (
-                    await session.scalars(
-                        select(AuditFinding).where(
-                            AuditFinding.workspace_id == run.workspace_id,
-                            AuditFinding.audit_run_id == run.previous_run_id,
-                        )
-                    )
-                ).all()
-            )
-
-        latest_history: dict[str, AuditFinding] = {}
-        if findings:
-            historical_findings = (
-                await session.scalars(
-                    select(AuditFinding)
-                    .join(AuditRun, AuditRun.id == AuditFinding.audit_run_id)
-                    .where(
-                        AuditFinding.workspace_id == run.workspace_id,
-                        AuditFinding.fingerprint.in_(sorted(findings)),
-                        AuditRun.status == "completed",
-                        AuditRun.id != run.id,
-                    )
-                    .order_by(
-                        AuditFinding.fingerprint,
-                        AuditFinding.last_seen_at.desc(),
-                        AuditFinding.id.desc(),
-                    )
-                )
-            ).all()
-            for historical_finding in historical_findings:
-                latest_history.setdefault(
-                    historical_finding.fingerprint, historical_finding
-                )
-
-        now = datetime.now(UTC)
-        statuses: list[str] = []
-        resolved_count = 0
-        for previous_finding in previous_run_findings:
-            if previous_finding.product_id not in target_product_ids:
-                status = next_finding_status(previous_finding.status)
-                statuses.append(status)
-                session.add(
-                    _copy_finding(
-                        previous_finding,
-                        run=run,
-                        status=status,
-                        last_seen_at=now,
-                    )
-                )
-            elif (
-                previous_finding.fingerprint not in findings
-                and previous_finding.status != "resolved"
-            ):
-                previous_finding.status = "resolved"
-                previous_finding.resolved_at = now
-                previous_finding.last_seen_at = now
-                resolved_count += 1
-
-        for fingerprint, candidate in sorted(findings.items()):
-            latest_finding = latest_history.get(fingerprint)
-            status = next_finding_status(
-                latest_finding.status if latest_finding is not None else None
-            )
-            statuses.append(status)
-            session.add(
-                AuditFinding(
-                    workspace_id=run.workspace_id,
-                    audit_run_id=run.id,
-                    previous_finding_id=(
-                        latest_finding.id if latest_finding is not None else None
-                    ),
-                    rule_version_id=candidate.rule_version_id,
-                    product_id=candidate.product_id,
-                    variant_id=candidate.variant_id,
-                    severity=candidate.severity,
-                    title=candidate.title,
-                    explanation=candidate.explanation,
-                    fingerprint=candidate.fingerprint,
-                    status=status,
-                    field_key=candidate.field_key,
-                    affected_value=_database_value(candidate.affected_value),
-                    business_impact=candidate.business_impact,
-                    remediation_type=candidate.remediation_type,
-                    failure_codes=list(candidate.failure_codes),
-                    evidence=[
-                        {
-                            "source_record_id": str(item.source_record_id),
-                            "field_path": item.field_path,
-                            "excerpt": item.excerpt,
-                            "checksum": item.checksum,
-                        }
-                        for item in candidate.evidence
-                    ],
-                    first_seen_at=(
-                        latest_finding.first_seen_at
-                        if latest_finding is not None
-                        else now
-                    ),
-                    last_seen_at=now,
-                    resolved_at=None,
-                )
-            )
-        await session.flush()
-        return statuses, resolved_count
-
-
-def _copy_finding(
-    finding: AuditFinding,
-    *,
-    run: AuditRun,
-    status: str,
-    last_seen_at: datetime,
-) -> AuditFinding:
-    return AuditFinding(
-        workspace_id=run.workspace_id,
-        audit_run_id=run.id,
-        previous_finding_id=finding.id,
-        rule_version_id=finding.rule_version_id,
-        product_id=finding.product_id,
-        variant_id=finding.variant_id,
-        severity=finding.severity,
-        title=finding.title,
-        explanation=finding.explanation,
-        fingerprint=finding.fingerprint,
-        status=status,
-        field_key=finding.field_key,
-        affected_value=finding.affected_value,
-        business_impact=finding.business_impact,
-        remediation_type=finding.remediation_type,
-        failure_codes=list(finding.failure_codes),
-        evidence=list(finding.evidence),
-        first_seen_at=finding.first_seen_at,
-        last_seen_at=last_seen_at,
-        resolved_at=None,
-    )
