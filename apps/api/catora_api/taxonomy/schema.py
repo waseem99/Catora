@@ -21,12 +21,18 @@ class FieldConstraints(BaseModel):
 
     @model_validator(mode="after")
     def validate_ranges(self) -> FieldConstraints:
-        if self.minimum is not None and self.maximum is not None:
-            if self.minimum > self.maximum:
-                raise ValueError("minimum cannot exceed maximum")
-        if self.min_length is not None and self.max_length is not None:
-            if self.min_length > self.max_length:
-                raise ValueError("min_length cannot exceed max_length")
+        if (
+            self.minimum is not None
+            and self.maximum is not None
+            and self.minimum > self.maximum
+        ):
+            raise ValueError("minimum cannot exceed maximum")
+        if (
+            self.min_length is not None
+            and self.max_length is not None
+            and self.min_length > self.max_length
+        ):
+            raise ValueError("min_length cannot exceed max_length")
         return self
 
 
@@ -68,11 +74,14 @@ class TaxonomyFieldDefinition(BaseModel):
     def validate_field_contract(self) -> TaxonomyFieldDefinition:
         if self.data_type == "enum" and not self.allowed_values:
             raise ValueError(f"enum field {self.key!r} requires allowed_values")
-        if self.canonical_unit and self.allowed_units:
-            if self.canonical_unit not in self.allowed_units:
-                raise ValueError(
-                    f"canonical_unit for {self.key!r} must be included in allowed_units"
-                )
+        if (
+            self.canonical_unit
+            and self.allowed_units
+            and self.canonical_unit not in self.allowed_units
+        ):
+            raise ValueError(
+                f"canonical_unit for {self.key!r} must be included in allowed_units"
+            )
         return self
 
 
