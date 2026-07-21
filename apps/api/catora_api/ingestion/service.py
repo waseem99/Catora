@@ -102,7 +102,9 @@ class IngestionService:
                     await session.commit()
                     return self._summary(job, duplicate_count=duplicate_count)
 
-                inserted_count = await self._persist_page(session, source=source, job=job, page=page)
+                inserted_count = await self._persist_page(
+                    session, source=source, job=job, page=page
+                )
                 duplicate_count += len(page.records) - inserted_count
                 job.processed_count += len(page.records) + len(page.rejections)
                 job.success_count += len(page.records)
@@ -135,7 +137,8 @@ class IngestionService:
             duplicate_count=duplicate_count,
             rejection_samples=rejection_samples,
         )
-        source.status = "active" if job.status in {"completed", "partially_completed"} else source.status
+        if job.status in {"completed", "partially_completed"}:
+            source.status = "active"
         await session.commit()
         return self._summary(job, duplicate_count=duplicate_count)
 
