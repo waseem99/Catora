@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Annotated, Literal
-from urllib.parse import urlparse
+from typing import Annotated, Literal, Self
+from urllib.parse import urlparse, urlunparse
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 JobStatus = Literal[
     "queued",
@@ -107,8 +113,71 @@ class ShopifySourceCreateRequest(IngestionModel):
         return value
 
 
+def _normalize_public_https_url(value: str) -> str:
+    parsed = urlparse(value.strip())
+    if parsed.scheme.lower() != "https" or not parsed.hostname:
+        raise ValueError("Public catalog URLs must use HTTPS")
+    if parsed.username or parsed.password or parsed.port is not None:
+        raise ValueError(
+            "Public catalog URLs cannot contain credentials or ports"
+        )
+    host = parsed.hostname.encode("idna").decode("ascii").lower()
+    path = parsed.path or "/"
+    return urlunparse(("https", host, path, "", parsed.query, ""))
+
+
+class PublicCatalogSourceCreateRequest(IngestionModel):
+    name: str = Field(min_length=2, max_length=200)
+    source_type: Literal["sitemap", "urls"]
+    start_url: str | None = Field(default=None, max_length=2000)
+    product_urls: list[str] = Field(default_factory=list, max_length=1000)
+    authorized_domain_confirmed: Literal[True]
+    max_products: int = Field(default=100, ge=1, le=1000)
+    max_sitemaps: int = Field(default=10, ge=1, le=50)
+    crawl_delay_seconds: float = Field(default=0.5, ge=0, le=60)
+
+    @field_validator("start_url")
+    @classmethod
+    def normalize_start_url(cls, value: str | None) -> str | None:
+        return _normalize_public_https_url(value) if value else None
+
+    @field_validator("product_urls")
+    @classmethod
+    def normalize_product_urls(cls, values: list[str]) -> list[str]:
+        normalized = [_normalize_public_https_url(value) for value in values]
+        return list(dict.fromkeys(normalized))
+
+    @model_validator(mode="after")
+    def validate_source_shape(self) -> Self:
+        if self.source_type == "sitemap":
+            if self.start_url is None:
+                raise ValueError("start_url is required for sitemap sources")
+            if self.product_urls:
+                raise ValueError(
+                    "product_urls must be empty for sitemap sources"
+                )
+            seed_host = urlparse(self.start_url).hostname
+        else:
+            if not self.product_urls:
+                raise ValueError("product_urls are required for URL sources")
+            if self.start_url is not None:
+                raise ValueError("start_url must be empty for URL sources")
+            seed_host = urlparse(self.product_urls[0]).hostname
+        candidate_urls = (
+            [self.start_url] if self.start_url else self.product_urls
+        )
+        if any(
+            urlparse(candidate).hostname != seed_host
+            for candidate in candidate_urls
+        ):
+            raise ValueError("All public catalog URLs must use the same host")
+        return self
+
+
 CatalogSourceCreateRequest = Annotated[
-    CsvSourceCreateRequest | ShopifySourceCreateRequest,
+    CsvSourceCreateRequest
+    | ShopifySourceCreateRequest
+    | PublicCatalogSourceCreateRequest,
     Field(discriminator="source_type"),
 ]
 
