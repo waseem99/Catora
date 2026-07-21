@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.exc import IntegrityError
 
 from catora_api.auditing.service import (
@@ -28,6 +28,8 @@ from catora_api.schemas.audits import (
     AuditFindingView,
     AuditRunCreateRequest,
     AuditRunView,
+    FindingStatus,
+    Severity,
 )
 from catora_api.worker import celery_app
 
@@ -209,10 +211,23 @@ async def list_audit_findings(
     session: SessionDependency,
     auth_service: AuthServiceDependency,
     context: AuthContextDependency,
-    finding_status: Annotated[str | None, Query(alias="status")] = None,
-    severity: Annotated[str | None, Query()] = None,
-    business_impact: Annotated[str | None, Query()] = None,
+    finding_status: Annotated[FindingStatus | None, Query(alias="status")] = None,
+    severity: Annotated[Severity | None, Query()] = None,
+    category_key: Annotated[
+        str | None,
+        Query(pattern=r"^[a-z][a-z0-9_]*$"),
+    ] = None,
+    field_key: Annotated[
+        str | None,
+        Query(pattern=r"^[a-z][a-z0-9_]*$"),
+    ] = None,
+    business_impact: Annotated[str | None, Query(min_length=1, max_length=50)] = None,
+    remediation_type: Annotated[
+        str | None,
+        Query(pattern=r"^[a-z][a-z0-9_]*$"),
+    ] = None,
     product_id: Annotated[uuid.UUID | None, Query()] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[AuditFindingView]:
     await auth_service.membership(session, context.user.id, workspace_id)
@@ -233,17 +248,35 @@ async def list_audit_findings(
         query = query.where(AuditFinding.status == finding_status)
     if severity is not None:
         query = query.where(AuditFinding.severity == severity)
+    if category_key is not None:
+        query = query.where(AuditFinding.category_key == category_key)
+    if field_key is not None:
+        query = query.where(AuditFinding.field_key == field_key)
     if business_impact is not None:
         query = query.where(AuditFinding.business_impact == business_impact)
+    if remediation_type is not None:
+        query = query.where(AuditFinding.remediation_type == remediation_type)
     if product_id is not None:
         query = query.where(AuditFinding.product_id == product_id)
+
+    severity_order = case(
+        (AuditFinding.severity == "critical", 0),
+        (AuditFinding.severity == "high", 1),
+        (AuditFinding.severity == "medium", 2),
+        (AuditFinding.severity == "low", 3),
+        else_=4,
+    )
     findings = (
         await session.scalars(
             query.order_by(
-                AuditFinding.severity,
+                severity_order,
+                AuditFinding.category_key,
                 AuditFinding.product_id,
+                AuditFinding.field_key,
                 AuditFinding.fingerprint,
-            ).limit(limit)
+            )
+            .offset(offset)
+            .limit(limit)
         )
     ).all()
     return [AuditFindingView.model_validate(finding) for finding in findings]
