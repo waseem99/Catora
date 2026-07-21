@@ -52,7 +52,7 @@ class AuditRun(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
             "status IN ('queued','running','completed','failed','cancelled')",
             name="valid_status",
         ),
-        CheckConstraint("mode IN ('full')", name="valid_mode"),
+        CheckConstraint("mode IN ('full','incremental')", name="valid_mode"),
         CheckConstraint(
             "progress_current >= 0 AND progress_total >= 0 "
             "AND progress_current <= progress_total",
@@ -75,6 +75,9 @@ class AuditRun(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     mode: Mapped[str] = mapped_column(String(30), nullable=False, default="full")
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
     source_snapshot_hash: Mapped[str | None] = mapped_column(String(64))
+    product_snapshot_hashes: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT
+    )
     rule_version_set: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=LIST_DEFAULT
     )
