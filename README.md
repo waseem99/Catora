@@ -77,7 +77,7 @@ The first usable ingestion path supports authenticated, tenant-scoped CSV upload
 4. Queue ingestion through `POST /api/v1/workspaces/{workspace_id}/catalog-sources/{source_id}/jobs`.
 5. Inspect job status and raw source samples through the workspace ingestion endpoints.
 
-Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads default to a 25 MiB limit configured through `CATORA_MAX_CATALOG_UPLOAD_BYTES`.
+Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads are streamed and default to a 25 MiB limit configured through `CATORA_MAX_CATALOG_UPLOAD_BYTES`. Ordinary job responses exclude raw rejected rows; detailed source samples remain restricted to authorized catalog managers.
 
 ## Validation
 
