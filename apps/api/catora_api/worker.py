@@ -12,6 +12,7 @@ celery_app.conf.update(
     task_time_limit=900,
     task_soft_time_limit=840,
     worker_prefetch_multiplier=1,
+    imports=("catora_api.ingestion.tasks",),
 )
 
 
