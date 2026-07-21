@@ -55,6 +55,24 @@ class FakeSession:
         return self.job
 
 
+class FailingValidationConnector(CatalogConnector):
+    source_type = "csv"
+    capabilities = ConnectorCapabilities()
+
+    async def validate(self) -> ConnectorValidation:
+        raise RuntimeError("validation failure")
+
+    async def pages(
+        self,
+        *,
+        checkpoint: Mapping[str, Any] | None = None,
+        page_size: int = 100,
+    ) -> AsyncIterator[ConnectorPage]:
+        del checkpoint, page_size
+        if False:
+            yield ConnectorPage((), (), None)
+
+
 class FailingConnector(CatalogConnector):
     source_type = "csv"
     capabilities = ConnectorCapabilities()
@@ -259,6 +277,25 @@ async def test_connector_failure_is_recorded_after_rollback() -> None:
             source=source,
             job=job,
             connector=FailingConnector(),
+        )
+
+    assert session.rollbacks == 1
+    assert job.status == "failed"
+    assert job.checkpoint["error_type"] == "RuntimeError"
+
+
+@pytest.mark.asyncio
+async def test_validation_exception_is_recorded_after_rollback() -> None:
+    source, job = source_and_job()
+    session = FakeSession()
+    session.job = job
+
+    with pytest.raises(RuntimeError, match="validation failure"):
+        await IngestionService().run(
+            session,  # type: ignore[arg-type]
+            source=source,
+            job=job,
+            connector=FailingValidationConnector(),
         )
 
     assert session.rollbacks == 1
