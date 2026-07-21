@@ -30,7 +30,6 @@ class AuditRunView(BaseModel):
     mode: AuditRunMode
     status: AuditRunStatus
     source_snapshot_hash: str | None
-    product_snapshot_hashes: dict[str, str]
     rule_version_set: list[str]
     progress_current: int = Field(ge=0)
     progress_total: int = Field(ge=0)
