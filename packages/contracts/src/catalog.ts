@@ -28,7 +28,7 @@ export const ProductAttributeSchema = z.object({
   confidence: z.enum(["high", "medium", "low"]),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-});
+}).strict();
 
 export const ProductImageSchema = z.object({
   id: z.string().uuid(),
@@ -39,7 +39,7 @@ export const ProductImageSchema = z.object({
   checksum: z.string().nullable(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-});
+}).strict();
 
 export const ProductVariantSchema = z.object({
   id: z.string().uuid(),
@@ -52,7 +52,7 @@ export const ProductVariantSchema = z.object({
   images: z.array(ProductImageSchema),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-});
+}).strict();
 
 export const ProductListItemSchema = z.object({
   id: z.string().uuid(),
@@ -66,14 +66,14 @@ export const ProductListItemSchema = z.object({
   warning_count: z.number().int().nonnegative(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-});
+}).strict();
 
 export const ProductListResponseSchema = z.object({
   items: z.array(ProductListItemSchema),
   total: z.number().int().nonnegative(),
   limit: z.number().int().min(1).max(100),
   offset: z.number().int().nonnegative(),
-});
+}).strict();
 
 export const ProductDetailSchema = z.object({
   id: z.string().uuid(),
@@ -89,7 +89,7 @@ export const ProductDetailSchema = z.object({
   provenance_count: z.number().int().nonnegative(),
   created_at: z.string().datetime(),
   updated_at: z.string().datetime(),
-});
+}).strict();
 
 export const EvidenceReferenceSchema = z.object({
   id: z.string().uuid(),
@@ -108,7 +108,7 @@ export const EvidenceReferenceSchema = z.object({
   excerpt: z.string().nullable(),
   checksum: z.string().length(64),
   created_at: z.string().datetime(),
-});
+}).strict();
 
 export const ProductProvenanceResponseSchema = z.object({
   product_id: z.string().uuid(),
@@ -116,7 +116,7 @@ export const ProductProvenanceResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   limit: z.number().int().min(1).max(200),
   offset: z.number().int().nonnegative(),
-});
+}).strict();
 
 export type ProductAttribute = z.infer<typeof ProductAttributeSchema>;
 export type ProductImage = z.infer<typeof ProductImageSchema>;
