@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from catora_api import __version__
-from catora_api.api import auth_router, ingestion_router
+from catora_api.api import auth_router, ingestion_router, shopify_router
 from catora_api.auth.service import (
     AuthenticationError,
     AuthorizationError,
@@ -56,6 +56,7 @@ app = FastAPI(
 )
 app.include_router(auth_router)
 app.include_router(ingestion_router)
+app.include_router(shopify_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
