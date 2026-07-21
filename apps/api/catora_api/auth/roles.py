@@ -17,6 +17,7 @@ ROLE_CAPABILITIES: dict[Role, frozenset[str]] = {
             "organization.manage",
             "members.manage",
             "sources.write",
+            "catalog.identity.manage",
             "analysis.run",
             "recommendations.write",
             "recommendations.review",
@@ -27,6 +28,7 @@ ROLE_CAPABILITIES: dict[Role, frozenset[str]] = {
         {
             "members.manage",
             "sources.write",
+            "catalog.identity.manage",
             "analysis.run",
             "recommendations.write",
             "recommendations.review",
