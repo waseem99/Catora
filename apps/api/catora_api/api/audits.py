@@ -13,8 +13,8 @@ from catora_api.auditing.service import (
     AuditConfigurationError,
     AuditRunConflictError,
     AuditRunNotFoundError,
-    AuditRunService,
 )
+from catora_api.auditing.stateful_service import StatefulAuditRunService
 from catora_api.auth.dependencies import (
     AuthContextDependency,
     AuthServiceDependency,
@@ -32,7 +32,7 @@ from catora_api.schemas.audits import (
 from catora_api.worker import celery_app
 
 router = APIRouter(prefix="/api/v1", tags=["catalog audits"])
-audit_service = AuditRunService()
+audit_service = StatefulAuditRunService()
 
 
 def _require_audit_run(role: str) -> None:
