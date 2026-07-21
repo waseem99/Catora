@@ -7,6 +7,8 @@ from catora_api.api.catalog import (
     _escape_like,
     _is_warning,
     _product_detail,
+)
+from catora_api.api.catalog import (
     router as catalog_router,
 )
 from catora_api.db.models.catalog import (
