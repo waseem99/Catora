@@ -149,6 +149,7 @@ class PublicCatalogSourceCreateRequest(IngestionModel):
 
     @model_validator(mode="after")
     def validate_source_shape(self) -> Self:
+        candidate_urls: list[str]
         if self.source_type == "sitemap":
             if self.start_url is None:
                 raise ValueError("start_url is required for sitemap sources")
@@ -156,16 +157,14 @@ class PublicCatalogSourceCreateRequest(IngestionModel):
                 raise ValueError(
                     "product_urls must be empty for sitemap sources"
                 )
-            seed_host = urlparse(self.start_url).hostname
+            candidate_urls = [self.start_url]
         else:
             if not self.product_urls:
                 raise ValueError("product_urls are required for URL sources")
             if self.start_url is not None:
                 raise ValueError("start_url must be empty for URL sources")
-            seed_host = urlparse(self.product_urls[0]).hostname
-        candidate_urls = (
-            [self.start_url] if self.start_url else self.product_urls
-        )
+            candidate_urls = self.product_urls
+        seed_host = urlparse(candidate_urls[0]).hostname
         if any(
             urlparse(candidate).hostname != seed_host
             for candidate in candidate_urls
