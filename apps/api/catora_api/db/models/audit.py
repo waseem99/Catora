@@ -111,6 +111,14 @@ class AuditFinding(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Ba
             "status IN ('new','ongoing','regressed','resolved')",
             name="valid_status",
         ),
+        Index(
+            "ix_audit_findings_run_query",
+            "workspace_id",
+            "audit_run_id",
+            "category_key",
+            "field_key",
+            "remediation_type",
+        ),
     )
     audit_run_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("audit_runs.id", ondelete="CASCADE"), nullable=False, index=True
@@ -132,6 +140,9 @@ class AuditFinding(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Ba
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="new")
+    category_key: Mapped[str] = mapped_column(
+        String(150), nullable=False, default="unknown", server_default="unknown"
+    )
     field_key: Mapped[str] = mapped_column(String(150), nullable=False)
     affected_value: Mapped[
         dict[str, object] | list[object] | str | int | float | bool | None
