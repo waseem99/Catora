@@ -142,6 +142,9 @@ class AuditRunService:
         if run.status not in ACTIVE_AUDIT_STATUSES:
             raise AuditRunConflictError("Only an active audit run can be cancelled")
         run.cancellation_requested = True
+        if run.status == "queued":
+            run.status = "cancelled"
+            run.completed_at = datetime.now(UTC)
         await session.flush()
         return run
 
