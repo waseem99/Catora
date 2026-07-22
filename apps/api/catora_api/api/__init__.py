@@ -10,6 +10,7 @@ from catora_api.api.intent_coverage import router as _intent_coverage_router
 from catora_api.api.intent_parsing import router as intent_parsing_router
 from catora_api.api.intent_runs import router as intent_runs_router
 from catora_api.api.intent_suite_history import router as _intent_suite_history_router
+from catora_api.api.intent_suite_reruns import router as _intent_suite_reruns_router
 from catora_api.api.intent_suites import router as _intent_suites_router
 from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
@@ -21,6 +22,7 @@ from catora_api.api.taxonomy import router as taxonomy_router
 _intent_coverage_router.include_router(_intent_breakdown_router)
 _intent_suites_router.include_router(_intent_coverage_router)
 _intent_suites_router.include_router(_intent_suite_history_router)
+_intent_suites_router.include_router(_intent_suite_reruns_router)
 intent_runs_router.include_router(_intent_suites_router)
 
 __all__ = [
