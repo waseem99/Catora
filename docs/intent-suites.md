@@ -5,13 +5,22 @@ suite never follows a lineage to a newer version later: every member stores the 
 `buyer_intent_id`, lineage, version, and position selected by the user.
 
 Suite creation and execution require the existing `analysis.run` capability and CSRF protection.
-Workspace members may read suite definitions and completed suite-run results. The backend endpoints
-are:
+Workspace members may read suite definitions and suite-run results. The backend endpoints are:
 
 - `GET|POST /api/v1/workspaces/{workspace_id}/intent-suites`
 - `GET /api/v1/workspaces/{workspace_id}/intent-suites/{suite_id}`
-- `POST /api/v1/workspaces/{workspace_id}/intent-suites/{suite_id}/runs`
+- `GET|POST /api/v1/workspaces/{workspace_id}/intent-suites/{suite_id}/runs`
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}`
+
+The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
+`status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
+scope, and ties are resolved by run ID after creation time for deterministic pagination.
+
+Each history item includes its requested product selection, previous-run identity, source snapshot
+hash, lifecycle timestamps, and reconciled suite summary. Page summaries are computed with grouped
+queries across all returned run IDs; the service does not call the run-detail endpoint once per item.
+Stored requested product IDs must remain unique and canonically sorted, otherwise the history read
+fails closed instead of returning ambiguous provenance.
 
 Executing a suite calls the existing deterministic `IntentRunService` once per pinned member. Each
 child intent run remains an append-only first-class run and is associated with the suite run through
