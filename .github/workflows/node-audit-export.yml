@@ -1,0 +1,28 @@
+name: Node Audit Export
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/node-audit-export.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Capture Node audit
+        shell: bash
+        run: |
+          npm audit --audit-level=moderate --json > node-audit.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: node-audit-report
+          path: node-audit.json
+          retention-days: 1
