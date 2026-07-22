@@ -40,7 +40,7 @@ from catora_api.schemas.intent_suites import (
     IntentSuiteView,
 )
 
-router = APIRouter(prefix="/api/v1", tags=["buyer intent suites"])
+router = APIRouter(tags=["buyer intent suites"])
 suite_service = IntentSuiteService()
 
 
