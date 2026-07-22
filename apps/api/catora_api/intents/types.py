@@ -162,7 +162,7 @@ class IntentMatchResult(BaseModel):
 
     product_id: uuid.UUID
     variant_id: uuid.UUID | None
-    category_key: str | None = Field(min_length=1, max_length=150)
+    category_key: str | None = Field(default=None, min_length=1, max_length=150)
     status: IntentMatchStatus
     category_status: CategoryStatus
     hard_constraints: tuple[ConstraintEvaluation, ...]
