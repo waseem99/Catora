@@ -95,7 +95,7 @@ def upgrade() -> None:
         sa.UniqueConstraint(
             "intent_suite_id",
             "buyer_intent_id",
-            name=op.f("uq_intent_suite_members_intent_suite_id"),
+            name="uq_intent_suite_members_suite_buyer_intent",
         ),
         sa.UniqueConstraint(
             "intent_suite_id",
