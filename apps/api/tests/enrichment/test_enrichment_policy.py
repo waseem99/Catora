@@ -19,7 +19,11 @@ from catora_api.enrichment.policies import (
     WorkspaceEnrichmentPolicyService,
     merge_brand_controls,
 )
-from catora_api.enrichment.types import BrandControls
+from catora_api.enrichment.types import (
+    BrandControls,
+    EnrichmentRequest,
+    SourceDocument,
+)
 from catora_api.main import app
 from catora_api.schemas.enrichment_policy import WorkspaceEnrichmentPolicyUpdate
 
@@ -86,6 +90,29 @@ def _policy(workspace_id: uuid.UUID) -> WorkspaceEnrichmentPolicy:
         max_run_budget_microunits=5_000,
         created_at=now,
         updated_at=now,
+    )
+
+
+def _enrichment_request(workspace_id: uuid.UUID) -> EnrichmentRequest:
+    return EnrichmentRequest(
+        workspace_id=workspace_id,
+        product_id=uuid.uuid4(),
+        task_type="improve_title",
+        allowed_fields=("title",),
+        original_values={"title": "Original title"},
+        sources=(
+            SourceDocument(
+                source_record_id=uuid.uuid4(),
+                field_path="product.title",
+                content="Original title",
+                kind="source_field",
+            ),
+        ),
+        brand_controls=BrandControls(
+            tone="casual",
+            locked_fields=("materials",),
+            maximum_lengths={"title": 120},
+        ),
     )
 
 
@@ -156,6 +183,29 @@ async def test_resolve_without_policy_preserves_request_controls() -> None:
 
     assert effective.brand_controls == requested
     assert effective.max_run_budget_microunits == 10_000
+
+
+@pytest.mark.asyncio
+async def test_apply_returns_effective_request_and_budget() -> None:
+    workspace_id = uuid.uuid4()
+    request = _enrichment_request(workspace_id)
+
+    effective_request, effective_budget = await WorkspaceEnrichmentPolicyService().apply(
+        cast(Any, PolicySession(_policy(workspace_id))),
+        request=request,
+        max_run_budget_microunits=10_000,
+    )
+
+    assert effective_budget == 5_000
+    assert effective_request.workspace_id == request.workspace_id
+    assert effective_request.product_id == request.product_id
+    assert effective_request.brand_controls.tone == "formal and factual"
+    assert effective_request.brand_controls.locked_fields == (
+        "warranty_months",
+        "materials",
+    )
+    assert effective_request.brand_controls.maximum_lengths["title"] == 80
+    assert request.brand_controls.tone == "casual"
 
 
 @pytest.mark.asyncio

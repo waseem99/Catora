@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.db.models.workflow import WorkspaceEnrichmentPolicy
-from catora_api.enrichment.types import BrandControls, FieldKey
+from catora_api.enrichment.types import BrandControls, EnrichmentRequest, FieldKey
 
 
 class EnrichmentPolicyConfigurationError(ValueError):
@@ -64,6 +64,26 @@ class WorkspaceEnrichmentPolicyService:
         return EffectiveEnrichmentPolicy(
             brand_controls=merge_brand_controls(workspace_controls, requested_controls),
             max_run_budget_microunits=effective_maximum,
+        )
+
+    async def apply(
+        self,
+        session: AsyncSession,
+        *,
+        request: EnrichmentRequest,
+        max_run_budget_microunits: int,
+    ) -> tuple[EnrichmentRequest, int]:
+        effective = await self.resolve(
+            session,
+            workspace_id=request.workspace_id,
+            requested_controls=request.brand_controls,
+            system_max_run_budget_microunits=max_run_budget_microunits,
+        )
+        return (
+            request.model_copy(
+                update={"brand_controls": effective.brand_controls},
+            ),
+            effective.max_run_budget_microunits,
         )
 
     async def set(

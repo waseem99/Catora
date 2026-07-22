@@ -11,6 +11,7 @@ from catora_api.db.models.reporting import AuditEvent
 from catora_api.db.models.workflow import (
     Recommendation,
     RecommendationJob,
+    WorkspaceEnrichmentPolicy,
 )
 from catora_api.enrichment.jobs import (
     RecommendationJobConfigurationError,
@@ -18,7 +19,11 @@ from catora_api.enrichment.jobs import (
     sanitized_request,
 )
 from catora_api.enrichment.persistence import PersistedRecommendation
-from catora_api.enrichment.types import EnrichmentRequest, SourceDocument
+from catora_api.enrichment.types import (
+    BrandControls,
+    EnrichmentRequest,
+    SourceDocument,
+)
 from catora_api.main import app
 from catora_api.schemas.recommendations import (
     RecommendationJobListResponse,
@@ -28,9 +33,13 @@ from catora_api.worker import celery_app
 
 
 class CreateSession:
-    def __init__(self) -> None:
+    def __init__(self, policy: WorkspaceEnrichmentPolicy | None = None) -> None:
+        self.policy = policy
         self.added: list[object] = []
         self.flush_count = 0
+
+    async def scalar(self, _statement: object) -> WorkspaceEnrichmentPolicy | None:
+        return self.policy
 
     def add(self, value: object) -> None:
         self.added.append(value)
@@ -106,6 +115,22 @@ def _request() -> EnrichmentRequest:
     )
 
 
+def _policy(request: EnrichmentRequest) -> WorkspaceEnrichmentPolicy:
+    now = datetime.now(UTC)
+    return WorkspaceEnrichmentPolicy(
+        id=uuid.uuid4(),
+        workspace_id=request.workspace_id,
+        brand_controls=BrandControls(
+            tone="formal and factual",
+            locked_fields=("warranty_months",),
+            maximum_lengths={"title": 80},
+        ).model_dump(mode="json"),
+        max_run_budget_microunits=50,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def _job(request: EnrichmentRequest) -> RecommendationJob:
     now = datetime.now(UTC)
     return RecommendationJob(
@@ -148,6 +173,37 @@ async def test_create_persists_redacted_request_snapshot() -> None:
     )
     assert session.added == [job]
     assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_create_persists_effective_workspace_policy() -> None:
+    request = _request().model_copy(
+        update={
+            "brand_controls": BrandControls(
+                tone="casual",
+                locked_fields=("materials",),
+                maximum_lengths={"title": 120},
+            )
+        }
+    )
+    session = CreateSession(_policy(request))
+
+    job = await RecommendationJobService().create(
+        cast(Any, session),
+        request=request,
+        requested_by_user_id=uuid.uuid4(),
+        provider_name="mock",
+        budget_microunits=100,
+    )
+    snapshot = EnrichmentRequest.model_validate(job.request_snapshot)
+
+    assert job.budget_microunits == 50
+    assert snapshot.brand_controls.tone == "formal and factual"
+    assert snapshot.brand_controls.locked_fields == (
+        "warranty_months",
+        "materials",
+    )
+    assert snapshot.brand_controls.maximum_lengths["title"] == 80
 
 
 @pytest.mark.asyncio

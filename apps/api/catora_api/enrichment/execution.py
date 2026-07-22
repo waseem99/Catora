@@ -18,6 +18,7 @@ from catora_api.enrichment.persistence import (
     PersistedRecommendation,
     RecommendationPersistenceService,
 )
+from catora_api.enrichment.policies import WorkspaceEnrichmentPolicyService
 from catora_api.enrichment.provider import ProviderAdapter
 from catora_api.enrichment.types import EnrichmentRequest
 
@@ -33,6 +34,7 @@ class RecommendationProviderError(RuntimeError):
 class RecommendationGenerationService:
     def __init__(self) -> None:
         self._persistence = RecommendationPersistenceService()
+        self._policies = WorkspaceEnrichmentPolicyService()
 
     async def generate(
         self,
@@ -51,22 +53,27 @@ class RecommendationGenerationService:
             request=request,
             audit_finding_id=audit_finding_id,
         )
+        effective_request, effective_budget = await self._policies.apply(
+            session,
+            request=request,
+            max_run_budget_microunits=budget_microunits,
+        )
         gateway = EnrichmentGateway(
             provider,
-            budget_microunits=budget_microunits,
+            budget_microunits=effective_budget,
             concurrency_limit=concurrency_limit,
             max_attempts=max_attempts,
             max_output_tokens=max_output_tokens,
         )
         try:
-            result = await gateway.run(request)
+            result = await gateway.run(effective_request)
         except Exception as exc:
             if isinstance(exc, EnrichmentGatewayError):
                 raise
             raise RecommendationProviderError("Enrichment provider call failed") from exc
         return await self._persistence.persist(
             session,
-            request=request,
+            request=effective_request,
             result=result,
             audit_finding_id=audit_finding_id,
         )
