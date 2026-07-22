@@ -6,13 +6,19 @@ from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
+from sqlalchemy import select
 
-from catora_api.db.models.intents import IntentSuiteMember, IntentSuiteRun
+from catora_api.db.models.intents import (
+    BuyerIntent,
+    IntentSuiteMember,
+    IntentSuiteRun,
+)
 from catora_api.intents.suites import (
     IntentSuiteMemberError,
     IntentSuiteMemberRecord,
     IntentSuiteRecord,
     IntentSuiteRunSummary,
+    _PinnedIntentSession,
     coverage_basis_points,
     suite_snapshot_hash,
     summary_delta,
@@ -22,6 +28,26 @@ from catora_api.schemas.intent_suites import (
     IntentSuiteMemberRequest,
     IntentSuiteRunCreateRequest,
 )
+
+
+class ScalarDelegate:
+    def __init__(self) -> None:
+        self.scalar_calls = 0
+
+    async def scalar(self, _statement: object) -> str:
+        self.scalar_calls += 1
+        return "delegated"
+
+
+@pytest.mark.asyncio
+async def test_pinned_session_serves_exact_historical_intent_once() -> None:
+    delegate = ScalarDelegate()
+    intent = SimpleNamespace(id=uuid.uuid4(), approval_status="superseded")
+    session = _PinnedIntentSession(cast(Any, delegate), cast(Any, intent))
+
+    assert await session.scalar(select(BuyerIntent)) is intent
+    assert await session.scalar(select(IntentSuiteRun.id)) == "delegated"
+    assert delegate.scalar_calls == 1
 
 
 def test_suite_schemas_reject_duplicate_members_and_products() -> None:
