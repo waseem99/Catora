@@ -13,6 +13,7 @@ Workspace members may read suite definitions and suite-run results. The backend 
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}`
 - `POST /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/rerun`
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/compare/{baseline_run_id}`
+- `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/intents`
 
 The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
 `status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
@@ -37,15 +38,23 @@ event records the selected source run and snapshot, reused selection mode and co
 and deterministic summary. Rerunning does not approve intents, alter suite membership, call an AI
 provider, or write to the catalog.
 
-The comparison endpoint lets a member compare any two different completed runs from the same suite.
-It returns each run's canonical snapshot, requested product selection, lifecycle timestamps and full
-summary, plus signed deltas calculated as selected run minus baseline run. `selection_changed` is
-reported separately so two runs with equal totals do not hide a changed evaluation scope.
+The aggregate comparison endpoint lets a member compare any two different completed runs from the
+same suite. It returns each run's canonical snapshot, requested product selection, lifecycle timestamps
+and full summary, plus signed deltas calculated as selected run minus baseline run.
+`selection_changed` is reported separately so two runs with equal totals do not hide a changed
+evaluation scope.
+
+The per-intent comparison endpoint drills that arbitrary comparison into the immutable suite-member
+order. Every row identifies the exact pinned buyer-intent row, source label, structured category keys,
+selected child run and baseline child run. Target, distinct-product, four-state and confident-coverage
+deltas are calculated as selected run minus baseline run from persisted match evidence. The service
+requires exactly one completed child run per suite member in each history record and never follows an
+intent lineage to a newer version.
 
 Comparison fails closed when either run is incomplete, belongs to another suite, has malformed
-snapshot or selection provenance, has a child-run count that differs from the immutable suite member
-count, or has state counts or basis-point coverage that do not reconcile. This read-only operation does
-not rewrite `previous_run_id`, create an audit event, or alter any stored run.
+snapshot or selection provenance, has child runs that differ from immutable suite membership, or has
+match evidence that does not reconcile. These read-only operations do not rewrite `previous_run_id`,
+create an audit event, or alter any stored run.
 
 Executing a suite calls the existing deterministic `IntentRunService` once per pinned member. Each
 child intent run remains an append-only first-class run and is associated with the suite run through
