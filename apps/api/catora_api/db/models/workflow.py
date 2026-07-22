@@ -89,6 +89,17 @@ class RecommendationJob(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixi
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class WorkspaceEnrichmentPolicy(
+    UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base
+):
+    __tablename__ = "workspace_enrichment_policies"
+    __table_args__ = (UniqueConstraint("workspace_id"),)
+    brand_controls: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
+    max_run_budget_microunits: Mapped[int | None] = mapped_column(BigInteger)
+
+
 class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     __tablename__ = "recommendation_fields"
     __table_args__ = (UniqueConstraint("recommendation_id", "field_key"),)

@@ -44,6 +44,7 @@ from catora_api.db.models.workflow import (
     RecommendationField,
     RecommendationJob,
     ReviewDecision,
+    WorkspaceEnrichmentPolicy,
 )
 
 __all__ = [
@@ -91,4 +92,5 @@ __all__ = [
     "TaxonomyField",
     "User",
     "Workspace",
+    "WorkspaceEnrichmentPolicy",
 ]

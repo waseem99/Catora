@@ -26,6 +26,12 @@ from catora_api.enrichment.persistence import (
     RecommendationPersistenceService,
     source_snapshot_hash,
 )
+from catora_api.enrichment.policies import (
+    EffectiveEnrichmentPolicy,
+    EnrichmentPolicyConfigurationError,
+    WorkspaceEnrichmentPolicyService,
+    merge_brand_controls,
+)
 from catora_api.enrichment.provider import ProviderAdapter
 from catora_api.enrichment.provider_factory import configured_provider
 from catora_api.enrichment.types import (
@@ -51,6 +57,8 @@ __all__ = [
     "EnrichmentGatewayError",
     "EnrichmentRequest",
     "EnrichmentResult",
+    "EffectiveEnrichmentPolicy",
+    "EnrichmentPolicyConfigurationError",
     "EvidenceReference",
     "InvalidProviderOutputError",
     "PersistedRecommendation",
@@ -71,7 +79,9 @@ __all__ = [
     "RecommendationTargetError",
     "SourceDocument",
     "ValidatedCandidate",
+    "WorkspaceEnrichmentPolicyService",
     "configured_provider",
+    "merge_brand_controls",
     "sanitized_request",
     "source_snapshot_hash",
 ]
