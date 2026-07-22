@@ -11,6 +11,7 @@ Workspace members may read suite definitions and suite-run results. The backend 
 - `GET /api/v1/workspaces/{workspace_id}/intent-suites/{suite_id}`
 - `GET|POST /api/v1/workspaces/{workspace_id}/intent-suites/{suite_id}/runs`
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}`
+- `POST /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/rerun`
 
 The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
 `status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
@@ -21,6 +22,19 @@ hash, lifecycle timestamps, and reconciled suite summary. Page summaries are com
 queries across all returned run IDs; the service does not call the run-detail endpoint once per item.
 Stored requested product IDs must remain unique and canonically sorted, otherwise the history read
 fails closed instead of returning ambiguous provenance.
+
+The history rerun endpoint creates a new append-only run using the selected completed run's exact
+stored product selection. The caller must provide `expected_source_snapshot_hash`, and the request
+fails with a conflict if that hash no longer matches the selected history record. The source run must
+also contain a canonical SHA-256 snapshot, complete lifecycle timestamps, and a unique sorted UUID
+selection. An empty selection preserves the existing `all active products` scope rather than freezing
+a hidden catalog list.
+
+A history rerun still links `previous_run_id` to the latest completed run for chronological comparison;
+it does not rewrite comparison history to point at an arbitrarily selected older source. The audit
+event records the selected source run and snapshot, reused selection mode and count, new run snapshot,
+and deterministic summary. Rerunning does not approve intents, alter suite membership, call an AI
+provider, or write to the catalog.
 
 Executing a suite calls the existing deterministic `IntentRunService` once per pinned member. Each
 child intent run remains an append-only first-class run and is associated with the suite run through
