@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, cast
 
@@ -281,7 +282,7 @@ def test_duplicate_and_unreconciled_category_reports_fail_closed() -> None:
         suite_id=uuid.uuid4(),
     )
     duplicate = selected.items[0]
-    selected.items = selected.items + (duplicate,)
+    selected = replace(selected, items=selected.items + (duplicate,))
     with pytest.raises(IntentCoverageDataError, match="duplicate buckets"):
         build_category_comparison(selected, baseline)
 
@@ -289,12 +290,15 @@ def test_duplicate_and_unreconciled_category_reports_fail_closed() -> None:
         workspace_id=uuid.uuid4(),
         suite_id=uuid.uuid4(),
     )
-    selected.totals = _totals(
-        intent_count=2,
-        product_count=3,
-        confident=1,
-        non_match=1,
-        insufficient=1,
+    selected = replace(
+        selected,
+        totals=_totals(
+            intent_count=2,
+            product_count=3,
+            confident=1,
+            non_match=1,
+            insufficient=1,
+        ),
     )
     with pytest.raises(IntentCoverageDataError, match="suite totals"):
         build_category_comparison(selected, baseline)
