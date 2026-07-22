@@ -6,6 +6,7 @@ from catora_api.api.catalog_identity import router as catalog_identity_router
 from catora_api.api.enrichment_policy import router as enrichment_policy_router
 from catora_api.api.ingestion import router as ingestion_router
 from catora_api.api.intent_parsing import router as intent_parsing_router
+from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
@@ -21,6 +22,7 @@ __all__ = [
     "enrichment_policy_router",
     "ingestion_router",
     "intent_parsing_router",
+    "intent_templates_router",
     "intents_router",
     "public_catalog_router",
     "recommendations_router",
