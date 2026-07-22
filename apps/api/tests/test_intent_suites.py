@@ -190,6 +190,8 @@ def test_suite_model_constraints_protect_positions_members_and_statuses() -> Non
     }
     assert ("intent_suite_id", "position") in member_unique_columns
     assert ("intent_suite_id", "buyer_intent_id") in member_unique_columns
+    assert "uq_intent_suite_members_suite_position" in member_names
+    assert "uq_intent_suite_members_suite_buyer_intent" in member_names
 
 
 def test_intent_suite_openapi_contracts_are_registered() -> None:
