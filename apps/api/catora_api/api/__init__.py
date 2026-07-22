@@ -6,6 +6,7 @@ from catora_api.api.catalog_identity import router as catalog_identity_router
 from catora_api.api.enrichment_policy import router as enrichment_policy_router
 from catora_api.api.ingestion import router as ingestion_router
 from catora_api.api.intent_breakdown import router as _intent_breakdown_router
+from catora_api.api.intent_comparisons import router as _intent_comparisons_router
 from catora_api.api.intent_coverage import router as _intent_coverage_router
 from catora_api.api.intent_parsing import router as intent_parsing_router
 from catora_api.api.intent_runs import router as intent_runs_router
@@ -21,6 +22,7 @@ from catora_api.api.shopify import router as shopify_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
 _intent_coverage_router.include_router(_intent_breakdown_router)
+_intent_coverage_router.include_router(_intent_comparisons_router)
 _intent_suites_router.include_router(_intent_coverage_router)
 _intent_suites_router.include_router(_intent_suite_comparisons_router)
 _intent_suites_router.include_router(_intent_suite_history_router)
