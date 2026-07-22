@@ -23,6 +23,7 @@ from catora_api.api import (
     ingestion_router,
     public_catalog_router,
     recommendation_job_actions_router,
+    recommendation_usage_router,
     recommendations_router,
     shopify_router,
     taxonomy_router,
@@ -78,6 +79,7 @@ app.include_router(audits_router)
 app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
 app.include_router(recommendation_job_actions_router)
+app.include_router(recommendation_usage_router)
 app.include_router(enrichment_policy_router)
 app.add_middleware(
     CORSMiddleware,
@@ -86,8 +88,6 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
-
 @app.exception_handler(AuthenticationError)
 async def authentication_error(_: Request, exc: AuthenticationError) -> JSONResponse:
     return JSONResponse(status_code=401, content={"detail": str(exc)})

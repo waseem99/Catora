@@ -9,6 +9,7 @@ from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendation_job_actions import (
     router as recommendation_job_actions_router,
 )
+from catora_api.api.recommendation_usage import router as recommendation_usage_router
 from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.shopify import router as shopify_router
 from catora_api.api.taxonomy import router as taxonomy_router
@@ -23,6 +24,7 @@ __all__ = [
     "ingestion_router",
     "public_catalog_router",
     "recommendation_job_actions_router",
+    "recommendation_usage_router",
     "recommendations_router",
     "shopify_router",
     "taxonomy_router",
