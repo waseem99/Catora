@@ -21,6 +21,7 @@ from catora_api.api import (
     catalog_router,
     ingestion_router,
     public_catalog_router,
+    recommendations_router,
     shopify_router,
     taxonomy_router,
 )
@@ -73,6 +74,7 @@ app.include_router(catalog_identity_router)
 app.include_router(taxonomy_router)
 app.include_router(audits_router)
 app.include_router(audit_rules_router)
+app.include_router(recommendations_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -144,7 +146,7 @@ async def _check_storage(settings: Settings) -> None:
             "s3",
             endpoint_url=settings.s3_endpoint_url,
             aws_access_key_id=settings.s3_access_key,
-            aws_secret_key=settings.s3_secret_key,
+            aws_secret_access_key=settings.s3_secret_key,
         )
         client.list_buckets()
 
