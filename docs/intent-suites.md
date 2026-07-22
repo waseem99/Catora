@@ -16,6 +16,7 @@ Workspace members may read suite definitions and suite-run results. The backend 
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/intents`
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/categories`
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/remediations`
+- `GET .../compare/{baseline_run_id}/intents/{buyer_intent_id}/match-transitions`
 
 The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
 `status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
@@ -67,6 +68,13 @@ constraint and unclassified-target deltas. The optional category bucket filter i
 both runs. Selected and baseline scoped coverage totals are returned separately, along with product-
 selection and per-field category-scope change flags. The comparison rejects truncated or malformed
 priority pages instead of silently omitting remediation fields.
+
+The match-transition endpoint compares one exact pinned suite intent across two runs and loads only
+that intent's persisted product or variant targets. The union is ordered by product UUID, with the
+product-level target before variants, then by variant UUID. Each item preserves complete selected and
+baseline explanations, labels the target as `retained`, `added`, or `removed`, and separately reports
+status, soft-score and evidence changes. Status filters, changed-only mode and stable pagination use one
+reconciled filtered total. Missing sides remain null; current catalog records are never consulted.
 
 Comparison fails closed when either run is incomplete, belongs to another suite, has malformed
 snapshot or selection provenance, has child runs that differ from immutable suite membership, or has
