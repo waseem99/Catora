@@ -19,12 +19,16 @@ from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
+from catora_api.api.remediation_comparisons import (
+    router as _remediation_comparisons_router,
+)
 from catora_api.api.shopify import router as shopify_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
 _intent_coverage_router.include_router(_intent_breakdown_router)
 _intent_coverage_router.include_router(_intent_comparisons_router)
 _intent_coverage_router.include_router(_category_comparisons_router)
+_intent_coverage_router.include_router(_remediation_comparisons_router)
 _intent_suites_router.include_router(_intent_coverage_router)
 _intent_suites_router.include_router(_intent_suite_comparisons_router)
 _intent_suites_router.include_router(_intent_suite_history_router)
