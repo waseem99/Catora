@@ -5,6 +5,7 @@ from catora_api.api.catalog import router as catalog_router
 from catora_api.api.catalog_identity import router as catalog_identity_router
 from catora_api.api.enrichment_policy import router as enrichment_policy_router
 from catora_api.api.ingestion import router as ingestion_router
+from catora_api.api.intent_coverage import router as _intent_coverage_router
 from catora_api.api.intent_runs import router as intent_runs_router
 from catora_api.api.intent_suites import router as _intent_suites_router
 from catora_api.api.intents import router as intents_router
@@ -14,6 +15,7 @@ from catora_api.api.shopify import router as shopify_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
 
+_intent_suites_router.include_router(_intent_coverage_router)
 intent_runs_router.include_router(_intent_suites_router)
 
 __all__ = [
