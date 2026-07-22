@@ -263,7 +263,11 @@ def _validated_remediation_map(
                 f"{label} remediation priorities contain duplicate fields"
             )
         _validate_priority(item, scope=page.scope, label=label)
-        _validate_category_filter(item, category_bucket=page.category_bucket, label=label)
+        _validate_category_filter(
+            item,
+            category_bucket=page.category_bucket,
+            label=label,
+        )
         by_field[item.field_key] = item
     return by_field
 
