@@ -4,24 +4,57 @@ import uuid
 from collections import defaultdict
 from typing import Annotated, cast
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.auth.dependencies import (
     AuthContextDependency,
     AuthServiceDependency,
+    CsrfContextDependency,
     SessionDependency,
+    SettingsDependency,
 )
+from catora_api.auth.roles import Role, can
+from catora_api.auth.service import AuthorizationError
+from catora_api.db.models.reporting import AuditEvent
 from catora_api.db.models.workflow import Recommendation, RecommendationField
+from catora_api.enrichment.errors import (
+    BudgetExceededError,
+    EnrichmentGatewayError,
+)
+from catora_api.enrichment.execution import (
+    RecommendationGenerationService,
+    RecommendationProviderError,
+    RecommendationTargetError,
+)
+from catora_api.enrichment.mock_provider import DeterministicMockProvider
+from catora_api.enrichment.provider import ProviderAdapter
 from catora_api.enrichment.types import EnrichmentTask
 from catora_api.schemas.recommendations import (
     RecommendationFieldView,
+    RecommendationGenerateRequest,
     RecommendationListResponse,
     RecommendationView,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["recommendations"])
+generation_service = RecommendationGenerationService()
+
+
+def configured_provider(
+    *,
+    provider_name: str,
+    environment: str,
+) -> ProviderAdapter | None:
+    if provider_name == "mock" and environment != "production":
+        return DeterministicMockProvider()
+    return None
+
+
+def _require_recommendation_write(role: str) -> None:
+    if not can(Role(role), "recommendations.write"):
+        raise AuthorizationError("Recommendation generation permission required")
 
 
 async def _fields_by_recommendation(
@@ -74,6 +107,99 @@ def _recommendation_view(
         created_at=recommendation.created_at,
         updated_at=recommendation.updated_at,
     )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/recommendations",
+    response_model=RecommendationView,
+    status_code=status.HTTP_201_CREATED,
+)
+async def generate_recommendation(
+    workspace_id: uuid.UUID,
+    payload: RecommendationGenerateRequest,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    settings: SettingsDependency,
+    context: CsrfContextDependency,
+) -> RecommendationView:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_recommendation_write(membership.role)
+    provider = configured_provider(
+        provider_name=settings.enrichment_provider,
+        environment=settings.environment,
+    )
+    if provider is None:
+        raise HTTPException(status_code=503, detail="Enrichment provider is not configured")
+
+    budget_microunits = (
+        payload.budget_microunits
+        if payload.budget_microunits is not None
+        else settings.enrichment_max_run_budget_microunits
+    )
+    if budget_microunits > settings.enrichment_max_run_budget_microunits:
+        raise HTTPException(
+            status_code=422,
+            detail="Requested enrichment budget exceeds the configured maximum",
+        )
+
+    request = payload.enrichment_request(workspace_id)
+    try:
+        persisted = await generation_service.generate(
+            session,
+            request=request,
+            provider=provider,
+            budget_microunits=budget_microunits,
+            concurrency_limit=settings.enrichment_concurrency_limit,
+            max_attempts=settings.enrichment_max_attempts,
+            max_output_tokens=settings.enrichment_max_output_tokens,
+            audit_finding_id=payload.audit_finding_id,
+        )
+    except RecommendationTargetError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BudgetExceededError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except EnrichmentGatewayError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Enrichment provider output was invalid",
+        ) from exc
+    except RecommendationProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    recommendation = persisted.recommendation
+    session.add(
+        AuditEvent(
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            event_type="recommendation.generated",
+            entity_type="recommendation",
+            entity_id=recommendation.id,
+            payload={
+                "product_id": str(recommendation.product_id),
+                "variant_id": (
+                    str(recommendation.variant_id)
+                    if recommendation.variant_id is not None
+                    else None
+                ),
+                "audit_finding_id": (
+                    str(recommendation.audit_finding_id)
+                    if recommendation.audit_finding_id is not None
+                    else None
+                ),
+                "task_type": recommendation.task_type,
+                "provider": recommendation.model_provider,
+                "model": recommendation.model_name,
+                "prompt_version": recommendation.prompt_version,
+                "cost_microunits": recommendation.cost_microunits,
+                "field_count": len(persisted.fields),
+            },
+        )
+    )
+    await session.commit()
+    await session.refresh(recommendation)
+    for field in persisted.fields:
+        await session.refresh(field)
+    return _recommendation_view(recommendation, list(persisted.fields))
 
 
 @router.get(

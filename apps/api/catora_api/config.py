@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from: str = "Catora <no-reply@catora.local>"
     trust_proxy_headers: bool = False
+    enrichment_provider: Literal["disabled", "mock"] = "disabled"
+    enrichment_max_run_budget_microunits: int = Field(default=100_000, ge=1)
+    enrichment_concurrency_limit: int = Field(default=4, ge=1, le=32)
+    enrichment_max_attempts: int = Field(default=2, ge=1, le=5)
+    enrichment_max_output_tokens: int = Field(default=2_000, ge=1, le=32_000)
 
     def validate_production(self) -> None:
         if self.environment != "production":
@@ -45,6 +50,10 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_AUTH_TOKEN_PEPPER must be a production secret")
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Production database must use PostgreSQL")
+        if self.enrichment_provider == "mock":
+            raise ValueError(
+                "The deterministic mock enrichment provider is not allowed in production"
+            )
 
 
 @lru_cache
