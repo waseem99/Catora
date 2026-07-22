@@ -73,8 +73,11 @@ The match-transition endpoint compares one exact pinned suite intent across two 
 that intent's persisted product or variant targets. The union is ordered by product UUID, with the
 product-level target before variants, then by variant UUID. Each item preserves complete selected and
 baseline explanations, labels the target as `retained`, `added`, or `removed`, and separately reports
-status, soft-score and evidence changes. Status filters, changed-only mode and stable pagination use one
-reconciled filtered total. Missing sides remain null; current catalog records are never consulted.
+status, soft-score and supporting-evidence changes. Supporting evidence excludes the target identity,
+status and score fields already reported by their own dimensions, so a score-only transition does not
+claim that its constraint or category evidence changed. Status filters, changed-only mode and stable
+pagination use one reconciled filtered total. Missing sides remain null; current catalog records are
+never consulted.
 
 Comparison fails closed when either run is incomplete, belongs to another suite, has malformed
 snapshot or selection provenance, has child runs that differ from immutable suite membership, or has
