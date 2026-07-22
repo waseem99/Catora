@@ -26,7 +26,14 @@ from catora_api.db.models.identity import (
     User,
     Workspace,
 )
-from catora_api.db.models.intents import BuyerIntent, IntentProductMatch, IntentRun
+from catora_api.db.models.intents import (
+    BuyerIntent,
+    IntentProductMatch,
+    IntentRun,
+    IntentSuite,
+    IntentSuiteMember,
+    IntentSuiteRun,
+)
 from catora_api.db.models.reporting import (
     AuditEvent,
     ExportArtifact,
@@ -64,6 +71,9 @@ __all__ = [
     "Invitation",
     "IntentProductMatch",
     "IntentRun",
+    "IntentSuite",
+    "IntentSuiteMember",
+    "IntentSuiteRun",
     "Locale",
     "Market",
     "MarketComparison",
