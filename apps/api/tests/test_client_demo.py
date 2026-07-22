@@ -108,7 +108,11 @@ def test_demo_pptx_is_valid_office_package() -> None:
 
 
 def test_demo_routes_are_registered() -> None:
-    paths = {route.path for route in app.routes}
+    paths = {
+        path
+        for route in app.routes
+        if isinstance(path := getattr(route, "path", None), str)
+    }
     assert "/api/v1/workspaces/{workspace_id}/demo" in paths
     assert "/api/v1/workspaces/{workspace_id}/demo/report.pptx" in paths
     assert "/api/v1/workspaces/{workspace_id}/demo/backlog.csv" in paths
