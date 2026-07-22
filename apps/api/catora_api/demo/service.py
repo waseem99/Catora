@@ -137,9 +137,7 @@ class DemoService:
         *,
         workspace_id: uuid.UUID,
     ) -> DemoOverviewResponse:
-        workspace = await session.scalar(
-            select(Workspace).where(Workspace.id == workspace_id)
-        )
+        workspace = await session.scalar(select(Workspace).where(Workspace.id == workspace_id))
         if workspace is None:
             raise HTTPException(status_code=404, detail="Workspace not found")
 
@@ -212,22 +210,23 @@ class DemoService:
         )
         image_count = int(
             await session.scalar(
-                select(func.count(ProductImage.id)).where(
-                    ProductImage.workspace_id == workspace_id
-                )
+                select(func.count(ProductImage.id)).where(ProductImage.workspace_id == workspace_id)
             )
             or 0
         )
 
-        findings = (
-            await session.scalars(
-                select(AuditFinding).where(
-                    AuditFinding.workspace_id == workspace_id,
-                    AuditFinding.audit_run_id == audit_run.id,
-                    AuditFinding.status != "resolved",
+        findings = cast(
+            list[AuditFinding],
+            (
+                await session.scalars(
+                    select(AuditFinding).where(
+                        AuditFinding.workspace_id == workspace_id,
+                        AuditFinding.audit_run_id == audit_run.id,
+                        AuditFinding.status != "resolved",
+                    )
                 )
-            )
-        ).all()
+            ).all(),
+        )
         findings.sort(
             key=lambda item: (
                 SEVERITY_ORDER.get(item.severity, 99),
@@ -238,13 +237,17 @@ class DemoService:
         )
         product_ids = sorted({finding.product_id for finding in findings})
         products = (
-            await session.scalars(
-                select(Product).where(
-                    Product.workspace_id == workspace_id,
-                    Product.id.in_(product_ids),
+            (
+                await session.scalars(
+                    select(Product).where(
+                        Product.workspace_id == workspace_id,
+                        Product.id.in_(product_ids),
+                    )
                 )
-            )
-        ).all() if product_ids else []
+            ).all()
+            if product_ids
+            else []
+        )
         product_titles = {product.id: product.title for product in products}
         field_products: dict[str, set[uuid.UUID]] = {}
         for finding in findings:
@@ -339,36 +342,44 @@ class DemoService:
         ).all()
         field_ids = [field.id for field in fields]
         decisions = (
-            await session.scalars(
-                select(ReviewDecision)
-                .where(
-                    ReviewDecision.workspace_id == workspace_id,
-                    ReviewDecision.recommendation_field_id.in_(field_ids),
+            (
+                await session.scalars(
+                    select(ReviewDecision)
+                    .where(
+                        ReviewDecision.workspace_id == workspace_id,
+                        ReviewDecision.recommendation_field_id.in_(field_ids),
+                    )
+                    .order_by(
+                        ReviewDecision.recommendation_field_id,
+                        ReviewDecision.created_at.desc(),
+                        ReviewDecision.id.desc(),
+                    )
                 )
-                .order_by(
-                    ReviewDecision.recommendation_field_id,
-                    ReviewDecision.created_at.desc(),
-                    ReviewDecision.id.desc(),
-                )
-            )
-        ).all() if field_ids else []
+            ).all()
+            if field_ids
+            else []
+        )
         latest_decisions: dict[uuid.UUID, ReviewDecision] = {}
         for decision in decisions:
             latest_decisions.setdefault(decision.recommendation_field_id, decision)
 
         approved_items = (
-            await session.scalars(
-                select(ChangeSetItem)
-                .join(ChangeSet, ChangeSet.id == ChangeSetItem.change_set_id)
-                .where(
-                    ChangeSet.workspace_id == workspace_id,
-                    ChangeSetItem.workspace_id == workspace_id,
-                    ChangeSetItem.recommendation_field_id.in_(field_ids),
-                    ChangeSet.status == "approved",
+            (
+                await session.scalars(
+                    select(ChangeSetItem)
+                    .join(ChangeSet, ChangeSet.id == ChangeSetItem.change_set_id)
+                    .where(
+                        ChangeSet.workspace_id == workspace_id,
+                        ChangeSetItem.workspace_id == workspace_id,
+                        ChangeSetItem.recommendation_field_id.in_(field_ids),
+                        ChangeSet.status == "approved",
+                    )
+                    .order_by(ChangeSet.created_at.desc(), ChangeSetItem.id.desc())
                 )
-                .order_by(ChangeSet.created_at.desc(), ChangeSetItem.id.desc())
-            )
-        ).all() if field_ids else []
+            ).all()
+            if field_ids
+            else []
+        )
         approved_field_ids = {item.recommendation_field_id for item in approved_items}
         width_field_ids = {field.id for field in fields if field.field_key == "width_mm"}
         projected_status = (
@@ -377,15 +388,19 @@ class DemoService:
             else hero_match.status
         )
 
-        change_set = await session.scalar(
-            select(ChangeSet)
-            .join(ChangeSetItem, ChangeSetItem.change_set_id == ChangeSet.id)
-            .where(
-                ChangeSet.workspace_id == workspace_id,
-                ChangeSetItem.recommendation_field_id.in_(field_ids),
+        change_set = (
+            await session.scalar(
+                select(ChangeSet)
+                .join(ChangeSetItem, ChangeSetItem.change_set_id == ChangeSet.id)
+                .where(
+                    ChangeSet.workspace_id == workspace_id,
+                    ChangeSetItem.recommendation_field_id.in_(field_ids),
+                )
+                .order_by(ChangeSet.created_at.desc(), ChangeSet.id.desc())
             )
-            .order_by(ChangeSet.created_at.desc(), ChangeSet.id.desc())
-        ) if field_ids else None
+            if field_ids
+            else None
+        )
         approved_count = sum(
             1 for decision in latest_decisions.values() if decision.decision == "approved"
         )
