@@ -104,11 +104,9 @@ async def product_snapshot_hash(
             "canonical_key": product.canonical_key,
             "title": product.title,
             "category_id": (
-                (
-                    str(product.primary_category_id)
-                    if product.primary_category_id is not None
-                    else None
-                )
+                str(product.primary_category_id)
+                if product.primary_category_id is not None
+                else None
             ),
         },
         "attributes": [
