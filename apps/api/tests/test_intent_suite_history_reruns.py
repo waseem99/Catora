@@ -49,7 +49,11 @@ class FakeSuiteService:
         self.persisted = persisted
         self.calls: list[dict[str, object]] = []
 
-    async def execute(self, _session: object, **kwargs: object) -> PersistedIntentSuiteRun:
+    async def execute(
+        self,
+        _session: object,
+        **kwargs: object,
+    ) -> PersistedIntentSuiteRun:
         self.calls.append(kwargs)
         return self.persisted
 
@@ -69,7 +73,11 @@ class FakeRerunService:
         self.result = result
         self.calls: list[dict[str, object]] = []
 
-    async def rerun(self, _session: object, **kwargs: object) -> PersistedIntentSuiteHistoryRerun:
+    async def rerun(
+        self,
+        _session: object,
+        **kwargs: object,
+    ) -> PersistedIntentSuiteHistoryRerun:
         self.calls.append(kwargs)
         return self.result
 
@@ -188,13 +196,24 @@ async def test_rerun_reuses_exact_canonical_product_selection() -> None:
 async def test_rerun_rejects_stale_snapshot_before_execution() -> None:
     workspace_id = uuid.uuid4()
     suite_id = uuid.uuid4()
-    source = _source_run(workspace_id=workspace_id, suite_id=suite_id, product_ids=[])
+    source = _source_run(
+        workspace_id=workspace_id,
+        suite_id=suite_id,
+        product_ids=[],
+    )
     suite_service = FakeSuiteService(
-        _persisted_run(workspace_id=workspace_id, suite_id=suite_id, product_ids=())
+        _persisted_run(
+            workspace_id=workspace_id,
+            suite_id=suite_id,
+            product_ids=(),
+        )
     )
     service = IntentSuiteHistoryRerunService(cast(Any, suite_service))
 
-    with pytest.raises(IntentSuiteHistoryRerunConflictError, match="snapshot changed"):
+    with pytest.raises(
+        IntentSuiteHistoryRerunConflictError,
+        match="snapshot changed",
+    ):
         await service.rerun(
             cast(Any, FakeSession(source)),
             workspace_id=workspace_id,
@@ -208,7 +227,10 @@ async def test_rerun_rejects_stale_snapshot_before_execution() -> None:
 @pytest.mark.asyncio
 async def test_rerun_hides_missing_cross_tenant_source() -> None:
     service = IntentSuiteHistoryRerunService()
-    with pytest.raises(IntentSuiteHistoryRerunNotFoundError, match="not found"):
+    with pytest.raises(
+        IntentSuiteHistoryRerunNotFoundError,
+        match="not found",
+    ):
         await service.rerun(
             cast(Any, FakeSession(None)),
             workspace_id=uuid.uuid4(),
@@ -221,8 +243,16 @@ async def test_rerun_hides_missing_cross_tenant_source() -> None:
     ("product_ids", "status", "message"),
     [
         (["not-a-uuid"], "completed", "selection is invalid"),
-        ([str(uuid.UUID(int=1)), str(uuid.UUID(int=1))], "completed", "duplicates"),
-        ([str(uuid.UUID(int=2)), str(uuid.UUID(int=1))], "completed", "ordered"),
+        (
+            [str(uuid.UUID(int=1)), str(uuid.UUID(int=1))],
+            "completed",
+            "duplicates",
+        ),
+        (
+            [str(uuid.UUID(int=2)), str(uuid.UUID(int=1))],
+            "completed",
+            "ordered",
+        ),
         ([], "running", "Only a completed"),
     ],
 )
