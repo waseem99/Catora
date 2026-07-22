@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any, cast
 
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,33 @@ class IntentSuiteNotFoundError(IntentSuiteError):
 
 class IntentSuiteMemberError(IntentSuiteError):
     pass
+
+
+class _PinnedIntentSession:
+    def __init__(self, session: AsyncSession, intent: BuyerIntent) -> None:
+        self._session = session
+        self._intent = intent
+        self._served_intent = False
+
+    async def scalar(
+        self,
+        statement: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        if not self._served_intent:
+            descriptions = getattr(statement, "column_descriptions", ())
+            entity = descriptions[0].get("entity") if descriptions else None
+            if entity is not BuyerIntent:
+                raise IntentSuiteMemberError(
+                    "Pinned intent execution contract changed unexpectedly"
+                )
+            self._served_intent = True
+            return self._intent
+        return await self._session.scalar(statement, *args, **kwargs)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._session, name)
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,8 +290,16 @@ class IntentSuiteService:
 
         child_runs: list[PersistedIntentRun] = []
         for member in record.members:
+            if member.intent.approval_status not in {"approved", "superseded"}:
+                raise IntentSuiteMemberError(
+                    "Intent suite member is no longer an approved version"
+                )
+            pinned_session = cast(
+                AsyncSession,
+                _PinnedIntentSession(session, member.intent),
+            )
             child = await self.run_service.execute(
-                session,
+                pinned_session,
                 workspace_id=workspace_id,
                 lineage_id=member.intent.lineage_id,
                 intent_version=member.intent.version,
