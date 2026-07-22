@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,6 +41,9 @@ class Recommendation(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, 
     prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
     cost_microunits: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     source_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    execution_metadata: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
 
 
 class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
@@ -55,6 +59,9 @@ class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMi
     evidence: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
     confidence: Mapped[str] = mapped_column(String(20), nullable=False)
     requires_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    proposal_metadata: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
 
 
 class ReviewDecision(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):

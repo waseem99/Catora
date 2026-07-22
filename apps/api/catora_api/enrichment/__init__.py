@@ -6,6 +6,13 @@ from catora_api.enrichment.gateway import (
     InvalidProviderOutputError,
     ProviderContractError,
 )
+from catora_api.enrichment.persistence import (
+    PersistedRecommendation,
+    RecommendationIdentityMismatchError,
+    RecommendationPersistenceError,
+    RecommendationPersistenceService,
+    source_snapshot_hash,
+)
 from catora_api.enrichment.provider import ProviderAdapter
 from catora_api.enrichment.types import (
     BrandControls,
@@ -36,6 +43,11 @@ __all__ = [
     "ProviderRequest",
     "ProviderResponse",
     "ProviderUsage",
+    "PersistedRecommendation",
+    "RecommendationIdentityMismatchError",
+    "RecommendationPersistenceError",
+    "RecommendationPersistenceService",
+    "source_snapshot_hash",
     "SourceDocument",
     "ValidatedCandidate",
 ]
