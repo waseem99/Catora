@@ -219,6 +219,8 @@ def persisted_match_snapshot(
     match: IntentProductMatch,
     buyer_intent_id: uuid.UUID,
 ) -> PersistedMatchSnapshot:
+    if "category_key" not in match.explanation:
+        raise IntentCoverageDataError("Stored intent match explanation is invalid")
     try:
         result = IntentMatchResult.model_validate(match.explanation)
     except ValidationError as exc:
@@ -263,6 +265,13 @@ def _validate_result_fields(result: IntentMatchResult) -> None:
         raise IntentCoverageDataError("Missing category status carries a category key")
     if result.category_status in {"supported", "violated"} and result.category_key is None:
         raise IntentCoverageDataError("Known category status has no category key")
+    if (
+        result.category_status == "missing"
+        and result.status != "insufficient_category_data"
+    ):
+        raise IntentCoverageDataError("Missing category status has an invalid match status")
+    if result.category_status == "violated" and result.status != "non_match":
+        raise IntentCoverageDataError("Violated category status has an invalid match status")
 
 
 def coverage_totals(
