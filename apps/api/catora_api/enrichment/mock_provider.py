@@ -18,28 +18,46 @@ class DeterministicMockProvider:
 
     async def generate(self, request: ProviderRequest) -> ProviderResponse:
         payload = request.user_payload
-        allowed_fields = _string_list(payload.get("allowed_fields"))
-        original_values = _mapping(payload.get("original_values"))
-        source = _first_source(payload.get("untrusted_product_content"))
-        candidates = [
-            _candidate(
-                field_key=field_key,
-                original_values=original_values,
-                source=source,
-                task_type=request.task_type,
-            )
-            for field_key in allowed_fields
-        ]
+        if request.task_type == "parse_buyer_intent":
+            output = _parsed_intent(payload)
+            usage_output: object = output
+        else:
+            allowed_fields = _string_list(payload.get("allowed_fields"))
+            original_values = _mapping(payload.get("original_values"))
+            source = _first_source(payload.get("untrusted_product_content"))
+            candidates = [
+                _candidate(
+                    field_key=field_key,
+                    original_values=original_values,
+                    source=source,
+                    task_type=request.task_type,
+                )
+                for field_key in allowed_fields
+            ]
+            output = {"candidates": candidates}
+            usage_output = candidates
         return ProviderResponse(
             provider_name=self.provider_name,
             model_name=self.model_name,
-            output={"candidates": candidates},
+            output=output,
             usage=ProviderUsage(
                 input_tokens=max(1, len(str(payload)) // 4),
-                output_tokens=max(1, len(str(candidates)) // 4),
+                output_tokens=max(1, len(str(usage_output)) // 4),
                 cost_microunits=100,
             ),
         )
+
+
+def _parsed_intent(payload: Mapping[str, object]) -> dict[str, object]:
+    categories = _string_list(payload.get("allowed_category_keys"))
+    return {
+        "query": str(payload.get("untrusted_query", "")),
+        "category_keys": categories[:1],
+        "hard_constraints": [],
+        "soft_preferences": [],
+        "market_id": payload.get("market_id"),
+        "locale": payload.get("locale"),
+    }
 
 
 def _candidate(

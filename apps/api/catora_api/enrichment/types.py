@@ -15,6 +15,17 @@ EnrichmentTask = Literal[
     "explain_improvement",
     "classify_category",
 ]
+ProviderTask = Literal[
+    "extract_attributes",
+    "normalize_attributes",
+    "improve_title",
+    "improve_description",
+    "generate_faqs",
+    "generate_alt_text",
+    "explain_improvement",
+    "classify_category",
+    "parse_buyer_intent",
+]
 EvidenceKind = Literal[
     "structured_field",
     "source_field",
@@ -161,7 +172,7 @@ class ProviderRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     request_id: uuid.UUID
-    task_type: EnrichmentTask
+    task_type: ProviderTask
     prompt_version: str = Field(min_length=1, max_length=100)
     prompt_fingerprint: str = Field(min_length=64, max_length=64)
     system_prompt: str = Field(min_length=1, max_length=20_000)
