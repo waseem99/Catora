@@ -411,9 +411,9 @@ def _transition(
         score_delta = (
             selected.soft_score_basis_points - baseline.soft_score_basis_points
         )
-        evidence_changed = _evidence_payload(
-            selected.explanation
-        ) != _evidence_payload(baseline.explanation)
+        selected_evidence = _evidence_payload(selected.explanation)
+        baseline_evidence = _evidence_payload(baseline.explanation)
+        evidence_changed = selected_evidence != baseline_evidence
     elif selected is not None:
         presence = "added"
         status_changed = False
