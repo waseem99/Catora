@@ -24,7 +24,6 @@ from catora_api.intents.remediation_comparisons import (
     IntentRemediationComparisonService,
     IntentRemediationDelta,
 )
-from catora_api.intents.types import FieldKey
 from catora_api.schemas.category_comparisons import IntentCoverageDeltaView
 from catora_api.schemas.intent_coverage import (
     IntentCoverageTotalsView,
@@ -104,7 +103,7 @@ def _item_view(
     item: IntentRemediationComparisonItem,
 ) -> IntentRemediationComparisonItemView:
     return IntentRemediationComparisonItemView(
-        field_key=cast(FieldKey, item.field_key),
+        field_key=item.field_key,
         presence=item.presence,
         selected=_priority_view(item.selected),
         baseline=_priority_view(item.baseline),
@@ -121,7 +120,7 @@ def _priority_view(
         return None
     return IntentRemediationPriorityView(
         priority_rank=item.priority_rank,
-        field_key=cast(FieldKey, item.field_key),
+        field_key=item.field_key,
         affected_intent_count=item.affected_intent_count,
         affected_target_count=item.affected_target_count,
         affected_product_count=item.affected_product_count,
