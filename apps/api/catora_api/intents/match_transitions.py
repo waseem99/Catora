@@ -411,10 +411,9 @@ def _transition(
         score_delta = (
             selected.soft_score_basis_points - baseline.soft_score_basis_points
         )
-        evidence_changed = (
-            selected.explanation.model_dump(mode="json")
-            != baseline.explanation.model_dump(mode="json")
-        )
+        evidence_changed = _evidence_payload(
+            selected.explanation
+        ) != _evidence_payload(baseline.explanation)
     elif selected is not None:
         presence = "added"
         status_changed = False
@@ -437,3 +436,15 @@ def _transition(
         soft_score_basis_points_delta=score_delta,
         evidence_changed=evidence_changed,
     )
+
+
+def _evidence_payload(result: IntentMatchResult) -> dict[str, object]:
+    payload: dict[str, object] = result.model_dump(mode="json")
+    for field in (
+        "product_id",
+        "variant_id",
+        "status",
+        "soft_score_basis_points",
+    ):
+        payload.pop(field, None)
+    return payload
