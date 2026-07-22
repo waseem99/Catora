@@ -112,6 +112,7 @@ jobs:
       CATORA_S3_ENDPOINT_URL: http://localhost:9000
       CATORA_S3_ACCESS_KEY: test
       CATORA_S3_SECRET_KEY: test-secret
+      CATORA_DEMO_PASSWORD: ci-demo-password
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -134,7 +135,7 @@ jobs:
           name: pytest-report
           path: pytest-report.txt
           retention-days: 3
-      - name: Run Alembic upgrade and downgrade
+      - name: Run migrations and client-demo reset smoke test
         shell: bash
         run: |
           set +e
@@ -144,6 +145,16 @@ jobs:
             upgrade_status=$?
             if [ "$upgrade_status" -ne 0 ]; then
               exit "$upgrade_status"
+            fi
+            python scripts/seed_sales_demo.py
+            first_seed_status=$?
+            if [ "$first_seed_status" -ne 0 ]; then
+              exit "$first_seed_status"
+            fi
+            python scripts/seed_sales_demo.py
+            second_seed_status=$?
+            if [ "$second_seed_status" -ne 0 ]; then
+              exit "$second_seed_status"
             fi
             alembic downgrade -1
           ) > migration-report.txt 2>&1
@@ -177,6 +188,12 @@ jobs:
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm audit --audit-level=moderate
+      - name: Export resolved package lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-package-lock
+          path: package-lock.json
+          retention-days: 3
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
