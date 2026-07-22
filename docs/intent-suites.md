@@ -14,6 +14,7 @@ Workspace members may read suite definitions and suite-run results. The backend 
 - `POST /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/rerun`
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/compare/{baseline_run_id}`
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/intents`
+- `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/categories`
 
 The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
 `status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
@@ -50,6 +51,13 @@ selected child run and baseline child run. Target, distinct-product, four-state 
 deltas are calculated as selected run minus baseline run from persisted match evidence. The service
 requires exactly one completed child run per suite member in each history record and never follows an
 intent lineage to a newer version.
+
+The category comparison endpoint returns the union of persisted category buckets in canonical order,
+with the unclassified bucket last. Each row is labelled `retained`, `added`, or `removed`, preserves the
+selected and baseline summaries when present, and uses zero-filled selected-minus-baseline deltas for
+absent sides. Suite totals are compared separately because distinct intent and product counts are not
+additive across category buckets. Category coverage is derived only from immutable stored match
+explanations and never joins mutable current catalog categories.
 
 Comparison fails closed when either run is incomplete, belongs to another suite, has malformed
 snapshot or selection provenance, has child runs that differ from immutable suite membership, or has
