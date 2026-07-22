@@ -43,12 +43,13 @@ class FakeAuthService:
 class FakeIntentService:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
+        self.created: BuyerIntent | None = None
 
     async def create(self, _session: object, **kwargs: Any) -> BuyerIntent:
         self.calls.append(kwargs)
         structured = kwargs["structured_intent"]
         now = datetime.now(UTC)
-        return BuyerIntent(
+        self.created = BuyerIntent(
             id=uuid.uuid4(),
             workspace_id=kwargs["workspace_id"],
             lineage_id=uuid.uuid4(),
@@ -62,6 +63,7 @@ class FakeIntentService:
             created_at=now,
             updated_at=now,
         )
+        return self.created
 
 
 @pytest.mark.asyncio
@@ -96,7 +98,8 @@ async def test_materialize_template_creates_audited_editable_draft(
     assert service.calls[0]["source"] == "template"
     assert service.calls[0]["workspace_id"] == workspace_id
     assert session.commit_count == 1
-    assert session.refreshed == [result.buyer_intent]
+    assert service.created is not None
+    assert session.refreshed == [service.created]
 
     audit = next(item for item in session.added if isinstance(item, AuditEvent))
     assert audit.event_type == "intent.created_from_template"
