@@ -6,8 +6,10 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
@@ -44,6 +46,47 @@ class Recommendation(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, 
     execution_metadata: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
     )
+
+
+class RecommendationJob(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
+    __tablename__ = "recommendation_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','completed','failed','cancelled')",
+            name="valid_status",
+        ),
+        Index(
+            "ix_recommendation_jobs_workspace_status_created",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+    requested_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    variant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("product_variants.id", ondelete="CASCADE"), index=True
+    )
+    audit_finding_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("audit_findings.id", ondelete="SET NULL"), index=True
+    )
+    recommendation_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("recommendations.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    provider_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    budget_microunits: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    request_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    failure_summary: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):

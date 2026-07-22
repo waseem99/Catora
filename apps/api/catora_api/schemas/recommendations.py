@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -13,6 +14,14 @@ from catora_api.enrichment.types import (
     FieldKey,
     SourceDocument,
 )
+
+RecommendationJobStatus = Literal[
+    "queued",
+    "running",
+    "completed",
+    "failed",
+    "cancelled",
+]
 
 
 class RecommendationGenerateRequest(BaseModel):
@@ -91,6 +100,34 @@ class RecommendationView(BaseModel):
 
 class RecommendationListResponse(BaseModel):
     items: list[RecommendationView]
+    total: int = Field(ge=0)
+    offset: int = Field(ge=0)
+    limit: int = Field(ge=1, le=500)
+
+
+class RecommendationJobView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    workspace_id: uuid.UUID
+    requested_by_user_id: uuid.UUID | None
+    product_id: uuid.UUID
+    variant_id: uuid.UUID | None
+    audit_finding_id: uuid.UUID | None
+    recommendation_id: uuid.UUID | None
+    status: RecommendationJobStatus
+    provider_name: str = Field(min_length=1, max_length=100)
+    task_type: EnrichmentTask
+    budget_microunits: int = Field(ge=1)
+    failure_summary: dict[str, object]
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class RecommendationJobListResponse(BaseModel):
+    items: list[RecommendationJobView]
     total: int = Field(ge=0)
     offset: int = Field(ge=0)
     limit: int = Field(ge=1, le=500)

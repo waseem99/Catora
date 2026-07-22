@@ -11,6 +11,13 @@ from catora_api.enrichment.gateway import (
     InvalidProviderOutputError,
     ProviderContractError,
 )
+from catora_api.enrichment.jobs import (
+    RecommendationJobConfigurationError,
+    RecommendationJobError,
+    RecommendationJobService,
+    RecommendationJobStateError,
+    sanitized_request,
+)
 from catora_api.enrichment.mock_provider import DeterministicMockProvider
 from catora_api.enrichment.persistence import (
     PersistedRecommendation,
@@ -20,6 +27,7 @@ from catora_api.enrichment.persistence import (
     source_snapshot_hash,
 )
 from catora_api.enrichment.provider import ProviderAdapter
+from catora_api.enrichment.provider_factory import configured_provider
 from catora_api.enrichment.types import (
     BrandControls,
     CandidateProposal,
@@ -53,11 +61,17 @@ __all__ = [
     "ProviderUsage",
     "RecommendationGenerationService",
     "RecommendationIdentityMismatchError",
+    "RecommendationJobConfigurationError",
+    "RecommendationJobError",
+    "RecommendationJobService",
+    "RecommendationJobStateError",
     "RecommendationPersistenceError",
     "RecommendationPersistenceService",
     "RecommendationProviderError",
     "RecommendationTargetError",
     "SourceDocument",
     "ValidatedCandidate",
+    "configured_provider",
+    "sanitized_request",
     "source_snapshot_hash",
 ]

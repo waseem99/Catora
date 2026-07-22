@@ -42,6 +42,7 @@ from catora_api.db.models.workflow import (
     MarketConflict,
     Recommendation,
     RecommendationField,
+    RecommendationJob,
     ReviewDecision,
 )
 
@@ -80,6 +81,7 @@ __all__ = [
     "ProductVariant",
     "Recommendation",
     "RecommendationField",
+    "RecommendationJob",
     "ReportJob",
     "ReviewDecision",
     "RuleDefinition",

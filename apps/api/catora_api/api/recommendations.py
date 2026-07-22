@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections import defaultdict
+from datetime import UTC, datetime
 from typing import Annotated, cast
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -18,38 +19,35 @@ from catora_api.auth.dependencies import (
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models.reporting import AuditEvent
-from catora_api.db.models.workflow import Recommendation, RecommendationField
-from catora_api.enrichment.errors import (
-    BudgetExceededError,
-    EnrichmentGatewayError,
+from catora_api.db.models.workflow import (
+    Recommendation,
+    RecommendationField,
+    RecommendationJob,
 )
+from catora_api.enrichment.errors import BudgetExceededError, EnrichmentGatewayError
 from catora_api.enrichment.execution import (
     RecommendationGenerationService,
     RecommendationProviderError,
     RecommendationTargetError,
 )
-from catora_api.enrichment.mock_provider import DeterministicMockProvider
+from catora_api.enrichment.jobs import RecommendationJobService
 from catora_api.enrichment.provider import ProviderAdapter
+from catora_api.enrichment.provider_factory import configured_provider
 from catora_api.enrichment.types import EnrichmentTask
 from catora_api.schemas.recommendations import (
     RecommendationFieldView,
     RecommendationGenerateRequest,
+    RecommendationJobListResponse,
+    RecommendationJobStatus,
+    RecommendationJobView,
     RecommendationListResponse,
     RecommendationView,
 )
+from catora_api.worker import celery_app
 
 router = APIRouter(prefix="/api/v1", tags=["recommendations"])
 generation_service = RecommendationGenerationService()
-
-
-def configured_provider(
-    *,
-    provider_name: str,
-    environment: str,
-) -> ProviderAdapter | None:
-    if provider_name == "mock" and environment != "production":
-        return DeterministicMockProvider()
-    return None
+job_service = RecommendationJobService()
 
 
 def _require_recommendation_write(role: str) -> None:
@@ -109,6 +107,33 @@ def _recommendation_view(
     )
 
 
+def _budget(
+    payload: RecommendationGenerateRequest,
+    configured_maximum: int,
+) -> int:
+    requested = payload.budget_microunits or configured_maximum
+    if requested > configured_maximum:
+        raise HTTPException(
+            status_code=422,
+            detail="Requested enrichment budget exceeds the configured maximum",
+        )
+    return requested
+
+
+def _provider(
+    *,
+    provider_name: str,
+    environment: str,
+) -> ProviderAdapter:
+    provider = configured_provider(
+        provider_name=provider_name,
+        environment=environment,
+    )
+    if provider is None:
+        raise HTTPException(status_code=503, detail="Enrichment provider is not configured")
+    return provider
+
+
 @router.post(
     "/workspaces/{workspace_id}/recommendations",
     response_model=RecommendationView,
@@ -124,23 +149,14 @@ async def generate_recommendation(
 ) -> RecommendationView:
     membership = await auth_service.membership(session, context.user.id, workspace_id)
     _require_recommendation_write(membership.role)
-    provider = configured_provider(
+    provider = _provider(
         provider_name=settings.enrichment_provider,
         environment=settings.environment,
     )
-    if provider is None:
-        raise HTTPException(status_code=503, detail="Enrichment provider is not configured")
-
-    budget_microunits = (
-        payload.budget_microunits
-        if payload.budget_microunits is not None
-        else settings.enrichment_max_run_budget_microunits
+    budget_microunits = _budget(
+        payload,
+        settings.enrichment_max_run_budget_microunits,
     )
-    if budget_microunits > settings.enrichment_max_run_budget_microunits:
-        raise HTTPException(
-            status_code=422,
-            detail="Requested enrichment budget exceeds the configured maximum",
-        )
 
     request = payload.enrichment_request(workspace_id)
     try:
@@ -200,6 +216,158 @@ async def generate_recommendation(
     for field in persisted.fields:
         await session.refresh(field)
     return _recommendation_view(recommendation, list(persisted.fields))
+
+
+@router.post(
+    "/workspaces/{workspace_id}/recommendation-jobs",
+    response_model=RecommendationJobView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_recommendation_job(
+    workspace_id: uuid.UUID,
+    payload: RecommendationGenerateRequest,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    settings: SettingsDependency,
+    context: CsrfContextDependency,
+) -> RecommendationJobView:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_recommendation_write(membership.role)
+    _provider(
+        provider_name=settings.enrichment_provider,
+        environment=settings.environment,
+    )
+    budget_microunits = _budget(
+        payload,
+        settings.enrichment_max_run_budget_microunits,
+    )
+    job = await job_service.create(
+        session,
+        request=payload.enrichment_request(workspace_id),
+        requested_by_user_id=context.user.id,
+        provider_name=settings.enrichment_provider,
+        budget_microunits=budget_microunits,
+        audit_finding_id=payload.audit_finding_id,
+    )
+    session.add(
+        AuditEvent(
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            event_type="recommendation.job_queued",
+            entity_type="recommendation_job",
+            entity_id=job.id,
+            payload={
+                "product_id": str(job.product_id),
+                "variant_id": str(job.variant_id) if job.variant_id is not None else None,
+                "audit_finding_id": (
+                    str(job.audit_finding_id)
+                    if job.audit_finding_id is not None
+                    else None
+                ),
+                "task_type": job.task_type,
+                "provider": job.provider_name,
+                "budget_microunits": job.budget_microunits,
+            },
+        )
+    )
+    await session.commit()
+    try:
+        celery_app.send_task("catora.recommendation.run", args=[str(job.id)])
+    except Exception as exc:
+        job.status = "failed"
+        job.completed_at = datetime.now(UTC)
+        job.failure_summary = {
+            "error_type": type(exc).__name__,
+            "error_message": "Unable to enqueue recommendation job",
+        }
+        session.add(
+            AuditEvent(
+                workspace_id=workspace_id,
+                actor_user_id=context.user.id,
+                event_type="recommendation.job_enqueue_failed",
+                entity_type="recommendation_job",
+                entity_id=job.id,
+                payload=dict(job.failure_summary),
+            )
+        )
+        await session.commit()
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to enqueue recommendation job",
+        ) from exc
+    await session.refresh(job)
+    return RecommendationJobView.model_validate(job)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/recommendation-jobs",
+    response_model=RecommendationJobListResponse,
+)
+async def list_recommendation_jobs(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+    product_id: Annotated[uuid.UUID | None, Query()] = None,
+    job_status: Annotated[
+        RecommendationJobStatus | None,
+        Query(alias="status"),
+    ] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+) -> RecommendationJobListResponse:
+    await auth_service.membership(session, context.user.id, workspace_id)
+    query = select(RecommendationJob).where(
+        RecommendationJob.workspace_id == workspace_id
+    )
+    if product_id is not None:
+        query = query.where(RecommendationJob.product_id == product_id)
+    if job_status is not None:
+        query = query.where(RecommendationJob.status == job_status)
+    total = int(
+        (
+            await session.scalar(
+                select(func.count()).select_from(query.order_by(None).subquery())
+            )
+        )
+        or 0
+    )
+    jobs = (
+        await session.scalars(
+            query.order_by(RecommendationJob.created_at.desc(), RecommendationJob.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+    return RecommendationJobListResponse(
+        items=[RecommendationJobView.model_validate(job) for job in jobs],
+        total=total,
+        offset=offset,
+        limit=limit,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/recommendation-jobs/{job_id}",
+    response_model=RecommendationJobView,
+)
+async def get_recommendation_job(
+    workspace_id: uuid.UUID,
+    job_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+) -> RecommendationJobView:
+    await auth_service.membership(session, context.user.id, workspace_id)
+    job = await session.scalar(
+        select(RecommendationJob).where(
+            RecommendationJob.id == job_id,
+            RecommendationJob.workspace_id == workspace_id,
+        )
+    )
+    if job is None:
+        raise HTTPException(status_code=404, detail="Recommendation job not found")
+    return RecommendationJobView.model_validate(job)
 
 
 @router.get(
