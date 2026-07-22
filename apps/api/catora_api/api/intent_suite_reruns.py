@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import uuid
+from typing import cast
 
 from fastapi import APIRouter, HTTPException, status
 
-from catora_api.api.intent_suites import _run_view
 from catora_api.auth.dependencies import (
     AuthServiceDependency,
     CsrfContextDependency,
@@ -23,10 +23,22 @@ from catora_api.intents.suite_reruns import (
     IntentSuiteHistoryRerunNotFoundError,
     IntentSuiteHistoryRerunService,
 )
-from catora_api.intents.suites import IntentSuiteMemberError, IntentSuiteNotFoundError
+from catora_api.intents.suites import (
+    IntentSuiteMemberError,
+    IntentSuiteNotFoundError,
+    IntentSuiteRunDelta,
+    IntentSuiteRunSummary,
+    PersistedIntentSuiteRun,
+)
 from catora_api.schemas.intent_suite_reruns import (
     IntentSuiteHistoryRerunRequest,
     IntentSuiteHistoryRerunView,
+)
+from catora_api.schemas.intent_suites import (
+    IntentSuiteRunDeltaView,
+    IntentSuiteRunStatus,
+    IntentSuiteRunSummaryView,
+    IntentSuiteRunView,
 )
 
 router = APIRouter(tags=["buyer intent suites"])
@@ -109,6 +121,63 @@ async def rerun_intent_suite_from_history(
         selection_mode=result.selection_mode,
         reused_product_ids=result.product_ids,
         run=_run_view(persisted),
+    )
+
+
+def _run_view(persisted: PersistedIntentSuiteRun) -> IntentSuiteRunView:
+    requested = tuple(uuid.UUID(item) for item in persisted.run.requested_product_ids)
+    return IntentSuiteRunView(
+        id=persisted.run.id,
+        workspace_id=cast(uuid.UUID, persisted.run.workspace_id),
+        intent_suite_id=persisted.run.intent_suite_id,
+        previous_run_id=persisted.run.previous_run_id,
+        status=cast(IntentSuiteRunStatus, persisted.run.status),
+        requested_product_ids=requested,
+        source_snapshot_hash=persisted.run.source_snapshot_hash,
+        intent_run_ids=persisted.child_run_ids,
+        started_at=persisted.run.started_at,
+        completed_at=persisted.run.completed_at,
+        created_at=persisted.run.created_at,
+        summary=_summary_view(persisted.summary),
+        delta=_delta_view(persisted.delta),
+    )
+
+
+def _summary_view(summary: IntentSuiteRunSummary) -> IntentSuiteRunSummaryView:
+    return IntentSuiteRunSummaryView(
+        member_count=summary.member_count,
+        intent_run_count=summary.intent_run_count,
+        target_count=summary.target_count,
+        product_count=summary.product_count,
+        confident_match_count=summary.confident_match_count,
+        possible_match_missing_data_count=(
+            summary.possible_match_missing_data_count
+        ),
+        non_match_count=summary.non_match_count,
+        insufficient_category_data_count=(
+            summary.insufficient_category_data_count
+        ),
+        confident_coverage_basis_points=summary.confident_coverage_basis_points,
+    )
+
+
+def _delta_view(delta: IntentSuiteRunDelta | None) -> IntentSuiteRunDeltaView | None:
+    if delta is None:
+        return None
+    return IntentSuiteRunDeltaView(
+        previous_run_id=delta.previous_run_id,
+        target_count_delta=delta.target_count_delta,
+        confident_match_count_delta=delta.confident_match_count_delta,
+        possible_match_missing_data_count_delta=(
+            delta.possible_match_missing_data_count_delta
+        ),
+        non_match_count_delta=delta.non_match_count_delta,
+        insufficient_category_data_count_delta=(
+            delta.insufficient_category_data_count_delta
+        ),
+        confident_coverage_basis_points_delta=(
+            delta.confident_coverage_basis_points_delta
+        ),
     )
 
 
