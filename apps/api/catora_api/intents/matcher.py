@@ -72,6 +72,7 @@ def evaluate_intent(
     return IntentMatchResult(
         product_id=candidate.product_id,
         variant_id=candidate.variant_id,
+        category_key=candidate.category_key,
         status=status,
         category_status=category_status,
         hard_constraints=hard,
@@ -91,6 +92,7 @@ def _result(
     return IntentMatchResult(
         product_id=candidate.product_id,
         variant_id=candidate.variant_id,
+        category_key=candidate.category_key,
         status=status,
         category_status=category_status,
         hard_constraints=(),
