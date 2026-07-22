@@ -4,7 +4,20 @@
 
 Catora audits enterprise ecommerce catalogs, identifies data and discoverability gaps, tests conversational buyer intents, proposes evidence-backed improvements, and packages the results into controlled operational workflows and executive reports.
 
-This repository currently contains the production-shaped foundation for the MVP described in [Issue #1](https://github.com/waseem99/Catora/issues/1).
+This repository contains the production-shaped MVP and the prepared client-winning demonstration described in [the client demo guide](docs/client-demo.md).
+
+## Client demo quick start
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose exec api alembic upgrade head
+npm run demo:seed
+```
+
+Sign in with `demo@catora.local` and the password printed by the seed command, select **Northstar Living — Sales Demo**, then choose **Launch client demo**.
+
+The seed command recreates only the dedicated sales-demo workspace. See [docs/client-demo.md](docs/client-demo.md) for the eight-minute presenter flow, reset command and failure fallback.
 
 ## Architecture
 
@@ -16,17 +29,15 @@ This repository currently contains the production-shaped foundation for the MVP 
 - **Browser-side intelligence:** Transformers.js with WebGPU/WASM capability detection
 - **Contracts:** shared TypeScript/Zod schemas
 
-The browser intelligence package is intentionally limited to privacy-preserving, low-risk local inference. Server-side analytics remain deterministic, and higher-value AI tasks use a provider-neutral backend gateway in later issues.
+The browser intelligence package is intentionally limited to privacy-preserving, low-risk local inference. Server-side analytics remain deterministic, and higher-value AI tasks use a provider-neutral backend gateway.
 
-## Quick start
+## Local development
 
 ### Prerequisites
 
 - Node.js 22+
 - Python 3.13+
 - Docker with Compose for the complete local stack
-
-### Local application development
 
 ```bash
 cp .env.example .env
@@ -50,22 +61,6 @@ npm run dev
 ```
 
 Open `http://localhost:3000`.
-
-### Complete local stack
-
-```bash
-cp .env.example .env
-docker compose up --build
-```
-
-Services:
-
-| Service | URL |
-|---|---|
-| Web | http://localhost:3000 |
-| API docs | http://localhost:8000/docs |
-| MinIO console | http://localhost:9001 |
-| Mailpit | http://localhost:8025 |
 
 ## CSV catalog ingestion
 
