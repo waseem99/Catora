@@ -22,6 +22,7 @@ from catora_api.api import (
     enrichment_policy_router,
     ingestion_router,
     intent_parsing_router,
+    intent_templates_router,
     intents_router,
     public_catalog_router,
     recommendations_router,
@@ -80,6 +81,7 @@ app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
+app.include_router(intent_templates_router)
 app.include_router(intents_router)
 app.add_middleware(
     CORSMiddleware,
