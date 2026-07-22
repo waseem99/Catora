@@ -115,6 +115,8 @@ class RecommendationJobView(BaseModel):
     variant_id: uuid.UUID | None
     audit_finding_id: uuid.UUID | None
     recommendation_id: uuid.UUID | None
+    retry_of_job_id: uuid.UUID | None
+    retry_count: int = Field(ge=0)
     status: RecommendationJobStatus
     provider_name: str = Field(min_length=1, max_length=100)
     task_type: EnrichmentTask

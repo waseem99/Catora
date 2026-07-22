@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
@@ -55,6 +56,8 @@ class RecommendationJob(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixi
             "status IN ('queued','running','completed','failed','cancelled')",
             name="valid_status",
         ),
+        CheckConstraint("retry_count >= 0", name="valid_retry_count"),
+        UniqueConstraint("retry_of_job_id"),
         Index(
             "ix_recommendation_jobs_workspace_status_created",
             "workspace_id",
@@ -77,6 +80,10 @@ class RecommendationJob(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixi
     recommendation_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("recommendations.id", ondelete="SET NULL"), index=True
     )
+    retry_of_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("recommendation_jobs.id", ondelete="SET NULL"), index=True
+    )
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
     provider_name: Mapped[str] = mapped_column(String(100), nullable=False)
     task_type: Mapped[str] = mapped_column(String(80), nullable=False)

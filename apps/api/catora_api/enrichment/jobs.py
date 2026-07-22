@@ -48,6 +48,8 @@ class RecommendationJobService:
         provider_name: str,
         budget_microunits: int,
         audit_finding_id: uuid.UUID | None = None,
+        retry_of_job_id: uuid.UUID | None = None,
+        retry_count: int = 0,
     ) -> RecommendationJob:
         effective_request, effective_budget = await self._policies.apply(
             session,
@@ -62,6 +64,8 @@ class RecommendationJobService:
             variant_id=effective_request.variant_id,
             audit_finding_id=audit_finding_id,
             recommendation_id=None,
+            retry_of_job_id=retry_of_job_id,
+            retry_count=retry_count,
             status="queued",
             provider_name=provider_name,
             task_type=effective_request.task_type,
@@ -76,6 +80,80 @@ class RecommendationJobService:
                 "recommendation job identifier was not assigned"
             )
         return job
+
+    async def get(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        job_id: uuid.UUID,
+        for_update: bool = False,
+    ) -> RecommendationJob | None:
+        statement = select(RecommendationJob).where(
+            RecommendationJob.id == job_id,
+            RecommendationJob.workspace_id == workspace_id,
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        job = await session.scalar(statement)
+        return job if isinstance(job, RecommendationJob) else None
+
+    async def cancel(
+        self,
+        session: AsyncSession,
+        *,
+        job: RecommendationJob,
+    ) -> RecommendationJob:
+        if job.status == "cancelled":
+            return job
+        if job.status != "queued":
+            raise RecommendationJobStateError("Only queued recommendation jobs can be cancelled")
+        job.status = "cancelled"
+        job.completed_at = datetime.now(UTC)
+        job.failure_summary = {}
+        await session.flush()
+        return job
+
+    async def retry(
+        self,
+        session: AsyncSession,
+        *,
+        source_job: RecommendationJob,
+        requested_by_user_id: uuid.UUID,
+        provider_name: str,
+        max_retries: int,
+        max_run_budget_microunits: int,
+    ) -> RecommendationJob:
+        if source_job.status != "failed":
+            raise RecommendationJobStateError("Only failed recommendation jobs can be retried")
+        if source_job.retry_count >= max_retries:
+            raise RecommendationJobStateError("Recommendation job retry limit reached")
+        existing_retry_id = await session.scalar(
+            select(RecommendationJob.id).where(
+                RecommendationJob.retry_of_job_id == source_job.id
+            )
+        )
+        if existing_retry_id is not None:
+            raise RecommendationJobStateError("Recommendation job has already been retried")
+        try:
+            request = EnrichmentRequest.model_validate(source_job.request_snapshot)
+        except ValidationError as exc:
+            raise RecommendationJobConfigurationError(
+                "Persisted recommendation request is invalid"
+            ) from exc
+        return await self.create(
+            session,
+            request=request,
+            requested_by_user_id=requested_by_user_id,
+            provider_name=provider_name,
+            budget_microunits=min(
+                source_job.budget_microunits,
+                max_run_budget_microunits,
+            ),
+            audit_finding_id=source_job.audit_finding_id,
+            retry_of_job_id=source_job.id,
+            retry_count=source_job.retry_count + 1,
+        )
 
     async def execute(
         self,

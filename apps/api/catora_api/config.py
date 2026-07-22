@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     enrichment_concurrency_limit: int = Field(default=4, ge=1, le=32)
     enrichment_max_attempts: int = Field(default=2, ge=1, le=5)
     enrichment_max_output_tokens: int = Field(default=2_000, ge=1, le=32_000)
+    enrichment_max_job_retries: int = Field(default=2, ge=0, le=10)
 
     def validate_production(self) -> None:
         if self.environment != "production":
