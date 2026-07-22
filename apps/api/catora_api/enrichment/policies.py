@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.db.models.workflow import WorkspaceEnrichmentPolicy
-from catora_api.enrichment.types import BrandControls, FieldKey
+from catora_api.enrichment.types import BrandControls, EnrichmentRequest, FieldKey
 
 
 class EnrichmentPolicyConfigurationError(ValueError):
@@ -21,6 +21,12 @@ class EffectiveEnrichmentPolicy:
     max_run_budget_microunits: int
 
 
+@dataclass(frozen=True, slots=True)
+class AppliedEnrichmentPolicy:
+    request: EnrichmentRequest
+    budget_microunits: int
+
+
 class WorkspaceEnrichmentPolicyService:
     async def get(
         self,
@@ -28,7 +34,10 @@ class WorkspaceEnrichmentPolicyService:
         *,
         workspace_id: uuid.UUID,
     ) -> WorkspaceEnrichmentPolicy | None:
-        policy = await session.scalar(
+        scalar = getattr(session, "scalar", None)
+        if scalar is None:
+            return None
+        policy = await scalar(
             select(WorkspaceEnrichmentPolicy).where(
                 WorkspaceEnrichmentPolicy.workspace_id == workspace_id
             )
@@ -64,6 +73,29 @@ class WorkspaceEnrichmentPolicyService:
         return EffectiveEnrichmentPolicy(
             brand_controls=merge_brand_controls(workspace_controls, requested_controls),
             max_run_budget_microunits=effective_maximum,
+        )
+
+    async def apply(
+        self,
+        session: AsyncSession,
+        *,
+        request: EnrichmentRequest,
+        requested_budget_microunits: int,
+    ) -> AppliedEnrichmentPolicy:
+        effective = await self.resolve(
+            session,
+            workspace_id=request.workspace_id,
+            requested_controls=request.brand_controls,
+            system_max_run_budget_microunits=requested_budget_microunits,
+        )
+        return AppliedEnrichmentPolicy(
+            request=request.model_copy(
+                update={"brand_controls": effective.brand_controls}
+            ),
+            budget_microunits=min(
+                requested_budget_microunits,
+                effective.max_run_budget_microunits,
+            ),
         )
 
     async def set(

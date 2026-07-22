@@ -16,6 +16,7 @@ from catora_api.enrichment.execution import (
     RecommendationProviderError,
     RecommendationTargetError,
 )
+from catora_api.enrichment.policies import WorkspaceEnrichmentPolicyService
 from catora_api.enrichment.prompts import redact_sensitive_text
 from catora_api.enrichment.provider_factory import configured_provider
 from catora_api.enrichment.types import EnrichmentRequest, SourceDocument
@@ -36,6 +37,7 @@ class RecommendationJobStateError(RecommendationJobError):
 class RecommendationJobService:
     def __init__(self) -> None:
         self._generation = RecommendationGenerationService()
+        self._policies = WorkspaceEnrichmentPolicyService()
 
     async def create(
         self,
@@ -47,18 +49,23 @@ class RecommendationJobService:
         budget_microunits: int,
         audit_finding_id: uuid.UUID | None = None,
     ) -> RecommendationJob:
-        safe_request = sanitized_request(request)
+        applied = await self._policies.apply(
+            session,
+            request=request,
+            requested_budget_microunits=budget_microunits,
+        )
+        safe_request = sanitized_request(applied.request)
         job = RecommendationJob(
-            workspace_id=request.workspace_id,
+            workspace_id=applied.request.workspace_id,
             requested_by_user_id=requested_by_user_id,
-            product_id=request.product_id,
-            variant_id=request.variant_id,
+            product_id=applied.request.product_id,
+            variant_id=applied.request.variant_id,
             audit_finding_id=audit_finding_id,
             recommendation_id=None,
             status="queued",
             provider_name=provider_name,
-            task_type=request.task_type,
-            budget_microunits=budget_microunits,
+            task_type=applied.request.task_type,
+            budget_microunits=applied.budget_microunits,
             request_snapshot=safe_request.model_dump(mode="json"),
             failure_summary={},
         )

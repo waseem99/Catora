@@ -27,6 +27,7 @@ from catora_api.enrichment.persistence import (
     source_snapshot_hash,
 )
 from catora_api.enrichment.policies import (
+    AppliedEnrichmentPolicy,
     EffectiveEnrichmentPolicy,
     EnrichmentPolicyConfigurationError,
     WorkspaceEnrichmentPolicyService,
@@ -48,17 +49,18 @@ from catora_api.enrichment.types import (
 )
 
 __all__ = [
+    "AppliedEnrichmentPolicy",
     "BrandControls",
     "BudgetExceededError",
     "BudgetLedger",
     "CandidateProposal",
     "DeterministicMockProvider",
+    "EffectiveEnrichmentPolicy",
     "EnrichmentGateway",
     "EnrichmentGatewayError",
+    "EnrichmentPolicyConfigurationError",
     "EnrichmentRequest",
     "EnrichmentResult",
-    "EffectiveEnrichmentPolicy",
-    "EnrichmentPolicyConfigurationError",
     "EvidenceReference",
     "InvalidProviderOutputError",
     "PersistedRecommendation",
