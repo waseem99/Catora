@@ -5,8 +5,10 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -24,6 +26,25 @@ JSON_DEFAULT = dict
 
 class BuyerIntent(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
     __tablename__ = "buyer_intents"
+    __table_args__ = (
+        CheckConstraint(
+            "approval_status IN ('draft','approved','superseded')",
+            name="valid_approval_status",
+        ),
+        UniqueConstraint("workspace_id", "lineage_id", "version"),
+        Index(
+            "ix_buyer_intents_workspace_lineage_version",
+            "workspace_id",
+            "lineage_id",
+            "version",
+        ),
+    )
+    lineage_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    supersedes_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("buyer_intents.id", ondelete="SET NULL"),
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(250), nullable=False)
     query: Mapped[str] = mapped_column(Text, nullable=False)
     structured_intent: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
