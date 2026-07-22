@@ -64,8 +64,16 @@ class IntentSuiteMember(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixi
     __tablename__ = "intent_suite_members"
     __table_args__ = (
         CheckConstraint("position >= 0", name="valid_position"),
-        UniqueConstraint("intent_suite_id", "position"),
-        UniqueConstraint("intent_suite_id", "buyer_intent_id"),
+        UniqueConstraint(
+            "intent_suite_id",
+            "position",
+            name="uq_intent_suite_members_suite_position",
+        ),
+        UniqueConstraint(
+            "intent_suite_id",
+            "buyer_intent_id",
+            name="uq_intent_suite_members_suite_buyer_intent",
+        ),
     )
     intent_suite_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
