@@ -13,7 +13,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from catora_api import __version__
-from catora_api.api import auth_router
+from catora_api.api import (
+    audit_rules_router,
+    audits_router,
+    auth_router,
+    catalog_identity_router,
+    catalog_router,
+    demo_router,
+    enrichment_policy_router,
+    ingestion_router,
+    intent_parsing_router,
+    intent_runs_router,
+    intent_templates_router,
+    intents_router,
+    public_catalog_router,
+    recommendations_router,
+    shopify_router,
+    taxonomy_router,
+)
 from catora_api.auth.service import (
     AuthenticationError,
     AuthorizationError,
@@ -55,6 +72,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.include_router(auth_router)
+app.include_router(ingestion_router)
+app.include_router(shopify_router)
+app.include_router(public_catalog_router)
+app.include_router(catalog_router)
+app.include_router(catalog_identity_router)
+app.include_router(taxonomy_router)
+app.include_router(audits_router)
+app.include_router(audit_rules_router)
+app.include_router(recommendations_router)
+app.include_router(enrichment_policy_router)
+app.include_router(intent_parsing_router)
+app.include_router(intent_runs_router)
+app.include_router(intent_templates_router)
+app.include_router(intents_router)
+app.include_router(demo_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -88,7 +120,10 @@ async def invalid_token_error(_: Request, exc: InvalidTokenError) -> JSONRespons
 async def request_context(request: Request, call_next: Any) -> Response:
     request_id = request.headers.get("x-request-id", str(uuid.uuid4()))
     structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(request_id=request_id, path=request.url.path)
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        path=request.url.path,
+    )
     response: Response = await call_next(request)
     response.headers["x-request-id"] = request_id
     response.headers["x-content-type-options"] = "nosniff"
@@ -99,12 +134,17 @@ async def request_context(request: Request, call_next: Any) -> Response:
 
 @app.get("/health/live", tags=["health"])
 async def liveness() -> dict[str, str]:
-    return {"status": "ok", "service": "catora-api", "version": __version__}
+    return {
+        "status": "ok",
+        "service": "catora-api",
+        "version": __version__,
+    }
 
 
 async def _check_redis(settings: Settings) -> None:
     client = redis.from_url(  # type: ignore[no-untyped-call]
-        settings.redis_url, socket_connect_timeout=2
+        settings.redis_url,
+        socket_connect_timeout=2,
     )
     try:
         await client.ping()
@@ -137,16 +177,33 @@ async def readiness() -> JSONResponse:
         try:
             await check()
             dependencies.append({"name": name, "status": "ok"})
-        except Exception as exc:  # readiness must report dependency failure, not leak internals
-            dependencies.append({"name": name, "status": "error", "detail": type(exc).__name__})
+        except Exception as exc:
+            dependencies.append(
+                {
+                    "name": name,
+                    "status": "error",
+                    "detail": type(exc).__name__,
+                }
+            )
 
     ready = all(item["status"] == "ok" for item in dependencies)
     return JSONResponse(
-        status_code=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE,
-        content={"status": "ready" if ready else "not_ready", "dependencies": dependencies},
+        status_code=(
+            status.HTTP_200_OK
+            if ready
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+        ),
+        content={
+            "status": "ready" if ready else "not_ready",
+            "dependencies": dependencies,
+        },
     )
 
 
 @app.get("/api/v1/system/info", tags=["system"])
 async def system_info() -> dict[str, str]:
-    return {"name": "Catora", "version": __version__, "environment": settings.environment}
+    return {
+        "name": "Catora",
+        "version": __version__,
+        "environment": settings.environment,
+    }

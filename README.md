@@ -4,7 +4,20 @@
 
 Catora audits enterprise ecommerce catalogs, identifies data and discoverability gaps, tests conversational buyer intents, proposes evidence-backed improvements, and packages the results into controlled operational workflows and executive reports.
 
-This repository currently contains the production-shaped foundation for the MVP described in [Issue #1](https://github.com/waseem99/Catora/issues/1).
+This repository contains the production-shaped MVP and the prepared client-winning demonstration described in [the client demo guide](docs/client-demo.md).
+
+## Client demo quick start
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose exec api alembic upgrade head
+npm run demo:seed
+```
+
+Sign in with `demo@catora.local` and the password printed by the seed command, select **Northstar Living — Sales Demo**, then choose **Launch client demo**.
+
+The seed command recreates only the dedicated sales-demo workspace. See [docs/client-demo.md](docs/client-demo.md) for the eight-minute presenter flow, reset command and failure fallback.
 
 ## Architecture
 
@@ -16,17 +29,15 @@ This repository currently contains the production-shaped foundation for the MVP 
 - **Browser-side intelligence:** Transformers.js with WebGPU/WASM capability detection
 - **Contracts:** shared TypeScript/Zod schemas
 
-The browser intelligence package is intentionally limited to privacy-preserving, low-risk local inference. Server-side analytics remain deterministic, and higher-value AI tasks use a provider-neutral backend gateway in later issues.
+The browser intelligence package is intentionally limited to privacy-preserving, low-risk local inference. Server-side analytics remain deterministic, and higher-value AI tasks use a provider-neutral backend gateway.
 
-## Quick start
+## Local development
 
 ### Prerequisites
 
 - Node.js 22+
 - Python 3.13+
 - Docker with Compose for the complete local stack
-
-### Local application development
 
 ```bash
 cp .env.example .env
@@ -51,21 +62,17 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-### Complete local stack
+## CSV catalog ingestion
 
-```bash
-cp .env.example .env
-docker compose up --build
-```
+The first usable ingestion path supports authenticated, tenant-scoped CSV uploads and resumable background processing.
 
-Services:
+1. Upload raw CSV bytes to `PUT /api/v1/workspaces/{workspace_id}/catalog-uploads/csv` using a CSV content type.
+2. Create a source with `POST /api/v1/workspaces/{workspace_id}/catalog-sources`, supplying the returned object key and column mapping.
+3. Validate the source through `POST /api/v1/workspaces/{workspace_id}/catalog-sources/{source_id}/validate`.
+4. Queue ingestion through `POST /api/v1/workspaces/{workspace_id}/catalog-sources/{source_id}/jobs`.
+5. Inspect job status and raw source samples through the workspace ingestion endpoints.
 
-| Service | URL |
-|---|---|
-| Web | http://localhost:3000 |
-| API docs | http://localhost:8000/docs |
-| MinIO console | http://localhost:9001 |
-| Mailpit | http://localhost:8025 |
+Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads are streamed and default to a 25 MiB limit configured through `CATORA_MAX_CATALOG_UPLOAD_BYTES`. Ordinary job responses exclude raw rejected rows; detailed source samples remain restricted to authorized catalog managers.
 
 ## Validation
 

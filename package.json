@@ -16,7 +16,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "demo:seed": "docker compose exec api python scripts/seed_sales_demo.py"
   },
   "devDependencies": {
     "eslint": "9.39.2",
@@ -24,6 +25,7 @@
     "typescript": "5.9.3"
   },
   "overrides": {
-    "postcss": "8.5.20"
+    "postcss": "8.5.20",
+    "sharp": "0.35.3"
   }
 }

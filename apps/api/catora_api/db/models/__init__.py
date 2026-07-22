@@ -12,6 +12,11 @@ from catora_api.db.models.catalog import (
     SourceRecord,
     TaxonomyField,
 )
+from catora_api.db.models.catalog_identity import (
+    CommercialProductIdentity,
+    ProductIdentityCandidate,
+    ProductIdentityMembership,
+)
 from catora_api.db.models.identity import (
     Locale,
     Market,
@@ -21,7 +26,14 @@ from catora_api.db.models.identity import (
     User,
     Workspace,
 )
-from catora_api.db.models.intents import BuyerIntent, IntentProductMatch, IntentRun
+from catora_api.db.models.intents import (
+    BuyerIntent,
+    IntentProductMatch,
+    IntentRun,
+    IntentSuite,
+    IntentSuiteMember,
+    IntentSuiteRun,
+)
 from catora_api.db.models.reporting import (
     AuditEvent,
     ExportArtifact,
@@ -29,6 +41,7 @@ from catora_api.db.models.reporting import (
     ProductCohort,
     ReportJob,
 )
+from catora_api.db.models.taxonomy import ProductCategoryTag
 from catora_api.db.models.workflow import (
     ChangeSet,
     ChangeSetItem,
@@ -36,7 +49,9 @@ from catora_api.db.models.workflow import (
     MarketConflict,
     Recommendation,
     RecommendationField,
+    RecommendationJob,
     ReviewDecision,
+    WorkspaceEnrichmentPolicy,
 )
 
 __all__ = [
@@ -49,12 +64,16 @@ __all__ = [
     "Category",
     "ChangeSet",
     "ChangeSetItem",
+    "CommercialProductIdentity",
     "EvidenceReference",
     "ExportArtifact",
     "IngestionJob",
     "Invitation",
     "IntentProductMatch",
     "IntentRun",
+    "IntentSuite",
+    "IntentSuiteMember",
+    "IntentSuiteRun",
     "Locale",
     "Market",
     "MarketComparison",
@@ -65,11 +84,15 @@ __all__ = [
     "PasswordResetToken",
     "Product",
     "ProductAttribute",
+    "ProductCategoryTag",
     "ProductCohort",
+    "ProductIdentityCandidate",
+    "ProductIdentityMembership",
     "ProductImage",
     "ProductVariant",
     "Recommendation",
     "RecommendationField",
+    "RecommendationJob",
     "ReportJob",
     "ReviewDecision",
     "RuleDefinition",
@@ -79,4 +102,5 @@ __all__ = [
     "TaxonomyField",
     "User",
     "Workspace",
+    "WorkspaceEnrichmentPolicy",
 ]

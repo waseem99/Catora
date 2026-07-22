@@ -6,13 +6,16 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     String,
     Text,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,6 +43,61 @@ class Recommendation(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, 
     prompt_version: Mapped[str] = mapped_column(String(100), nullable=False)
     cost_microunits: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     source_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    execution_metadata: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
+
+
+class RecommendationJob(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
+    __tablename__ = "recommendation_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued','running','completed','failed','cancelled')",
+            name="valid_status",
+        ),
+        Index(
+            "ix_recommendation_jobs_workspace_status_created",
+            "workspace_id",
+            "status",
+            "created_at",
+        ),
+    )
+    requested_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    product_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    variant_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("product_variants.id", ondelete="CASCADE"), index=True
+    )
+    audit_finding_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("audit_findings.id", ondelete="SET NULL"), index=True
+    )
+    recommendation_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("recommendations.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="queued")
+    provider_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    budget_microunits: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    request_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    failure_summary: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class WorkspaceEnrichmentPolicy(
+    UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base
+):
+    __tablename__ = "workspace_enrichment_policies"
+    __table_args__ = (UniqueConstraint("workspace_id"),)
+    brand_controls: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
+    max_run_budget_microunits: Mapped[int | None] = mapped_column(BigInteger)
 
 
 class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
@@ -55,6 +113,9 @@ class RecommendationField(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMi
     evidence: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
     confidence: Mapped[str] = mapped_column(String(20), nullable=False)
     requires_verification: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    proposal_metadata: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False, default=JSON_DEFAULT, server_default=text("'{}'::jsonb")
+    )
 
 
 class ReviewDecision(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Base):
