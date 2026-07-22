@@ -19,7 +19,17 @@ Supported collection filters are `category_key`, `use_case`, `offset`, and `limi
 stable by template key and the returned total is computed from the same filtered in-memory set used
 for pagination.
 
-A template becomes editable only when a user explicitly submits its `name` and `structured_intent`
-to the existing buyer-intent create endpoint with `source` set to `template`. The resulting workspace
-record starts as a draft and follows the same versioning, approval, and execution boundaries as any
-other buyer intent.
+Users with buyer-intent authoring permission can create an editable draft directly from one exact
+template version through:
+
+- `POST /api/v1/workspaces/{workspace_id}/buyer-intent-templates/{template_key}/materialize`
+
+The request includes `expected_template_version` and an optional draft-name override. A version
+mismatch fails with a conflict instead of silently materializing different template content. The
+response identifies the template key, template version, taxonomy version, and created buyer intent.
+
+Materialization creates a normal version-1 buyer-intent record with `source=template` and
+`approval_status=draft`. The audit event `intent.created_from_template` persists the template key,
+template version, taxonomy version, lineage, and created intent version. Materialization never
+approves or executes the draft, and it never calls an AI provider. All later edits, approval, suite
+membership, execution, and analytics use the same boundaries as any other buyer intent.
