@@ -112,6 +112,7 @@ class RecommendationJobService:
             provider = configured_provider(
                 provider_name=job.provider_name,
                 environment=settings.environment,
+                settings=settings,
             )
             if provider is None:
                 raise RecommendationJobConfigurationError(

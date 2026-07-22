@@ -34,11 +34,16 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_from: str = "Catora <no-reply@catora.local>"
     trust_proxy_headers: bool = False
-    enrichment_provider: Literal["disabled", "mock"] = "disabled"
+    enrichment_provider: Literal["disabled", "mock", "http_json"] = "disabled"
     enrichment_max_run_budget_microunits: int = Field(default=100_000, ge=1)
     enrichment_concurrency_limit: int = Field(default=4, ge=1, le=32)
     enrichment_max_attempts: int = Field(default=2, ge=1, le=5)
     enrichment_max_output_tokens: int = Field(default=2_000, ge=1, le=32_000)
+    enrichment_http_endpoint: str | None = None
+    enrichment_http_api_key: str = Field(default="", repr=False)
+    enrichment_http_model: str = "catalog-enrichment-v1"
+    enrichment_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    enrichment_http_max_request_cost_microunits: int = Field(default=100_000, ge=0)
 
     def validate_production(self) -> None:
         if self.environment != "production":
@@ -54,6 +59,18 @@ class Settings(BaseSettings):
             raise ValueError(
                 "The deterministic mock enrichment provider is not allowed in production"
             )
+        if self.enrichment_provider == "http_json":
+            endpoint = self.enrichment_http_endpoint or ""
+            if not endpoint.startswith("https://"):
+                raise ValueError(
+                    "CATORA_ENRICHMENT_HTTP_ENDPOINT must use HTTPS in production"
+                )
+            if len(self.enrichment_http_api_key) < 16:
+                raise ValueError(
+                    "CATORA_ENRICHMENT_HTTP_API_KEY must be a production secret"
+                )
+            if not self.enrichment_http_model.strip():
+                raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
 
 
 @lru_cache
