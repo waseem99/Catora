@@ -22,6 +22,7 @@ from catora_api.api import (
     enrichment_policy_router,
     ingestion_router,
     public_catalog_router,
+    recommendation_usage_router,
     recommendations_router,
     shopify_router,
     taxonomy_router,
@@ -77,6 +78,7 @@ app.include_router(audits_router)
 app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
 app.include_router(enrichment_policy_router)
+app.include_router(recommendation_usage_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
