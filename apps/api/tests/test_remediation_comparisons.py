@@ -170,7 +170,7 @@ def _pages(
                 targets=5,
                 products=4,
                 missing=5,
-                category_keys=("sofas", "sofa_beds"),
+                category_keys=("sofa_beds", "sofas"),
             ),
         ),
         total=2,
