@@ -13,7 +13,10 @@ export default async function WorkspacePage({ params }: Props) {
         for this workspace.
       </p>
       <div className="actions">
-        <Link className="primary" href={`/workspace/${workspaceId}/products`}>
+        <Link className="primary" href={`/workspace/${workspaceId}/demo`}>
+          Launch client demo
+        </Link>
+        <Link className="secondary" href={`/workspace/${workspaceId}/products`}>
           Browse products
         </Link>
         <Link className="secondary" href={`/workspace/${workspaceId}/identity-review`}>
