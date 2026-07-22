@@ -47,9 +47,14 @@ class IntentConstraint(BaseModel):
                 raise ValueError("one_of constraints require a non-empty tuple")
         elif isinstance(self.expected, tuple):
             raise ValueError(f"{self.operator} constraints require a scalar expected value")
-        if self.operator in {"less_than_or_equal", "greater_than_or_equal"}:
-            if isinstance(self.expected, bool) or not isinstance(self.expected, int | float):
-                raise ValueError(f"{self.operator} constraints require a numeric value")
+        if (
+            self.operator in {"less_than_or_equal", "greater_than_or_equal"}
+            and (
+                isinstance(self.expected, bool)
+                or not isinstance(self.expected, int | float)
+            )
+        ):
+            raise ValueError(f"{self.operator} constraints require a numeric value")
         if self.operator == "contains" and not isinstance(self.expected, str):
             raise ValueError("contains constraints require a string value")
         return self
