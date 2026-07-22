@@ -15,6 +15,7 @@ Workspace members may read suite definitions and suite-run results. The backend 
 - `GET /api/v1/workspaces/{workspace_id}/intent-suite-runs/{run_id}/compare/{baseline_run_id}`
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/intents`
 - `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/categories`
+- `GET .../intent-suite-runs/{run_id}/compare/{baseline_run_id}/coverage/remediations`
 
 The suite-run collection `GET` endpoint returns append-only run history newest first. It supports the
 `status`, `offset`, and `limit` query parameters. The filtered total and returned items use the same
@@ -58,6 +59,14 @@ selected and baseline summaries when present, and uses zero-filled selected-minu
 absent sides. Suite totals are compared separately because distinct intent and product counts are not
 additive across category buckets. Category coverage is derived only from immutable stored match
 explanations and never joins mutable current catalog categories.
+
+The remediation comparison endpoint returns the union of missing or conflicting canonical field keys
+in stable field-key order. Each row preserves the selected and baseline priority records, labels fields
+as `retained`, `added`, or `removed`, reports retained-field rank movement, and returns signed impact,
+constraint and unclassified-target deltas. The optional category bucket filter is applied identically to
+both runs. Selected and baseline scoped coverage totals are returned separately, along with product-
+selection and per-field category-scope change flags. The comparison rejects truncated or malformed
+priority pages instead of silently omitting remediation fields.
 
 Comparison fails closed when either run is incomplete, belongs to another suite, has malformed
 snapshot or selection provenance, has child runs that differ from immutable suite membership, or has
