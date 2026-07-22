@@ -167,7 +167,7 @@ def test_transition_union_order_and_change_flags() -> None:
             product_id=second,
             status="confident_match",
             score=6_000,
-            category_key="sofas",
+            category_key="chairs",
         ),
         _evidence(
             index=3,
@@ -211,9 +211,10 @@ def test_transition_union_order_and_change_flags() -> None:
     ]
     assert items[0].status_changed is True
     assert items[0].soft_score_basis_points_delta == 9_000
+    assert items[0].evidence_changed is True
     assert items[1].status_changed is False
     assert items[1].soft_score_basis_points_delta == 1_000
-    assert items[1].evidence_changed is True
+    assert items[1].evidence_changed is False
     assert all(item.changed for item in items)
 
 
