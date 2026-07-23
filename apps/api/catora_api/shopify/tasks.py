@@ -356,7 +356,7 @@ async def _process_shopify_webhook(delivery_id: uuid.UUID) -> None:
                     )
                     .values(status="cancelled")
                 )
-                cancelled_jobs = result.rowcount or 0
+                cancelled_jobs = int(getattr(result, "rowcount", 0) or 0)
             session.add(
                 AuditEvent(
                     workspace_id=workspace_id,
