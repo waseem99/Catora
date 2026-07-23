@@ -1,0 +1,84 @@
+name: Northstar live demo validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: northstar-demo-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-package:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: catora
+          POSTGRES_USER: catora
+          POSTGRES_PASSWORD: catora
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U catora -d catora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CATORA_DATABASE_URL: postgresql+asyncpg://catora:catora@localhost:5432/catora
+      CATORA_REDIS_URL: redis://localhost:6379/0
+      CATORA_S3_ENDPOINT_URL: http://localhost:9000
+      CATORA_S3_ACCESS_KEY: test
+      CATORA_S3_SECRET_KEY: test-secret
+      CATORA_DEMO_PASSWORD: ci-demo-password
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Build and validate Northstar package
+        shell: bash
+        run: |
+          set +e
+          (
+            cd apps/api
+            alembic upgrade head
+            python scripts/seed_enterprise_demo.py
+            rm -rf /tmp/northstar-shopify-demo-package
+            python scripts/build_northstar_shopify_demo_package.py \
+              --output-dir /tmp/northstar-shopify-demo-package
+            python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          package = Path('/tmp/northstar-shopify-demo-package')
+          csv_path = package / 'northstar-shopify-products.csv'
+          manifest = json.loads(
+              (package / 'northstar-shopify-manifest.json').read_text(encoding='utf-8')
+          )
+          digest = hashlib.sha256(csv_path.read_bytes()).hexdigest()
+          assert manifest['store_domain'] == 'northstar-living-demo.myshopify.com'
+          assert manifest['product_count'] == 1000
+          assert manifest['variant_count'] == 2000
+          assert manifest['csv_sha256'] == digest
+          print(json.dumps(manifest, indent=2, sort_keys=True))
+          PY
+          ) > /tmp/northstar-demo-report.txt 2>&1
+          status=$?
+          tail -n 140 /tmp/northstar-demo-report.txt
+          exit "$status"
+      - name: Upload Northstar package report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: northstar-demo-report
+          path: /tmp/northstar-demo-report.txt
+          if-no-files-found: error
+          retention-days: 3
