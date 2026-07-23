@@ -60,7 +60,7 @@ async def _check_storage(settings: Settings) -> None:
             "s3",
             endpoint_url=settings.s3_endpoint_url,
             aws_access_key_id=settings.s3_access_key,
-            aws_secret_access_key=settings.s3_secret_key,
+            aws_secret_key=settings.s3_secret_key,
         )
         client.head_bucket(Bucket=settings.s3_bucket)
 
@@ -117,6 +117,9 @@ async def build_preflight(
     audit_run = await session.get(AuditRun, overview.audit.run_id)
     if audit_run is None or audit_run.completed_at is None:
         raise RuntimeError("The verified demo audit run is incomplete")
+    snapshot_hash = audit_run.source_snapshot_hash
+    if not isinstance(snapshot_hash, str) or len(snapshot_hash) != 64:
+        raise RuntimeError("The verified demo audit snapshot is invalid")
     finding_count = int(
         await session.scalar(
             select(func.count(AuditFinding.id)).where(
@@ -131,7 +134,6 @@ async def build_preflight(
         overview.catalog.product_count >= EXPECTED_PRODUCT_COUNT
         and overview.catalog.variant_count >= EXPECTED_VARIANT_COUNT
         and len(overview.recommendation.fields) >= 1
-        and len(audit_run.source_snapshot_hash) == 64
     )
     data_component = DemoComponentView(
         key="demo_data",
@@ -190,7 +192,7 @@ async def build_preflight(
         components=components,
         last_verified_snapshot=DemoVerifiedSnapshotView(
             audit_run_id=audit_run.id,
-            source_snapshot_hash=audit_run.source_snapshot_hash,
+            source_snapshot_hash=snapshot_hash,
             verified_at=audit_run.completed_at,
             product_count=overview.catalog.product_count,
             variant_count=overview.catalog.variant_count,
@@ -250,7 +252,7 @@ async def reset_task_belongs_to_workspace(
                 AuditEvent.workspace_id == workspace_id,
                 AuditEvent.event_type == "demo.reset_requested",
             )
-            .order_by(AuditEvent.created_at.desc())
+            .order_by(AuditEvent.occurred_at.desc())
             .limit(50)
         )
     ).all()
