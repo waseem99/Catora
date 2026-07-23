@@ -6,8 +6,9 @@ Catora's first merchant connection uses a custom-distribution Shopify app, not a
 
 - App URL: `https://catora.codistan.org`
 - OAuth callback: `https://api.catora.codistan.org/api/v1/shopify/oauth/callback`
+- Northstar development store: `northstar-living-demo.myshopify.com`
 
-Add the complete callback URL to the app's allowed redirection URLs in the Shopify Dev Dashboard.
+Add the complete callback URL to the app's allowed redirection URLs in the Shopify Dev Dashboard. Use the permanent Northstar `myshopify.com` hostname above for installation, synchronization, presenter checks and reset validation.
 
 ## Required environment
 
@@ -34,7 +35,7 @@ Never rotate this key without an explicit credential migration or merchant recon
 
 ## Installation flow
 
-1. An owner or admin enters the store's permanent `*.myshopify.com` domain in Catora.
+1. An owner or admin enters `northstar-living-demo.myshopify.com` in Catora for the live demonstration, or the qualified pilot merchant's permanent `*.myshopify.com` domain.
 2. Catora creates a short-lived, one-time OAuth state and sets an HTTP-only SameSite callback cookie.
 3. The browser is redirected to Shopify's grant screen.
 4. Catora validates the callback state, browser cookie, shop hostname and Shopify query HMAC.
@@ -84,7 +85,7 @@ The `Shopify installation validation` GitHub workflow runs against PostgreSQL an
 
 ## Live acceptance gate
 
-The software release is complete only after all of these external checks pass against the Northstar development store:
+The software release is complete only after all of these external checks pass against `northstar-living-demo.myshopify.com`:
 
 - the Dev Dashboard app uses the canonical Codistan app and callback URLs;
 - Railway contains the client ID, client secret and encryption key as secrets;
