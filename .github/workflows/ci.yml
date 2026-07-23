@@ -203,14 +203,49 @@ jobs:
         with:
           node-version: 22
       - name: Audit Node.js dependencies
+        shell: bash
         run: |
-          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-          npm audit --audit-level=moderate
+          set +e
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+            > npm-audit-report.txt 2>&1
+          install_status=$?
+          if [ "$install_status" -eq 0 ]; then
+            npm audit --audit-level=moderate >> npm-audit-report.txt 2>&1
+            audit_status=$?
+          else
+            audit_status="$install_status"
+          fi
+          cat npm-audit-report.txt
+          exit "$audit_status"
+      - name: Upload Node.js audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: npm-audit-report.txt
+          retention-days: 3
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
           cache: pip
       - name: Audit Python dependencies
+        shell: bash
         run: |
-          python -m pip install pip-audit==2.10.1
-          pip-audit apps/api --strict
+          set +e
+          python -m pip install pip-audit==2.10.1 > pip-audit-report.txt 2>&1
+          install_status=$?
+          if [ "$install_status" -eq 0 ]; then
+            pip-audit apps/api --strict >> pip-audit-report.txt 2>&1
+            audit_status=$?
+          else
+            audit_status="$install_status"
+          fi
+          cat pip-audit-report.txt
+          exit "$audit_status"
+      - name: Upload Python audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.txt
+          retention-days: 3
