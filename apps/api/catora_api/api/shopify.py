@@ -24,10 +24,13 @@ from catora_api.schemas.ingestion import (
     ShopifySourceCreateRequest,
 )
 from catora_api.schemas.shopify_installations import (
+    InstallationHealth,
+    InstallationStatus,
     ShopifyConfigurationView,
     ShopifyInstallationView,
     ShopifyInstallStartRequest,
     ShopifyInstallStartResponse,
+    TokenMode,
 )
 from catora_api.shopify.installations import (
     ShopifyCredentialError,
@@ -80,6 +83,7 @@ def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
     snapshot = dict(installation.input_snapshot)
     access_expires_at = _snapshot_datetime(snapshot, "access_token_expires_at")
     refresh_expires_at = _snapshot_datetime(snapshot, "refresh_token_expires_at")
+    health: InstallationHealth
     if installation.status == "active":
         health = "healthy"
         detail = "Catora can resolve a protected Shopify catalog credential."
@@ -95,27 +99,39 @@ def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
     else:
         health = "unknown"
         detail = "The Shopify connection is not ready."
-    token_mode = _snapshot_text(snapshot, "token_mode")
+
+    status_value = installation.status
+    if status_value not in {
+        "pending",
+        "active",
+        "refresh_required",
+        "disconnected",
+        "revoked",
+        "failed",
+    }:
+        status_value = "failed"
+    installation_status = cast(InstallationStatus, status_value)
+
+    token_mode_value = _snapshot_text(snapshot, "token_mode")
+    if token_mode_value not in {"expiring_offline", "non_expiring_offline"}:
+        token_mode_value = "expiring_offline"
+    token_mode = cast(TokenMode, token_mode_value)
+
     return ShopifyInstallationView(
         id=installation.id,
         workspace_id=cast(uuid.UUID, installation.workspace_id),
         catalog_source_id=_snapshot_uuid(snapshot, "catalog_source_id"),
         shop_domain=_snapshot_text(snapshot, "shop_domain") or "unknown.myshopify.com",
-        status=cast(str, installation.status),
+        status=installation_status,
         granted_scopes=_snapshot_scopes(snapshot),
-        token_mode=cast(
-            str,
-            token_mode
-            if token_mode in {"expiring_offline", "non_expiring_offline"}
-            else "expiring_offline",
-        ),
+        token_mode=token_mode,
         access_token_expires_at=access_expires_at,
         refresh_token_expires_at=refresh_expires_at,
         installed_at=_snapshot_datetime(snapshot, "installed_at"),
         refreshed_at=_snapshot_datetime(snapshot, "refreshed_at"),
         disconnected_at=_snapshot_datetime(snapshot, "disconnected_at"),
         last_health_checked_at=_snapshot_datetime(snapshot, "last_health_checked_at"),
-        health=cast(str, health),
+        health=health,
         detail=detail,
     )
 
