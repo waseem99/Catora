@@ -1,0 +1,29 @@
+name: Apply diagnostic MyPy patch
+
+on:
+  push:
+    branches: [agent/prospect-diagnostic-orchestration]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/prospect-diagnostic-orchestration
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python scripts/apply_diagnostic_mypy_patch.py
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply_diagnostic_mypy_patch.py .github/workflows/apply-diagnostic-mypy.yml
+          git add apps/api/catora_api/api/diagnostics.py apps/api/catora_api/diagnostics/tasks.py
+          git commit -m "Fix prospect diagnostic type contracts"
+          git push origin HEAD:agent/prospect-diagnostic-orchestration
