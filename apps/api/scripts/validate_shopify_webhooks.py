@@ -83,6 +83,8 @@ async def validate() -> None:
             "catalog_source_id": str(source.id),
         }
         await session.commit()
+        installation_id = installation.id
+        source_id = source.id
 
         with patch.object(celery_app, "send_task") as send_task:
             first_job = await queue_shopify_sync(
@@ -159,25 +161,29 @@ async def validate() -> None:
                     settings.shopify_client_secret,
                 ),
             )
-        await session.close()
+        uninstall_delivery_id = uninstall.delivery_id
 
-    await _process_shopify_webhook(uninstall.delivery_id)
+    await _process_shopify_webhook(uninstall_delivery_id)
 
     async with SessionFactory() as session:
-        installation = await session.get(ReportJob, installation.id)
-        source = await session.get(CatalogSource, source.id)
+        installation = await session.get(ReportJob, installation_id)
+        source = await session.get(CatalogSource, source_id)
         active_jobs = await session.scalar(
             select(func.count(IngestionJob.id)).where(
-                IngestionJob.catalog_source_id == source.id,
+                IngestionJob.catalog_source_id == source_id,
                 IngestionJob.status.in_(("queued", "validating", "running")),
             )
         )
         if installation is None or installation.status != "revoked":
             raise RuntimeError("Shopify uninstall did not revoke the installation")
-        if source is None or source.credential_ref is not None or source.status != "disconnected":
+        if (
+            source is None
+            or source.credential_ref is not None
+            or source.status != "disconnected"
+        ):
             raise RuntimeError("Shopify uninstall retained an active source credential")
-        if active_jobs != 1:
-            raise RuntimeError("Acceptance fixture expected one bounded active sync job")
+        if active_jobs != 0:
+            raise RuntimeError("Shopify uninstall retained active synchronization work")
 
     print("Shopify webhook and uninstall acceptance check passed.")
 
