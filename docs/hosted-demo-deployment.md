@@ -5,10 +5,11 @@ It keeps the application architecture provider-neutral while documenting one fas
 
 - Vercel: Next.js frontend
 - Railway: FastAPI service, Celery worker, PostgreSQL, Redis and S3-compatible bucket
-- Domains: `app.catora.com` and `api.catora.com`
+- Domains: `katora.kodisan.org` and `api.katora.kodisan.org`
 
 The sibling HTTPS domains are intentional. Catora uses secure `SameSite=Lax` session and CSRF
-cookies in production, so the frontend and API should remain under the same registrable domain.
+cookies in production, so the frontend and API remain under the same registrable company domain,
+`kodisan.org`.
 
 ## 1. Prerequisites
 
@@ -17,7 +18,7 @@ The operator needs:
 - access to the `waseem99/Catora` GitHub repository;
 - a Vercel team/project;
 - a Railway project;
-- DNS access for `catora.com`;
+- DNS access for `kodisan.org`;
 - a production-safe demo password;
 - a production authentication pepper of at least 32 random characters.
 
@@ -69,8 +70,8 @@ CATORA_S3_ACCESS_KEY=<Railway bucket access key>
 CATORA_S3_SECRET_KEY=<Railway bucket secret key>
 CATORA_S3_BUCKET=<Railway bucket name>
 CATORA_AUTH_TOKEN_PEPPER=<at least 32 random characters>
-CATORA_FRONTEND_URL=https://app.catora.com
-CATORA_CORS_ORIGINS=["https://app.catora.com"]
+CATORA_FRONTEND_URL=https://katora.kodisan.org
+CATORA_CORS_ORIGINS=["https://katora.kodisan.org"]
 CATORA_TRUST_PROXY_HEADERS=true
 CATORA_ENRICHMENT_PROVIDER=disabled
 ```
@@ -81,7 +82,7 @@ Set these on the API service only:
 CATORA_DEMO_PASSWORD=<stable private presenter password>
 CATORA_SMTP_HOST=<production SMTP host or approved test relay>
 CATORA_SMTP_PORT=<SMTP port>
-CATORA_SMTP_FROM=Catora <no-reply@catora.com>
+CATORA_SMTP_FROM=Catora <no-reply@katora.kodisan.org>
 ```
 
 The first private demonstration can keep enrichment disabled because the seeded recommendation
@@ -114,12 +115,12 @@ uploads or exports through the API or time-limited presigned URLs.
 
 ## 3. API domain
 
-Attach `api.catora.com` to the Railway API service and create the DNS record shown by Railway.
-Wait for HTTPS issuance, then verify:
+Attach `api.katora.kodisan.org` to the Railway API service and create the DNS record shown by
+Railway. Wait for HTTPS issuance, then verify:
 
 ```bash
-curl --fail https://api.catora.com/health/live
-curl --fail https://api.catora.com/health/ready
+curl --fail https://api.katora.kodisan.org/health/live
+curl --fail https://api.katora.kodisan.org/health/ready
 ```
 
 Do not attach a public domain to the worker.
@@ -141,10 +142,10 @@ repository root and builds only `@catora/web`.
 Set the production environment variable:
 
 ```text
-NEXT_PUBLIC_CATORA_API_URL=https://api.catora.com
+NEXT_PUBLIC_CATORA_API_URL=https://api.katora.kodisan.org
 ```
 
-Attach `app.catora.com` and create the DNS record shown by Vercel. Do not use an unrelated
+Attach `katora.kodisan.org` and create the DNS record shown by Vercel. Do not use an unrelated
 `vercel.app` hostname for the final presenter login because that changes browser cookie-site
 behavior.
 
@@ -153,7 +154,7 @@ behavior.
 After the first healthy API deployment, run the seed command in the API service environment:
 
 ```bash
-python scripts/seed_sales_demo.py
+python scripts/seed_enterprise_demo.py
 ```
 
 Use Railway's service shell or CLI command execution so the script receives production database
@@ -172,8 +173,8 @@ The password is the configured `CATORA_DEMO_PASSWORD`.
 Run from a trusted operator machine or CI secret context:
 
 ```bash
-export CATORA_SMOKE_FRONTEND_URL=https://app.catora.com
-export CATORA_SMOKE_API_URL=https://api.catora.com
+export CATORA_SMOKE_FRONTEND_URL=https://katora.kodisan.org
+export CATORA_SMOKE_API_URL=https://api.katora.kodisan.org
 export CATORA_SMOKE_EMAIL=demo@catora.local
 export CATORA_SMOKE_PASSWORD='<private presenter password>'
 python scripts/smoke_hosted_demo.py
@@ -226,9 +227,9 @@ Railway's deployment health check is not continuous monitoring. Configure an ext
 monitor for:
 
 ```text
-https://api.catora.com/health/live
-https://api.catora.com/health/ready
-https://app.catora.com/login
+https://api.katora.kodisan.org/health/live
+https://api.katora.kodisan.org/health/ready
+https://katora.kodisan.org/login
 ```
 
 Alert on sustained failures, not a single transient request. Keep operational diagnostics free of
