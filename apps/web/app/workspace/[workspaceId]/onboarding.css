@@ -2,9 +2,10 @@
 .onboarding-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 28px; }
 .onboarding-header h1 { margin-bottom: 16px; font-size: clamp(40px, 5vw, 64px); }
 .onboarding-back { padding: 11px 14px; border-radius: 9px; text-decoration: none; white-space: nowrap; }
-.onboarding-paths { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.onboarding-paths { display: grid; grid-template-columns: .8fr 1.4fr .8fr; gap: 16px; align-items: start; }
 .onboarding-card { display: grid; align-content: start; gap: 15px; min-height: 590px; padding: 26px; border: 1px solid var(--border); border-radius: 18px; background: rgba(15,29,26,.92); }
 .onboarding-card.featured-card { border-color: rgba(92,225,173,.5); background: linear-gradient(155deg, rgba(92,225,173,.12), rgba(15,29,26,.95)); }
+.onboarding-card.diagnostic-intake-card { min-height: 760px; border-color: rgba(92,225,173,.32); }
 .onboarding-card.pilot-card { background: linear-gradient(155deg, rgba(105,117,255,.08), rgba(15,29,26,.95)); }
 .onboarding-card h2 { margin: 0; font-size: 28px; }
 .onboarding-card p { margin: 0; color: var(--muted); line-height: 1.55; }
@@ -15,9 +16,14 @@
 .csv-onboarding-form label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
 .csv-onboarding-form input { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; color: var(--text); background: var(--bg); font: inherit; }
 .csv-onboarding-form input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+.diagnostic-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.optional-label { color: var(--muted); font-size: 11px; font-weight: 500; }
 .file-field { padding: 14px; border: 1px dashed var(--border); border-radius: 11px; background: rgba(7,17,15,.55); }
 .file-field input { padding: 0; border: 0; }
 .file-field span, .form-status { color: var(--muted); font-size: 12px; line-height: 1.45; }
+.authorization-field { display: grid !important; grid-template-columns: 20px 1fr; align-items: start; gap: 10px !important; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: rgba(7,17,15,.55); }
+.authorization-field input { width: 17px; height: 17px; margin-top: 2px; padding: 0; accent-color: var(--accent); }
+.authorization-field span { color: var(--muted); line-height: 1.45; }
 .processing-shell { max-width: 980px; }
 .processing-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .processing-summary div { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: var(--panel); }
@@ -41,14 +47,17 @@
 .success-alert { border-color: rgba(92,225,173,.45); }
 .warning-alert { border-color: #72532b; }
 .danger-alert { border-color: #7f1d1d; }
-@media (max-width: 900px) {
+@media (max-width: 1040px) {
   .onboarding-paths { grid-template-columns: 1fr; }
-  .onboarding-card { min-height: 0; }
+  .onboarding-card, .onboarding-card.diagnostic-intake-card { min-height: 0; }
+}
+@media (max-width: 900px) {
   .processing-summary { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 620px) {
   .onboarding-shell { padding-top: 30px; }
   .onboarding-header { flex-direction: column; }
+  .diagnostic-form-grid { grid-template-columns: 1fr; }
   .processing-summary { grid-template-columns: 1fr; }
   .processing-stage { grid-template-columns: 38px 1fr; gap: 12px; }
   .processing-stage header { align-items: flex-start; flex-direction: column; }

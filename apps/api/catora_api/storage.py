@@ -66,3 +66,12 @@ class ObjectStorage:
             return body
 
         return await asyncio.to_thread(download)
+
+    async def delete(self, key: str) -> None:
+        if not key:
+            return
+
+        def remove() -> None:
+            self._client().delete_object(Bucket=self.settings.s3_bucket, Key=key)
+
+        await asyncio.to_thread(remove)
