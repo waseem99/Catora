@@ -200,13 +200,20 @@ async def build_preflight(
     )
 
 
-def enqueue_demo_reset(*, actor_user_id: uuid.UUID, reason: str) -> uuid.UUID:
+def enqueue_demo_reset(
+    *,
+    task_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    reason: str,
+) -> None:
     from catora_api.demo.tasks import reset_sales_demo
 
     result = reset_sales_demo.apply_async(
-        kwargs={"actor_user_id": str(actor_user_id), "reason": reason}
+        kwargs={"actor_user_id": str(actor_user_id), "reason": reason},
+        task_id=str(task_id),
     )
-    return uuid.UUID(str(result.id))
+    if str(result.id) != str(task_id):
+        raise RuntimeError("The reset broker returned an unexpected task identity")
 
 
 def demo_reset_status(task_id: uuid.UUID) -> DemoResetStatusResponse:
