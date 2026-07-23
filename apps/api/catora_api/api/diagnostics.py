@@ -16,11 +16,20 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
-from catora_api.db.models import AuditEvent, CatalogSource, IngestionJob, ReportJob, Workspace
-from catora_api.diagnostics.reporting import build_backlog_csv, build_report_pptx, load_report
+from catora_api.db.models import (
+    AuditEvent,
+    CatalogSource,
+    IngestionJob,
+    ReportJob,
+    Workspace,
+)
+from catora_api.diagnostics.reporting import (
+    build_backlog_csv,
+    build_report_pptx,
+    load_report,
+)
 from catora_api.diagnostics.service import (
     ASSESSMENT_TYPE,
-    DiagnosticConflictError,
     DiagnosticNotFoundError,
     DiagnosticService,
 )
@@ -46,7 +55,9 @@ StorageDependency = Annotated[ObjectStorage, Depends(get_object_storage)]
 
 def _require_diagnostic_manager(role: str) -> None:
     if not can(Role(role), "diagnostics.manage"):
-        raise AuthorizationError("Prospect diagnostic management requires owner or admin access")
+        raise AuthorizationError(
+            "Prospect diagnostic management requires owner or admin access"
+        )
 
 
 async def _assessment_for_user(
@@ -61,7 +72,11 @@ async def _assessment_for_user(
         assessment = await service.get(session, assessment_id)
     except DiagnosticNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    membership = await auth_service.membership(session, user_id, assessment.workspace_id)
+    membership = await auth_service.membership(
+        session,
+        user_id,
+        assessment.workspace_id,
+    )
     if require_manage:
         _require_diagnostic_manager(membership.role)
     return assessment
@@ -90,7 +105,9 @@ async def create_prospect_diagnostic(
     context: CsrfContextDependency,
 ) -> DiagnosticView:
     membership = await auth_service.membership(
-        session, context.user.id, operator_workspace_id
+        session,
+        context.user.id,
+        operator_workspace_id,
     )
     _require_diagnostic_manager(membership.role)
     assessment = await service.create(
@@ -127,31 +144,51 @@ async def upload_prospect_catalog(
     if assessment.status not in {"awaiting_upload", "failed"}:
         raise HTTPException(
             status_code=409,
-            detail="This diagnostic already has an active or completed catalog assessment",
+            detail=(
+                "This diagnostic already has an active or completed "
+                "catalog assessment"
+            ),
         )
 
     content_type = request.headers.get("content-type", "text/csv").split(";", 1)[0]
-    if content_type not in {"text/csv", "application/csv", "application/vnd.ms-excel"}:
-        raise HTTPException(status_code=415, detail="Upload must use a CSV content type")
+    if content_type not in {
+        "text/csv",
+        "application/csv",
+        "application/vnd.ms-excel",
+    }:
+        raise HTTPException(
+            status_code=415,
+            detail="Upload must use a CSV content type",
+        )
     content_buffer = bytearray()
     async for chunk in request.stream():
         if len(content_buffer) + len(chunk) > settings.max_catalog_upload_bytes:
             raise HTTPException(
-                status_code=413, detail="CSV upload exceeds configured size limit"
+                status_code=413,
+                detail="CSV upload exceeds configured size limit",
             )
         content_buffer.extend(chunk)
     if not content_buffer:
         raise HTTPException(status_code=400, detail="CSV upload cannot be empty")
 
     workspace_id = assessment.workspace_id
-    object_key = f"workspaces/{workspace_id}/diagnostics/{assessment.id}/shopify-products.csv"
-    stored = await storage.put_bytes(object_key, bytes(content_buffer), content_type="text/csv")
+    object_key = (
+        f"workspaces/{workspace_id}/diagnostics/{assessment.id}/"
+        "shopify-products.csv"
+    )
+    stored = await storage.put_bytes(
+        object_key,
+        bytes(content_buffer),
+        content_type="text/csv",
+    )
     snapshot = dict(assessment.input_snapshot)
+    company_name = snapshot.get("company_name")
+    company_label = company_name if isinstance(company_name, str) else "Prospect"
     storefront_id = _snapshot_uuid(snapshot, "storefront_id")
     source = CatalogSource(
         workspace_id=workspace_id,
         storefront_id=storefront_id,
-        name=f"{snapshot.get('company_name', 'Prospect')} Shopify product export",
+        name=f"{company_label} Shopify product export",
         source_type="csv",
         status="draft",
         config={
@@ -204,7 +241,10 @@ async def upload_prospect_catalog(
         await session.commit()
         raise HTTPException(
             status_code=422,
-            detail=" ".join(validation.errors) or "The Shopify CSV could not be validated",
+            detail=(
+                " ".join(validation.errors)
+                or "The Shopify CSV could not be validated"
+            ),
         )
 
     source.status = "ready"
@@ -250,7 +290,10 @@ async def upload_prospect_catalog(
     )
     await session.commit()
     try:
-        celery_app.send_task("catora.diagnostic.run", args=[str(assessment.id)])
+        celery_app.send_task(
+            "catora.diagnostic.run",
+            args=[str(assessment.id)],
+        )
     except Exception as exc:
         job.status = "failed"
         await service.set_status(
@@ -260,7 +303,10 @@ async def upload_prospect_catalog(
             failure_code=type(exc).__name__,
             failure_detail="The diagnostic worker could not be queued.",
         )
-        raise HTTPException(status_code=503, detail="Unable to queue the diagnostic") from exc
+        raise HTTPException(
+            status_code=503,
+            detail="Unable to queue the diagnostic",
+        ) from exc
     await session.refresh(assessment)
     return await service.view(session, assessment)
 
@@ -317,7 +363,10 @@ async def download_prospect_backlog(
         user_id=context.user.id,
     )
     if assessment.status != "completed":
-        raise DiagnosticConflictError("The assessment backlog is not ready")
+        raise HTTPException(
+            status_code=409,
+            detail="The assessment backlog is not ready",
+        )
     report = await load_report(session, assessment)
     payload = build_backlog_csv(report)
     session.add(
@@ -335,7 +384,9 @@ async def download_prospect_backlog(
         content=payload,
         media_type="text/csv; charset=utf-8",
         headers={
-            "Content-Disposition": 'attachment; filename="catora-prospect-remediation-backlog.csv"'
+            "Content-Disposition": (
+                'attachment; filename="catora-prospect-remediation-backlog.csv"'
+            )
         },
     )
 
@@ -354,7 +405,10 @@ async def download_prospect_report(
         user_id=context.user.id,
     )
     if assessment.status != "completed":
-        raise DiagnosticConflictError("The assessment report is not ready")
+        raise HTTPException(
+            status_code=409,
+            detail="The assessment report is not ready",
+        )
     report = await load_report(session, assessment)
     payload = build_report_pptx(report)
     session.add(
@@ -371,10 +425,13 @@ async def download_prospect_report(
     return Response(
         content=payload,
         media_type=(
-            "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            "application/vnd.openxmlformats-officedocument."
+            "presentationml.presentation"
         ),
         headers={
-            "Content-Disposition": 'attachment; filename="catora-prospect-executive-assessment.pptx"'
+            "Content-Disposition": (
+                'attachment; filename="catora-prospect-executive-assessment.pptx"'
+            )
         },
     )
 
@@ -399,7 +456,10 @@ async def delete_prospect_diagnostic(
     )
     snapshot = dict(assessment.input_snapshot)
     object_key = snapshot.get("object_key")
-    operator_workspace_id = _snapshot_uuid(snapshot, "operator_workspace_id")
+    operator_workspace_id = _snapshot_uuid(
+        snapshot,
+        "operator_workspace_id",
+    )
     await service.set_status(session, assessment, "deleting")
     if isinstance(object_key, str):
         await storage.delete(object_key)
@@ -414,11 +474,15 @@ async def delete_prospect_diagnostic(
                 payload={"assessment_id": str(assessment.id)},
             )
         )
-    await session.execute(delete(Workspace).where(Workspace.id == assessment.workspace_id))
+    await session.execute(
+        delete(Workspace).where(Workspace.id == assessment.workspace_id)
+    )
     await session.commit()
 
 
-@router.post("/workspaces/{operator_workspace_id}/prospect-diagnostics/purge-expired")
+@router.post(
+    "/workspaces/{operator_workspace_id}/prospect-diagnostics/purge-expired"
+)
 async def purge_expired_diagnostics(
     operator_workspace_id: uuid.UUID,
     session: SessionDependency,
@@ -427,7 +491,9 @@ async def purge_expired_diagnostics(
     context: CsrfContextDependency,
 ) -> dict[str, int]:
     membership = await auth_service.membership(
-        session, context.user.id, operator_workspace_id
+        session,
+        context.user.id,
+        operator_workspace_id,
     )
     _require_diagnostic_manager(membership.role)
     assessments = list(
@@ -444,7 +510,10 @@ async def purge_expired_diagnostics(
     purged = 0
     for assessment in assessments:
         snapshot = dict(assessment.input_snapshot)
-        if _snapshot_uuid(snapshot, "operator_workspace_id") != operator_workspace_id:
+        if (
+            _snapshot_uuid(snapshot, "operator_workspace_id")
+            != operator_workspace_id
+        ):
             continue
         expires = snapshot.get("retention_expires_at")
         if not isinstance(expires, str):
@@ -458,7 +527,9 @@ async def purge_expired_diagnostics(
         object_key = snapshot.get("object_key")
         if isinstance(object_key, str):
             await storage.delete(object_key)
-        await session.execute(delete(Workspace).where(Workspace.id == assessment.workspace_id))
+        await session.execute(
+            delete(Workspace).where(Workspace.id == assessment.workspace_id)
+        )
         purged += 1
     if purged:
         session.add(
