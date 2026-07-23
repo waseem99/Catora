@@ -250,9 +250,12 @@ def _package_checks(root: Path) -> list[CheckResult]:
             "package.deployment_commands",
             scripts.get("deploy:validate") == "python scripts/validate_deployment_contract.py"
             and "demo:package-shopify" in scripts
-            and "demo:smoke" in scripts,
-            "deployment validation, package generation and smoke commands available",
-            "package scripts must expose deploy:validate, demo:package-shopify and demo:smoke",
+            and scripts.get("demo:smoke") == "python scripts/smoke_hosted_demo.py"
+            and scripts.get("demo:verify-shopify-change")
+            == "python scripts/verify_shopify_live_change.py",
+            "deployment, package, hosted smoke and live-change commands available",
+            "package scripts must expose deploy:validate, demo:package-shopify, "
+            "demo:smoke and demo:verify-shopify-change",
         )
     ]
 
