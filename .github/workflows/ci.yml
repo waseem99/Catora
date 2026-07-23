@@ -49,6 +49,24 @@ jobs:
           python-version: '3.13'
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Validate hosted deployment assets
+        shell: bash
+        run: |
+          python -m py_compile scripts/smoke_hosted_demo.py
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for path in (
+              Path("apps/web/vercel.json"),
+              Path("deploy/railway/api.railway.json"),
+              Path("deploy/railway/worker.railway.json"),
+          ):
+              with path.open(encoding="utf-8") as handle:
+                  payload = json.load(handle)
+              if not isinstance(payload, dict) or not payload.get("$schema"):
+                  raise SystemExit(f"Invalid deployment config: {path}")
+          PY
       - name: Run Ruff
         shell: bash
         run: |
