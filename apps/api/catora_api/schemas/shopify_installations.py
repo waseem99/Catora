@@ -14,6 +14,13 @@ InstallationStatus = Literal[
     "revoked",
     "failed",
 ]
+TokenMode = Literal["expiring_offline", "non_expiring_offline"]
+InstallationHealth = Literal[
+    "healthy",
+    "refresh_required",
+    "disconnected",
+    "unknown",
+]
 
 
 class ShopifyInstallationModel(BaseModel):
@@ -43,14 +50,14 @@ class ShopifyInstallationView(ShopifyInstallationModel):
     shop_domain: str
     status: InstallationStatus
     granted_scopes: list[str]
-    token_mode: Literal["expiring_offline", "non_expiring_offline"]
+    token_mode: TokenMode
     access_token_expires_at: datetime | None = None
     refresh_token_expires_at: datetime | None = None
     installed_at: datetime | None = None
     refreshed_at: datetime | None = None
     disconnected_at: datetime | None = None
     last_health_checked_at: datetime | None = None
-    health: Literal["healthy", "refresh_required", "disconnected", "unknown"]
+    health: InstallationHealth
     detail: str
 
 
