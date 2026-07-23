@@ -43,8 +43,31 @@ jobs:
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
       - name: Validate prospect workspace isolation and cleanup
-        working-directory: apps/api
+        shell: bash
         run: |
-          alembic upgrade head
-          python scripts/seed_enterprise_demo.py
-          python scripts/validate_prospect_diagnostic.py
+          set +e
+          (
+            cd apps/api
+            alembic upgrade head
+            migrate_status=$?
+            if [ "$migrate_status" -ne 0 ]; then
+              exit "$migrate_status"
+            fi
+            python scripts/seed_enterprise_demo.py
+            seed_status=$?
+            if [ "$seed_status" -ne 0 ]; then
+              exit "$seed_status"
+            fi
+            python scripts/validate_prospect_diagnostic.py
+          ) > /tmp/prospect-diagnostic-report.txt 2>&1
+          status=$?
+          tail -n 120 /tmp/prospect-diagnostic-report.txt
+          exit "$status"
+      - name: Upload prospect diagnostic report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prospect-diagnostic-report
+          path: /tmp/prospect-diagnostic-report.txt
+          if-no-files-found: error
+          retention-days: 3
