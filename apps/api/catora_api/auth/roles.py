@@ -23,6 +23,7 @@ ROLE_CAPABILITIES: dict[Role, frozenset[str]] = {
             "recommendations.write",
             "recommendations.review",
             "reports.write",
+            "demo.present",
         }
     ),
     Role.ADMIN: frozenset(
@@ -35,6 +36,7 @@ ROLE_CAPABILITIES: dict[Role, frozenset[str]] = {
             "recommendations.write",
             "recommendations.review",
             "reports.write",
+            "demo.present",
         }
     ),
     Role.ANALYST: frozenset({"analysis.run", "recommendations.write", "reports.write"}),
