@@ -11,10 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from catora_api.db.models import (
     AuditEvent,
     AuditFinding,
-    AuditRun,
     IngestionJob,
     IntentProductMatch,
-    IntentRun,
     Locale,
     Market,
     Membership,
@@ -39,25 +37,54 @@ TEMPLATE_VERSION = "prospect-diagnostic-v1"
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
 _STAGE_DETAILS: dict[str, tuple[str, str]] = {
-    "awaiting_upload": ("Upload catalog", "The prospect workspace is ready for a Shopify product CSV."),
-    "queued": ("Queued", "The catalog assessment is queued for the Catora worker."),
-    "ingesting": ("Importing catalog", "Catora is validating and importing Shopify product rows."),
-    "normalizing": ("Normalizing catalog", "Products, variants and evidence are being canonicalized."),
-    "categorizing": ("Assigning taxonomy", "Products are being classified against the furniture taxonomy."),
-    "auditing": ("Running deterministic audit", "Evidence-backed catalog requirements are being evaluated."),
-    "matching": ("Testing buyer intents", "Prepared furniture buying scenarios are being evaluated."),
-    "preparing_reports": ("Preparing deliverables", "Persisted findings and matches are being reconciled."),
-    "completed": ("Assessment complete", "The branded assessment and operational backlog are ready."),
-    "failed": ("Assessment needs attention", "The assessment stopped safely and can be inspected or retried."),
-    "deleting": ("Deleting assessment", "Catalog data and the isolated prospect workspace are being removed."),
+    "awaiting_upload": (
+        "Upload catalog",
+        "The prospect workspace is ready for a Shopify product CSV.",
+    ),
+    "queued": (
+        "Queued",
+        "The catalog assessment is queued for the Catora worker.",
+    ),
+    "ingesting": (
+        "Importing catalog",
+        "Catora is validating and importing Shopify product rows.",
+    ),
+    "normalizing": (
+        "Normalizing catalog",
+        "Products, variants and evidence are being canonicalized.",
+    ),
+    "categorizing": (
+        "Assigning taxonomy",
+        "Products are being classified against the furniture taxonomy.",
+    ),
+    "auditing": (
+        "Running deterministic audit",
+        "Evidence-backed catalog requirements are being evaluated.",
+    ),
+    "matching": (
+        "Testing buyer intents",
+        "Prepared furniture buying scenarios are being evaluated.",
+    ),
+    "preparing_reports": (
+        "Preparing deliverables",
+        "Persisted findings and matches are being reconciled.",
+    ),
+    "completed": (
+        "Assessment complete",
+        "The branded assessment and operational backlog are ready.",
+    ),
+    "failed": (
+        "Assessment needs attention",
+        "The assessment stopped safely and can be inspected or retried.",
+    ),
+    "deleting": (
+        "Deleting assessment",
+        "Catalog data and the isolated prospect workspace are being removed.",
+    ),
 }
 
 
 class DiagnosticNotFoundError(LookupError):
-    pass
-
-
-class DiagnosticConflictError(ValueError):
     pass
 
 
@@ -93,7 +120,11 @@ def _snapshot_uuid_list(snapshot: dict[str, object], key: str) -> list[uuid.UUID
 
 def _snapshot_int(snapshot: dict[str, object], key: str) -> int:
     value = snapshot.get(key, 0)
-    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else 0
+    )
 
 
 def _snapshot_text(snapshot: dict[str, object], key: str, default: str = "") -> str:
@@ -122,6 +153,7 @@ class DiagnosticService:
         *,
         actor_user_id: uuid.UUID,
         actor_role: str,
+        operator_workspace_id: uuid.UUID,
         payload: DiagnosticCreateRequest,
     ) -> ReportJob:
         assessment_id = uuid.uuid4()
@@ -183,6 +215,7 @@ class DiagnosticService:
             name=f"{payload.market_code} diagnostic market",
         )
         session.add(market)
+        await session.flush()
 
         now = self.now()
         assessment = ReportJob(
@@ -194,6 +227,7 @@ class DiagnosticService:
                 "company_name": payload.company_name,
                 "organization_id": str(organization.id),
                 "operator_user_id": str(actor_user_id),
+                "operator_workspace_id": str(operator_workspace_id),
                 "market_id": str(market.id),
                 "market_code": payload.market_code,
                 "locale": payload.locale,
@@ -203,7 +237,9 @@ class DiagnosticService:
                 "authorization_confirmed": True,
                 "authorization_confirmed_at": now.isoformat(),
                 "retention_days": payload.retention_days,
-                "retention_expires_at": (now + timedelta(days=payload.retention_days)).isoformat(),
+                "retention_expires_at": (
+                    now + timedelta(days=payload.retention_days)
+                ).isoformat(),
                 "assigned_category_count": 0,
                 "ambiguous_category_count": 0,
                 "unclassified_category_count": 0,
@@ -220,6 +256,7 @@ class DiagnosticService:
                 entity_type="report_job",
                 entity_id=assessment.id,
                 payload={
+                    "operator_workspace_id": str(operator_workspace_id),
                     "company_name": payload.company_name,
                     "market_code": payload.market_code,
                     "locale": payload.locale,
@@ -258,9 +295,16 @@ class DiagnosticService:
         assessment.input_snapshot = snapshot
         await session.commit()
 
-    async def view(self, session: AsyncSession, assessment: ReportJob) -> DiagnosticView:
+    async def view(
+        self,
+        session: AsyncSession,
+        assessment: ReportJob,
+    ) -> DiagnosticView:
         snapshot = dict(assessment.input_snapshot)
-        workspace = await session.get(Workspace, cast(uuid.UUID, assessment.workspace_id))
+        workspace = await session.get(
+            Workspace,
+            cast(uuid.UUID, assessment.workspace_id),
+        )
         if workspace is None:
             raise DiagnosticNotFoundError("Prospect diagnostic workspace not found")
 
@@ -313,7 +357,10 @@ class DiagnosticService:
 
         stage, detail = _STAGE_DETAILS.get(
             assessment.status,
-            (assessment.status.replace("_", " ").title(), "Catora is reconciling assessment state."),
+            (
+                assessment.status.replace("_", " ").title(),
+                "Catora is reconciling assessment state.",
+            ),
         )
         counts = DiagnosticCounts(
             processed_rows=job.processed_count if job is not None else 0,
@@ -322,27 +369,37 @@ class DiagnosticService:
             warning_count=job.warning_count if job is not None else 0,
             product_count=product_count,
             variant_count=variant_count,
-            assigned_category_count=_snapshot_int(snapshot, "assigned_category_count"),
-            ambiguous_category_count=_snapshot_int(snapshot, "ambiguous_category_count"),
-            unclassified_category_count=_snapshot_int(snapshot, "unclassified_category_count"),
+            assigned_category_count=_snapshot_int(
+                snapshot,
+                "assigned_category_count",
+            ),
+            ambiguous_category_count=_snapshot_int(
+                snapshot,
+                "ambiguous_category_count",
+            ),
+            unclassified_category_count=_snapshot_int(
+                snapshot,
+                "unclassified_category_count",
+            ),
             finding_count=finding_count,
             intent_run_count=len(intent_run_ids),
             intent_match_count=intent_match_count,
         )
-        status = cast(DiagnosticStatus, assessment.status)
+        diagnostic_status = cast(DiagnosticStatus, assessment.status)
         return DiagnosticView(
             id=assessment.id,
             workspace_id=workspace.id,
             organization_id=workspace.organization_id,
             company_name=_snapshot_text(snapshot, "company_name", workspace.name),
-            status=status,
+            status=diagnostic_status,
             current_stage=stage,
             detail=detail,
             market_code=_snapshot_text(snapshot, "market_code"),
             locale=_snapshot_text(snapshot, "locale"),
             currency=_snapshot_text(snapshot, "currency"),
             retention_expires_at=(
-                _snapshot_datetime(snapshot, "retention_expires_at") or assessment.created_at
+                _snapshot_datetime(snapshot, "retention_expires_at")
+                or assessment.created_at
             ),
             counts=counts,
             created_at=assessment.created_at,
@@ -354,13 +411,21 @@ class DiagnosticService:
             audit_run_id=audit_run_id,
             intent_run_ids=intent_run_ids,
             result_path=f"/workspace/{workspace.id}/diagnostic/{assessment.id}",
-            report_path=f"/api/v1/prospect-diagnostics/{assessment.id}/report.pptx",
-            backlog_path=f"/api/v1/prospect-diagnostics/{assessment.id}/backlog.csv",
-            rejection_path=f"/api/v1/prospect-diagnostics/{assessment.id}/rejections",
+            report_path=(
+                f"/api/v1/prospect-diagnostics/{assessment.id}/report.pptx"
+            ),
+            backlog_path=(
+                f"/api/v1/prospect-diagnostics/{assessment.id}/backlog.csv"
+            ),
+            rejection_path=(
+                f"/api/v1/prospect-diagnostics/{assessment.id}/rejections"
+            ),
         )
 
     async def rejection_list(
-        self, session: AsyncSession, assessment: ReportJob
+        self,
+        session: AsyncSession,
+        assessment: ReportJob,
     ) -> DiagnosticRejectionList:
         snapshot = dict(assessment.input_snapshot)
         job_id = _snapshot_uuid(snapshot, "ingestion_job_id")
@@ -375,7 +440,11 @@ class DiagnosticService:
                     row_number = item.get("row_number")
                     reason = item.get("reason")
                     raw_payload = item.get("raw_payload")
-                    if not isinstance(row_number, int) or row_number < 1 or not isinstance(reason, str):
+                    if (
+                        not isinstance(row_number, int)
+                        or row_number < 1
+                        or not isinstance(reason, str)
+                    ):
                         continue
                     payload = raw_payload if isinstance(raw_payload, dict) else {}
                     handle = payload.get("Handle")
@@ -384,37 +453,18 @@ class DiagnosticService:
                         DiagnosticRejection(
                             row_number=row_number,
                             reason=reason,
-                            product_handle=handle if isinstance(handle, str) and handle else None,
-                            variant_sku=sku if isinstance(sku, str) and sku else None,
+                            product_handle=(
+                                handle
+                                if isinstance(handle, str) and handle
+                                else None
+                            ),
+                            variant_sku=(
+                                sku if isinstance(sku, str) and sku else None
+                            ),
                         )
                     )
         return DiagnosticRejectionList(
             items=samples,
             total_rejected=job.rejection_count if job is not None else 0,
             sample_limit=100,
-        )
-
-    async def latest_audit_run(
-        self, session: AsyncSession, assessment: ReportJob
-    ) -> AuditRun | None:
-        run_id = _snapshot_uuid(dict(assessment.input_snapshot), "audit_run_id")
-        return await session.get(AuditRun, run_id) if run_id is not None else None
-
-    async def intent_runs(
-        self, session: AsyncSession, assessment: ReportJob
-    ) -> list[IntentRun]:
-        run_ids = _snapshot_uuid_list(dict(assessment.input_snapshot), "intent_run_ids")
-        if not run_ids:
-            return []
-        return list(
-            (
-                await session.scalars(
-                    select(IntentRun)
-                    .where(
-                        IntentRun.workspace_id == assessment.workspace_id,
-                        IntentRun.id.in_(run_ids),
-                    )
-                    .order_by(IntentRun.created_at, IntentRun.id)
-                )
-            ).all()
         )
