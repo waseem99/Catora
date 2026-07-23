@@ -20,6 +20,7 @@ from catora_api.db.models import (
     AuditEvent,
     CatalogSource,
     IngestionJob,
+    Organization,
     ReportJob,
     Workspace,
 )
@@ -474,8 +475,11 @@ async def delete_prospect_diagnostic(
                 payload={"assessment_id": str(assessment.id)},
             )
         )
+    organization_id = _snapshot_uuid(snapshot, "organization_id")
+    if organization_id is None:
+        raise HTTPException(status_code=409, detail="Diagnostic organization is unavailable")
     await session.execute(
-        delete(Workspace).where(Workspace.id == assessment.workspace_id)
+        delete(Organization).where(Organization.id == organization_id)
     )
     await session.commit()
 
@@ -527,8 +531,11 @@ async def purge_expired_diagnostics(
         object_key = snapshot.get("object_key")
         if isinstance(object_key, str):
             await storage.delete(object_key)
+        organization_id = _snapshot_uuid(snapshot, "organization_id")
+        if organization_id is None:
+            continue
         await session.execute(
-            delete(Workspace).where(Workspace.id == assessment.workspace_id)
+            delete(Organization).where(Organization.id == organization_id)
         )
         purged += 1
     if purged:
