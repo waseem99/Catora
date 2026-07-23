@@ -9,11 +9,14 @@ export default async function WorkspacePage({ params }: Props) {
       <p className="eyebrow">WORKSPACE READY</p>
       <h1>Catalog intelligence</h1>
       <p className="lede">
-        Review canonical products, normalization warnings, identity candidates and source evidence
-        for this workspace.
+        Choose a prepared sample, upload a Shopify CSV diagnostic, or prepare a connected Shopify
+        pilot. Every completed processing state is backed by persisted Catora records.
       </p>
       <div className="actions">
-        <Link className="primary" href={`/workspace/${workspaceId}/demo`}>
+        <Link className="primary" href={`/workspace/${workspaceId}/onboarding`}>
+          Add or explore a catalog
+        </Link>
+        <Link className="secondary" href={`/workspace/${workspaceId}/demo`}>
           Launch client demo
         </Link>
         <Link className="secondary" href={`/workspace/${workspaceId}/products`}>

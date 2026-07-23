@@ -48,11 +48,18 @@ async def _csv_connector(
         raise ValueError("CSV source mapping is missing")
     content = await storage.get_bytes(object_key)
     delimiter = config.get("delimiter")
+    profile = config.get("profile", "generic")
+    if profile not in {"generic", "shopify"}:
+        raise ValueError("CSV source profile is invalid")
+    standard_shopify_mapping = (
+        mapping.get("product_id") == "Handle" and mapping.get("title") == "Title"
+    )
     return CsvCatalogConnector(
         content=content,
         mapping=CsvMapping(**mapping),
         encoding=str(config.get("encoding") or "utf-8-sig"),
         delimiter=delimiter if isinstance(delimiter, str) else None,
+        shopify_profile=profile == "shopify" or standard_shopify_mapping,
     )
 
 

@@ -82,6 +82,7 @@ class CsvMappingRequest(IngestionModel):
 class CsvSourceCreateRequest(IngestionModel):
     name: str = Field(min_length=2, max_length=200)
     source_type: Literal["csv"] = "csv"
+    profile: Literal["generic", "shopify"] = "generic"
     object_key: str = Field(min_length=1, max_length=700)
     mapping: CsvMappingRequest
     encoding: str = Field(default="utf-8-sig", min_length=3, max_length=50)
