@@ -187,5 +187,8 @@ def test_production_http_provider_requires_https_and_secret() -> None:
         enrichment_http_model="catalog-model-v1",
         s3_secret_key="production-object-secret",
         auth_token_pepper="p" * 32,
+        frontend_url="https://catora.codistan.org",
+        cors_origins=["https://catora.codistan.org"],
+        trust_proxy_headers=True,
     )
     valid.validate_production()
