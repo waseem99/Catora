@@ -40,6 +40,30 @@ def _string_list(snapshot: dict[str, object], key: str) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+async def _installation_actor(
+    session: AsyncSession,
+    *,
+    installation: ReportJob,
+    snapshot: dict[str, object],
+    actor_user_id: uuid.UUID | None,
+) -> uuid.UUID | None:
+    if actor_user_id is not None:
+        return actor_user_id
+    persisted = _uuid_value(snapshot, "installed_by_user_id")
+    if persisted is not None:
+        return persisted
+    return await session.scalar(
+        select(AuditEvent.actor_user_id)
+        .where(
+            AuditEvent.entity_id == installation.id,
+            AuditEvent.event_type.in_(("shopify.installed", "shopify.reconnected")),
+            AuditEvent.actor_user_id.is_not(None),
+        )
+        .order_by(AuditEvent.occurred_at.desc())
+        .limit(1)
+    )
+
+
 async def queue_shopify_sync(
     session: AsyncSession,
     *,
@@ -52,6 +76,15 @@ async def queue_shopify_sync(
         return None
     workspace_id = cast(uuid.UUID, installation.workspace_id)
     snapshot = dict(installation.input_snapshot)
+    actor_user_id = await _installation_actor(
+        session,
+        installation=installation,
+        snapshot=snapshot,
+        actor_user_id=actor_user_id,
+    )
+    if actor_user_id is not None:
+        snapshot["installed_by_user_id"] = str(actor_user_id)
+
     source_id = _uuid_value(snapshot, "catalog_source_id")
     if source_id is None:
         return None
