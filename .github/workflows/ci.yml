@@ -49,10 +49,13 @@ jobs:
           python-version: '3.13'
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
-      - name: Validate hosted deployment assets
+      - name: Validate hosted deployment and enterprise demo assets
         shell: bash
         run: |
           python -m py_compile scripts/smoke_hosted_demo.py
+          python -m py_compile apps/api/scripts/seed_enterprise_demo.py
+          python -m py_compile apps/api/scripts/export_sales_demo_shopify_csv.py
+          python -m py_compile apps/api/scripts/validate_sales_demo_shopify_csv.py
           python - <<'PY'
           import json
           from pathlib import Path
@@ -153,7 +156,7 @@ jobs:
           name: pytest-report
           path: pytest-report.txt
           retention-days: 3
-      - name: Run migrations and client-demo reset smoke test
+      - name: Run migrations and enterprise-demo reset smoke test
         shell: bash
         run: |
           set +e
@@ -164,27 +167,41 @@ jobs:
             if [ "$upgrade_status" -ne 0 ]; then
               exit "$upgrade_status"
             fi
-            python scripts/seed_sales_demo.py
+            python scripts/seed_enterprise_demo.py
             first_seed_status=$?
             if [ "$first_seed_status" -ne 0 ]; then
               exit "$first_seed_status"
             fi
-            python scripts/seed_sales_demo.py
+            python scripts/seed_enterprise_demo.py
             second_seed_status=$?
             if [ "$second_seed_status" -ne 0 ]; then
               exit "$second_seed_status"
             fi
+            python scripts/export_sales_demo_shopify_csv.py \
+              --output /tmp/northstar-shopify-products.csv
+            export_status=$?
+            if [ "$export_status" -ne 0 ]; then
+              exit "$export_status"
+            fi
+            python scripts/validate_sales_demo_shopify_csv.py \
+              /tmp/northstar-shopify-products.csv
+            validation_status=$?
+            if [ "$validation_status" -ne 0 ]; then
+              exit "$validation_status"
+            fi
             alembic downgrade -1
-          ) > migration-report.txt 2>&1
+          ) > /tmp/migration-report.txt 2>&1
           status=$?
-          cat migration-report.txt
+          tail -n 100 /tmp/migration-report.txt > /tmp/migration-tail.txt
+          cat /tmp/migration-tail.txt
           exit "$status"
-      - name: Upload migration report
+      - name: Upload enterprise migration tail
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: migration-report
-          path: migration-report.txt
+          name: enterprise-migration-tail
+          path: /tmp/migration-tail.txt
+          if-no-files-found: error
           retention-days: 3
 
   security:
