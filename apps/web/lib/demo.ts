@@ -95,7 +95,39 @@ export const DemoOverviewSchema = z.object({
   operational_csv_path: z.string(),
 });
 
+export const DemoPreflightSchema = z.object({
+  workspace_id: uuid,
+  generated_at: z.string(),
+  ready: z.boolean(),
+  components: z.array(z.object({
+    key: z.string(),
+    label: z.string(),
+    state: z.enum(["ok", "warning", "error"]),
+    detail: z.string(),
+  })),
+  last_verified_snapshot: z.object({
+    audit_run_id: uuid,
+    source_snapshot_hash: z.string().length(64),
+    verified_at: z.string(),
+    product_count: z.number().int().nonnegative(),
+    variant_count: z.number().int().nonnegative(),
+    finding_count: z.number().int().nonnegative(),
+    recommendation_field_count: z.number().int().nonnegative(),
+  }),
+});
+
+export const DemoResetResponseSchema = z.object({
+  task_id: uuid,
+  status: z.enum(["queued", "running", "completed", "failed"]),
+});
+
+export const DemoResetStatusSchema = DemoResetResponseSchema.extend({
+  detail: z.string(),
+});
+
 export type DemoOverview = z.infer<typeof DemoOverviewSchema>;
+export type DemoPreflight = z.infer<typeof DemoPreflightSchema>;
+export type DemoResetStatus = z.infer<typeof DemoResetStatusSchema>;
 export type DemoDecision = "approved" | "rejected";
 
 export function demoOverviewPath(workspaceId: string): string {
@@ -104,6 +136,18 @@ export function demoOverviewPath(workspaceId: string): string {
 
 export function demoDecisionPath(workspaceId: string, recommendationId: string): string {
   return `${demoOverviewPath(workspaceId)}/recommendations/${recommendationId}/decision`;
+}
+
+export function demoPreflightPath(workspaceId: string): string {
+  return `${demoOverviewPath(workspaceId)}/preflight`;
+}
+
+export function demoResetPath(workspaceId: string): string {
+  return `${demoOverviewPath(workspaceId)}/reset`;
+}
+
+export function demoResetStatusPath(workspaceId: string, taskId: string): string {
+  return `${demoResetPath(workspaceId)}/${taskId}`;
 }
 
 export function absoluteApiPath(path: string): string {
