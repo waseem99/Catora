@@ -1,0 +1,44 @@
+name: Fix presenter storage credential keyword
+
+on:
+  push:
+    branches:
+      - agent/demo-presenter-reliability
+    paths:
+      - .github/workflows/fix-presenter-storage-key.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/demo-presenter-reliability
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Correct boto3 keyword
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("apps/api/catora_api/demo/reliability.py")
+          content = path.read_text()
+          old = "aws_secret_key=settings.s3_secret_key"
+          new = "aws_secret_access_key=settings.s3_secret_key"
+          if content.count(old) != 1:
+              raise SystemExit("Expected one incorrect storage keyword")
+          path.write_text(content.replace(old, new))
+          PY
+      - name: Commit fix and remove one-shot workflow
+        shell: bash
+        run: |
+          rm .github/workflows/fix-presenter-storage-key.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/api/catora_api/demo/reliability.py \
+            .github/workflows/fix-presenter-storage-key.yml
+          git commit -m "Fix presenter object-storage preflight"
+          git push origin HEAD:agent/demo-presenter-reliability
