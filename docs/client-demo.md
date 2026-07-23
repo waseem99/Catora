@@ -13,14 +13,30 @@ npm run demo:seed
 
 Set `CATORA_DEMO_PASSWORD` before the seed command to choose a password. When it is absent, the command generates a password and prints it once. The login is always `demo@catora.local`.
 
-The seed command deletes and recreates only the `sales-demo` workspace. Other organizations and workspaces are untouched.
+The seed command deletes and recreates only the `sales-demo` workspace. Other organizations and workspaces are untouched. The enterprise showcase contains 1,000 products, 2,000 active variants/SKUs, ten categories and five prepared buyer-intent scenarios.
+
+## Presenter preflight
+
+Owners and admins see a **Demo readiness** panel above the guided route. Run it before every client meeting.
+
+The preflight checks:
+
+- the enterprise-scale persisted demo data;
+- PostgreSQL queryability;
+- Redis connectivity;
+- private object-storage bucket access;
+- Celery worker response;
+- editable PPTX generation.
+
+The panel also shows the timestamp and counts from the latest completed audit snapshot. If a live dependency is temporarily unavailable, Catora labels the state as **Using verified fallback** and continues to show the persisted, timestamped analysis. It does not claim that an unavailable live synchronization succeeded.
 
 ## Presenter route
 
-1. Sign in at `http://localhost:3000/login`.
+1. Sign in at `http://localhost:3000/login` or the hosted application domain.
 2. Select **Northstar Living — Sales Demo**.
 3. Choose **Launch client demo**.
-4. Complete the five sections in order.
+4. Confirm the presenter readiness panel.
+5. Complete the five sections in order.
 
 ### 1. Catalog overview
 
@@ -54,6 +70,10 @@ Both are generated from the same persisted records shown by the guided route. Do
 
 ## Reset before another presentation
 
+An owner or admin can choose **Reset demo workspace** in the presenter panel. The API records the attributable request before enqueueing the exact Celery task identity, then recreates only the deterministic `sales-demo` workspace. The panel only polls task IDs recorded for that workspace and reloads the completed demo.
+
+The command-line fallback remains:
+
 ```bash
 npm run demo:seed
 ```
@@ -62,10 +82,14 @@ Use the newly printed password when `CATORA_DEMO_PASSWORD` is not set.
 
 ## Failure fallback
 
+- Run the presenter preflight and read the component-specific status.
 - Confirm API readiness at `http://localhost:8000/health/ready`.
 - Apply migrations with `docker compose exec api alembic upgrade head`.
-- Reset the workspace with `npm run demo:seed`.
+- Reset the workspace through the presenter panel or `npm run demo:seed`.
 - Confirm the browser API URL is `http://localhost:8000` for local Docker Compose.
+- For hosted environments, run `npm run demo:smoke` with the documented smoke-test variables.
+
+A failed reset returns a sanitized failure state and keeps the previous verified snapshot available. Task failures never expose subprocess output, credentials or raw catalog records to the browser.
 
 ## Scope boundaries
 

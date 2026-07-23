@@ -7,6 +7,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 DecisionName = Literal["approved", "rejected"]
+DemoComponentState = Literal["ok", "warning", "error"]
+DemoResetState = Literal["queued", "running", "completed", "failed"]
 
 
 class DemoCatalogSummary(BaseModel):
@@ -141,6 +143,58 @@ class DemoOverviewResponse(BaseModel):
     change_set: DemoChangeSetView
     report_pptx_path: str
     operational_csv_path: str
+
+
+class DemoComponentView(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    key: str = Field(min_length=1, max_length=80)
+    label: str = Field(min_length=1, max_length=120)
+    state: DemoComponentState
+    detail: str = Field(min_length=1, max_length=500)
+
+
+class DemoVerifiedSnapshotView(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    audit_run_id: uuid.UUID
+    source_snapshot_hash: str = Field(min_length=64, max_length=64)
+    verified_at: datetime
+    product_count: int = Field(ge=0)
+    variant_count: int = Field(ge=0)
+    finding_count: int = Field(ge=0)
+    recommendation_field_count: int = Field(ge=0)
+
+
+class DemoPreflightResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace_id: uuid.UUID
+    generated_at: datetime
+    ready: bool
+    components: list[DemoComponentView]
+    last_verified_snapshot: DemoVerifiedSnapshotView
+
+
+class DemoResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class DemoResetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    task_id: uuid.UUID
+    status: DemoResetState
+
+
+class DemoResetStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    task_id: uuid.UUID
+    status: DemoResetState
+    detail: str = Field(min_length=1, max_length=500)
 
 
 class DemoFieldDecisionRequest(BaseModel):

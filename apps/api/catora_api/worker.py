@@ -16,6 +16,7 @@ celery_app.conf.update(
         "catora_api.ingestion.tasks",
         "catora_api.auditing.tasks",
         "catora_api.enrichment.tasks",
+        "catora_api.demo.tasks",
     ),
 )
 

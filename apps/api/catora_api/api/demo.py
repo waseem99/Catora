@@ -4,7 +4,7 @@ import csv
 import io
 import uuid
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response, status
 
 from catora_api.auth.dependencies import (
     AuthContextDependency,
@@ -16,15 +16,38 @@ from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models.reporting import AuditEvent
 from catora_api.demo.pptx import build_demo_pptx
+from catora_api.demo.reliability import (
+    build_preflight,
+    demo_reset_status,
+    enqueue_demo_reset,
+    require_presenter_workspace,
+    reset_task_belongs_to_workspace,
+)
 from catora_api.demo.service import DemoService
 from catora_api.schemas.demo import (
     DemoOverviewResponse,
+    DemoPreflightResponse,
     DemoRecommendationDecisionRequest,
     DemoRecommendationDecisionResponse,
+    DemoResetRequest,
+    DemoResetResponse,
+    DemoResetStatusResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["client-demo"])
 service = DemoService()
+
+
+async def _require_presenter(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    user_id: uuid.UUID,
+) -> None:
+    membership = await auth_service.membership(session, user_id, workspace_id)
+    if not can(Role(membership.role), "demo.present"):
+        raise AuthorizationError("Presenter permission required")
+    await require_presenter_workspace(session, workspace_id=workspace_id)
 
 
 @router.get(
@@ -39,6 +62,114 @@ async def get_demo_overview(
 ) -> DemoOverviewResponse:
     await auth_service.membership(session, context.user.id, workspace_id)
     return await service.overview(session, workspace_id=workspace_id)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/demo/preflight",
+    response_model=DemoPreflightResponse,
+)
+async def get_demo_preflight(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+) -> DemoPreflightResponse:
+    await _require_presenter(
+        workspace_id,
+        session,
+        auth_service,
+        context.user.id,
+    )
+    return await build_preflight(
+        session,
+        workspace_id=workspace_id,
+        settings=auth_service.settings,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/demo/reset",
+    response_model=DemoResetResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def request_demo_reset(
+    workspace_id: uuid.UUID,
+    payload: DemoResetRequest,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> DemoResetResponse:
+    await _require_presenter(
+        workspace_id,
+        session,
+        auth_service,
+        context.user.id,
+    )
+    task_id = uuid.uuid4()
+    session.add(
+        AuditEvent(
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            event_type="demo.reset_requested",
+            entity_type="workspace",
+            entity_id=workspace_id,
+            payload={"task_id": str(task_id), "reason": payload.reason},
+        )
+    )
+    await session.commit()
+    try:
+        enqueue_demo_reset(
+            task_id=task_id,
+            actor_user_id=context.user.id,
+            reason=payload.reason,
+        )
+    except Exception as exc:
+        session.add(
+            AuditEvent(
+                workspace_id=workspace_id,
+                actor_user_id=context.user.id,
+                event_type="demo.reset_enqueue_failed",
+                entity_type="workspace",
+                entity_id=workspace_id,
+                payload={
+                    "task_id": str(task_id),
+                    "reason": payload.reason,
+                    "error_type": type(exc).__name__,
+                },
+            )
+        )
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The demo reset could not be queued",
+        ) from exc
+    return DemoResetResponse(task_id=task_id, status="queued")
+
+
+@router.get(
+    "/workspaces/{workspace_id}/demo/reset/{task_id}",
+    response_model=DemoResetStatusResponse,
+)
+async def get_demo_reset_status(
+    workspace_id: uuid.UUID,
+    task_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+) -> DemoResetStatusResponse:
+    await _require_presenter(
+        workspace_id,
+        session,
+        auth_service,
+        context.user.id,
+    )
+    if not await reset_task_belongs_to_workspace(
+        session,
+        workspace_id=workspace_id,
+        task_id=task_id,
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reset task not found")
+    return demo_reset_status(task_id)
 
 
 @router.post(
