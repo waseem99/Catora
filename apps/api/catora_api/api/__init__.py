@@ -17,11 +17,13 @@ from catora_api.api.intents import router as intents_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.shopify import router as shopify_router
+from catora_api.api.shopify_activity import router as _shopify_activity_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
 _intent_coverage_router.include_router(_intent_breakdown_router)
 _intent_suites_router.include_router(_intent_coverage_router)
 intent_runs_router.include_router(_intent_suites_router)
+shopify_router.include_router(_shopify_activity_router)
 
 __all__ = [
     "audit_rules_router",
