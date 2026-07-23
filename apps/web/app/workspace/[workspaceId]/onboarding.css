@@ -28,15 +28,20 @@
 .shopify-connect-form label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
 .shopify-connect-form input { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; color: var(--text); background: var(--bg); font: inherit; }
 .shopify-connect-form input:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
-.shopify-connection-state { display: grid; gap: 7px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7,17,15,.58); }
-.shopify-connection-state > span { width: fit-content; padding: 5px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }
+.shopify-connection-state { display: grid; gap: 10px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: rgba(7,17,15,.58); }
+.shopify-connection-state header { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.shopify-connection-state header span { width: fit-content; padding: 5px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }
 .shopify-connection-state small { color: var(--muted); line-height: 1.4; }
+.shopify-sync-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.shopify-sync-metrics div { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(15,29,26,.72); }
+.shopify-sync-metrics span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+.shopify-sync-metrics strong { font-size: 19px; }
 .shopify-healthy { border-color: rgba(92,225,173,.45); }
-.shopify-healthy > span { color: var(--accent); border-color: rgba(92,225,173,.45); }
+.shopify-healthy header span { color: var(--accent); border-color: rgba(92,225,173,.45); }
 .shopify-refresh_required { border-color: #72532b; }
-.shopify-refresh_required > span { color: #ffd9a8; border-color: #72532b; }
+.shopify-refresh_required header span { color: #ffd9a8; border-color: #72532b; }
 .shopify-disconnected { border-color: #7f1d1d; }
-.shopify-disconnected > span { color: #fecaca; border-color: #7f1d1d; }
+.shopify-disconnected header span { color: #fecaca; border-color: #7f1d1d; }
 .processing-shell { max-width: 980px; }
 .processing-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
 .processing-summary div { display: grid; gap: 8px; padding: 18px; border: 1px solid var(--border); border-radius: 13px; background: var(--panel); }
@@ -71,6 +76,7 @@
   .onboarding-shell { padding-top: 30px; }
   .onboarding-header { flex-direction: column; }
   .diagnostic-form-grid { grid-template-columns: 1fr; }
+  .shopify-sync-metrics { grid-template-columns: 1fr; }
   .processing-summary { grid-template-columns: 1fr; }
   .processing-stage { grid-template-columns: 38px 1fr; gap: 12px; }
   .processing-stage header { align-items: flex-start; flex-direction: column; }
