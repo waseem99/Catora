@@ -18,7 +18,7 @@ from catora_api.shopify.installations import (
     ShopifyInstallationService,
 )
 
-SHOP = "northstar-living.myshopify.com"
+SHOP = "northstar-living-demo.myshopify.com"
 ACCESS_VALUE = "acceptance-access-credential"
 REFRESH_VALUE = "acceptance-refresh-credential"
 
