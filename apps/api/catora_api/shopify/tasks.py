@@ -30,6 +30,7 @@ from catora_api.taxonomy.assignment import TaxonomyAssignmentService
 from catora_api.taxonomy.resolution import classify_product
 
 _PREVIEW_ATTRIBUTE_KEYS = ("description", "category", "product_type", "collections")
+_ACTIVE_JOB_STATUSES = ("queued", "validating", "running")
 
 
 def _now() -> datetime:
@@ -148,6 +149,16 @@ def run_shopify_sync(job_id: str, installation_id: str) -> None:
 
 
 async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> None:
+    async with SessionFactory() as session:
+        installation = await session.get(ReportJob, installation_id)
+        if installation is None or installation.status != "active":
+            return
+        installation.input_snapshot = {
+            **dict(installation.input_snapshot),
+            "sync_status": "running",
+        }
+        await session.commit()
+
     await _run_ingestion_job(job_id)
     async with SessionFactory() as session:
         installation = await session.get(ReportJob, installation_id)
@@ -159,12 +170,19 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
         actor_user_id = _uuid_value(snapshot, "installed_by_user_id")
         source_id = _uuid_value(snapshot, "catalog_source_id")
         source = await session.get(CatalogSource, source_id) if source_id else None
+        if installation.status != "active":
+            if job.status in _ACTIVE_JOB_STATUSES:
+                job.status = "cancelled"
+                await session.commit()
+            return
         if job.status not in {"completed", "partially_completed"} or source is None:
             installation.input_snapshot = {
                 **snapshot,
                 "sync_status": "failed",
                 "last_sync_failed_at": _now().isoformat(),
-                "last_sync_error_type": str(job.checkpoint.get("error_type") or "SyncFailed"),
+                "last_sync_error_type": str(
+                    job.checkpoint.get("error_type") or "SyncFailed"
+                ),
             }
             await session.commit()
             return
@@ -183,6 +201,9 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
             workspace_id
         )
         async with SessionFactory() as session:
+            installation = await session.get(ReportJob, installation_id)
+            if installation is None or installation.status != "active":
+                return
             audit_run = await StatefulAuditRunService().create_run(
                 session,
                 workspace_id=workspace_id,
@@ -197,6 +218,8 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
             source = await session.get(CatalogSource, source_id) if source_id else None
             job = await session.get(IngestionJob, job_id)
             if installation is None or source is None or job is None:
+                return
+            if installation.status != "active":
                 return
             product_count = await session.scalar(
                 select(func.count(Product.id)).where(
@@ -265,7 +288,7 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
     except Exception as exc:
         async with SessionFactory() as session:
             installation = await session.get(ReportJob, installation_id)
-            if installation is None:
+            if installation is None or installation.status != "active":
                 return
             installation.input_snapshot = {
                 **dict(installation.input_snapshot),
@@ -288,36 +311,52 @@ async def _process_shopify_webhook(delivery_id: uuid.UUID) -> None:
         if (
             delivery is None
             or delivery.report_type != SHOPIFY_WEBHOOK_DELIVERY_TYPE
-            or delivery.status == "completed"
+            or delivery.status in {"completed", "ignored"}
         ):
             return
         snapshot = dict(delivery.input_snapshot)
         installation_id = _uuid_value(snapshot, "installation_id")
-        installation = await session.get(ReportJob, installation_id) if installation_id else None
+        installation = (
+            await session.get(ReportJob, installation_id) if installation_id else None
+        )
         if installation is None:
             delivery.status = "failed"
             await session.commit()
             return
         topic = snapshot.get("topic")
         product_id = snapshot.get("product_id")
-        actor_user_id = _uuid_value(dict(installation.input_snapshot), "installed_by_user_id")
+        installation_snapshot = dict(installation.input_snapshot)
+        actor_user_id = _uuid_value(
+            installation_snapshot,
+            "installed_by_user_id",
+        )
         workspace_id = cast(uuid.UUID, installation.workspace_id)
-        source_id = _uuid_value(dict(installation.input_snapshot), "catalog_source_id")
+        source_id = _uuid_value(installation_snapshot, "catalog_source_id")
         source = await session.get(CatalogSource, source_id) if source_id else None
 
         if topic == "app/uninstalled":
-            current = dict(installation.input_snapshot)
             installation.status = "revoked"
             installation.input_snapshot = {
-                **current,
+                **installation_snapshot,
                 "encrypted_access_token": None,
                 "encrypted_refresh_token": None,
                 "sync_status": "revoked",
                 "disconnected_at": _now().isoformat(),
+                "pending_product_ids": [],
             }
+            cancelled_jobs = 0
             if source is not None:
                 source.status = "disconnected"
                 source.credential_ref = None
+                result = await session.execute(
+                    update(IngestionJob)
+                    .where(
+                        IngestionJob.catalog_source_id == source.id,
+                        IngestionJob.status.in_(_ACTIVE_JOB_STATUSES),
+                    )
+                    .values(status="cancelled")
+                )
+                cancelled_jobs = result.rowcount or 0
             session.add(
                 AuditEvent(
                     workspace_id=workspace_id,
@@ -325,15 +364,28 @@ async def _process_shopify_webhook(delivery_id: uuid.UUID) -> None:
                     event_type="shopify.uninstalled",
                     entity_type="report_job",
                     entity_id=installation.id,
-                    payload={"shop_domain": current.get("shop_domain")},
+                    payload={
+                        "shop_domain": installation_snapshot.get("shop_domain"),
+                        "cancelled_job_count": cancelled_jobs,
+                    },
                 )
             )
             delivery.status = "completed"
+            delivery.input_snapshot = {
+                **snapshot,
+                "processed_at": _now().isoformat(),
+                "cancelled_job_count": cancelled_jobs,
+            }
             await session.commit()
             return
 
         if installation.status != "active" or source is None:
             delivery.status = "ignored"
+            delivery.input_snapshot = {
+                **snapshot,
+                "processed_at": _now().isoformat(),
+                "ignore_reason": "installation_not_active",
+            }
             await session.commit()
             return
 
