@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import delete, select
@@ -75,7 +75,7 @@ async def _assessment_for_user(
     membership = await auth_service.membership(
         session,
         user_id,
-        assessment.workspace_id,
+        cast(uuid.UUID, assessment.workspace_id),
     )
     if require_manage:
         _require_diagnostic_manager(membership.role)

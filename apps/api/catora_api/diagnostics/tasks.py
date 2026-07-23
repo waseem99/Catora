@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections import defaultdict
+from typing import cast
 
 from celery import shared_task
 from sqlalchemy import select
@@ -171,7 +172,7 @@ async def _run_diagnostic(assessment_id: uuid.UUID) -> None:
             return
         snapshot = dict(assessment.input_snapshot)
         actor_user_id = _uuid_value(snapshot, "operator_user_id")
-        workspace_id = assessment.workspace_id
+        workspace_id = cast(uuid.UUID, assessment.workspace_id)
         source_id = _uuid_value(snapshot, "catalog_source_id")
         job_id = _uuid_value(snapshot, "ingestion_job_id")
         source = await session.get(CatalogSource, source_id)
@@ -328,7 +329,8 @@ async def _run_diagnostic(assessment_id: uuid.UUID) -> None:
             snapshot = dict(assessment.input_snapshot)
             market_value = snapshot.get("market_id")
             market_id = uuid.UUID(market_value) if isinstance(market_value, str) else None
-            locale = snapshot.get("locale") if isinstance(snapshot.get("locale"), str) else "en-US"
+            locale_value = snapshot.get("locale")
+            locale = locale_value if isinstance(locale_value, str) else "en-US"
             intent_run_ids: list[str] = []
             intent_service = IntentRunService()
             for name, structured in _prepared_intents(locale=locale, market_id=market_id):
@@ -344,30 +346,30 @@ async def _run_diagnostic(assessment_id: uuid.UUID) -> None:
                 )
                 session.add(intent)
                 await session.flush()
-                persisted = await intent_service.execute(
+                intent_result = await intent_service.execute(
                     session,
                     workspace_id=workspace_id,
                     lineage_id=intent.lineage_id,
                     intent_version=1,
                 )
-                intent_run_ids.append(str(persisted.run.id))
+                intent_run_ids.append(str(intent_result.run.id))
                 session.add(
                     AuditEvent(
                         workspace_id=workspace_id,
                         actor_user_id=actor_user_id,
                         event_type="diagnostic.intent_completed",
                         entity_type="intent_run",
-                        entity_id=persisted.run.id,
+                        entity_id=intent_result.run.id,
                         payload={
                             "name": name,
-                            "target_count": persisted.summary.target_count,
-                            "confident_match_count": persisted.summary.confident_match_count,
+                            "target_count": intent_result.summary.target_count,
+                            "confident_match_count": intent_result.summary.confident_match_count,
                             "possible_match_missing_data_count": (
-                                persisted.summary.possible_match_missing_data_count
+                                intent_result.summary.possible_match_missing_data_count
                             ),
-                            "non_match_count": persisted.summary.non_match_count,
+                            "non_match_count": intent_result.summary.non_match_count,
                             "insufficient_category_data_count": (
-                                persisted.summary.insufficient_category_data_count
+                                intent_result.summary.insufficient_category_data_count
                             ),
                         },
                     )
@@ -399,24 +401,24 @@ async def _run_diagnostic(assessment_id: uuid.UUID) -> None:
             await service.set_status(session, assessment, "completed")
         except Exception as exc:
             await session.rollback()
-            persisted = await session.get(ReportJob, assessment_id)
-            if persisted is None:
+            failed_assessment = await session.get(ReportJob, assessment_id)
+            if failed_assessment is None:
                 return
-            stage = persisted.status.replace("_", " ")
+            stage = failed_assessment.status.replace("_", " ")
             await service.set_status(
                 session,
-                persisted,
+                failed_assessment,
                 "failed",
                 failure_code=type(exc).__name__,
                 failure_detail=f"The assessment stopped safely during {stage}.",
             )
             session.add(
                 AuditEvent(
-                    workspace_id=persisted.workspace_id,
+                    workspace_id=failed_assessment.workspace_id,
                     actor_user_id=actor_user_id,
                     event_type="diagnostic.failed",
                     entity_type="report_job",
-                    entity_id=persisted.id,
+                    entity_id=failed_assessment.id,
                     payload={"stage": stage, "error_type": type(exc).__name__},
                 )
             )
