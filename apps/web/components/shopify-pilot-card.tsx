@@ -4,7 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   ShopifyConfiguration,
   ShopifyInstallation,
+  ShopifyWebhookDelivery,
   disconnectShopifyInstallation,
+  getLatestShopifyWebhook,
   getShopifyConfiguration,
   getShopifyInstallation,
   refreshShopifyInstallation,
@@ -25,6 +27,7 @@ function date(value: string | null): string {
 export function ShopifyPilotCard({ workspaceId }: Props) {
   const [configuration, setConfiguration] = useState<ShopifyConfiguration | null>(null);
   const [installation, setInstallation] = useState<ShopifyInstallation | null>(null);
+  const [latestWebhook, setLatestWebhook] = useState<ShopifyWebhookDelivery | null>(null);
   const [shopDomain, setShopDomain] = useState("northstar-living-demo.myshopify.com");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +36,15 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
     let active = true;
     async function load() {
       try {
-        const [config, connected] = await Promise.all([
+        const [config, connected, webhook] = await Promise.all([
           getShopifyConfiguration(workspaceId),
           getShopifyInstallation(workspaceId),
+          getLatestShopifyWebhook(workspaceId),
         ]);
         if (!active) return;
         setConfiguration(config);
         setInstallation(connected);
+        setLatestWebhook(webhook);
         if (connected) setShopDomain(connected.shop_domain);
       } catch (caught) {
         if (active) {
@@ -54,16 +59,20 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!installation || !["queued", "coalesced", "running"].includes(installation.sync_status)) {
-      return;
-    }
+    if (!installation || installation.status !== "active") return;
     const timer = window.setInterval(() => {
-      void getShopifyInstallation(workspaceId)
-        .then((connected) => setInstallation(connected))
+      void Promise.all([
+        getShopifyInstallation(workspaceId),
+        getLatestShopifyWebhook(workspaceId),
+      ])
+        .then(([connected, webhook]) => {
+          setInstallation(connected);
+          setLatestWebhook(webhook);
+        })
         .catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [installation, workspaceId]);
+  }, [installation?.status, workspaceId]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -117,6 +126,7 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
         sync_status: "revoked",
         detail: "The shop is disconnected and no credential is available.",
       });
+      setLatestWebhook(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to disconnect Shopify.");
     } finally {
@@ -160,6 +170,20 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
           <small>
             Sync: {installation.sync_status.replaceAll("_", " ")} · Last verified: {date(installation.last_successful_sync_at)}
           </small>
+          {latestWebhook ? (
+            <div className={`shopify-webhook-proof webhook-${latestWebhook.status}`}>
+              <strong>Latest verified webhook</strong>
+              <span>{latestWebhook.topic}</span>
+              <small>
+                HMAC verified · {latestWebhook.status} · Received {date(latestWebhook.received_at)}
+              </small>
+              {latestWebhook.product_id ? (
+                <small>Shopify product ID: {latestWebhook.product_id}</small>
+              ) : null}
+            </div>
+          ) : (
+            <small>No verified Shopify webhook has been received yet.</small>
+          )}
           {installation.last_sync_error_type ? (
             <small className="form-error">Last sync stopped safely: {installation.last_sync_error_type}</small>
           ) : null}
