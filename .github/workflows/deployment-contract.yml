@@ -1,0 +1,28 @@
+name: Deployment contract
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deployment-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate source-controlled deployment contract
+        run: |
+          python -m py_compile scripts/validate_deployment_contract.py
+          python -m py_compile scripts/smoke_hosted_demo.py
+          python -m py_compile scripts/verify_shopify_live_change.py
+          python scripts/validate_deployment_contract.py

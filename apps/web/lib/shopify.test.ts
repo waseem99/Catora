@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ShopifyConfigurationSchema,
   ShopifyInstallationSchema,
+  ShopifyWebhookDeliverySchema,
 } from "./shopify";
 
 describe("Shopify installation contracts", () => {
@@ -46,11 +47,29 @@ describe("Shopify installation contracts", () => {
       variant_count: 2000,
       warning_count: 3,
       last_sync_error_type: null,
+      latest_webhook: null,
     });
     expect(installation.granted_scopes).toEqual(["read_products"]);
     expect(installation.product_count).toBe(1000);
     expect(installation.variant_count).toBe(2000);
     expect(installation).not.toHaveProperty("access_token");
     expect(installation).not.toHaveProperty("refresh_token");
+  });
+
+  it("parses a verified product-update delivery without raw payload or secrets", () => {
+    const delivery = ShopifyWebhookDeliverySchema.parse({
+      id: "83b4d4a4-3838-4db4-8b14-0e05478a4c3f",
+      topic: "products/update",
+      status: "completed",
+      signature_verified: true,
+      received_at: "2026-07-23T08:30:00Z",
+      processed_at: "2026-07-23T08:30:02Z",
+      product_id: "1234567890",
+      ingestion_job_id: "7b1608dc-69ff-44d2-a014-08d09be8dbe9",
+    });
+    expect(delivery.topic).toBe("products/update");
+    expect(delivery.signature_verified).toBe(true);
+    expect(delivery).not.toHaveProperty("payload");
+    expect(delivery).not.toHaveProperty("signature");
   });
 });

@@ -36,6 +36,11 @@
 .shopify-sync-metrics div { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 9px; background: rgba(15,29,26,.72); }
 .shopify-sync-metrics span { color: var(--muted); font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .shopify-sync-metrics strong { font-size: 19px; }
+.shopify-webhook-proof { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; padding: 11px; border: 1px solid var(--border); border-radius: 9px; background: rgba(15,29,26,.72); }
+.shopify-webhook-proof > span { color: var(--accent); font-size: 12px; font-weight: 900; }
+.shopify-webhook-proof small { grid-column: 1 / -1; }
+.webhook-failed { border-color: #7f1d1d; }
+.webhook-ignored { border-color: #72532b; }
 .shopify-healthy { border-color: rgba(92,225,173,.45); }
 .shopify-healthy header span { color: var(--accent); border-color: rgba(92,225,173,.45); }
 .shopify-refresh_required { border-color: #72532b; }
@@ -77,6 +82,7 @@
   .onboarding-header { flex-direction: column; }
   .diagnostic-form-grid { grid-template-columns: 1fr; }
   .shopify-sync-metrics { grid-template-columns: 1fr; }
+  .shopify-webhook-proof { grid-template-columns: 1fr; }
   .processing-summary { grid-template-columns: 1fr; }
   .processing-stage { grid-template-columns: 38px 1fr; gap: 12px; }
   .processing-stage header { align-items: flex-start; flex-direction: column; }

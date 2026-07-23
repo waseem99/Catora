@@ -30,6 +30,13 @@ SyncStatus = Literal[
     "failed",
     "revoked",
 ]
+ShopifyWebhookTopic = Literal[
+    "app/uninstalled",
+    "products/create",
+    "products/update",
+    "products/delete",
+]
+ShopifyWebhookStatus = Literal["queued", "completed", "ignored", "failed"]
 
 
 class ShopifyInstallationModel(BaseModel):
@@ -50,6 +57,17 @@ class ShopifyInstallStartRequest(ShopifyInstallationModel):
 class ShopifyInstallStartResponse(ShopifyInstallationModel):
     authorization_url: str
     expires_at: datetime
+
+
+class ShopifyWebhookDeliveryView(ShopifyInstallationModel):
+    id: uuid.UUID
+    topic: ShopifyWebhookTopic
+    status: ShopifyWebhookStatus
+    signature_verified: bool = True
+    received_at: datetime
+    processed_at: datetime | None = None
+    product_id: str | None = None
+    ingestion_job_id: uuid.UUID | None = None
 
 
 class ShopifyInstallationView(ShopifyInstallationModel):
@@ -76,6 +94,7 @@ class ShopifyInstallationView(ShopifyInstallationModel):
     variant_count: int = 0
     warning_count: int = 0
     last_sync_error_type: str | None = None
+    latest_webhook: ShopifyWebhookDeliveryView | None = None
 
 
 class ShopifyConfigurationView(ShopifyInstallationModel):

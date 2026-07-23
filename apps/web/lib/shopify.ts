@@ -7,6 +7,22 @@ export const ShopifyConfigurationSchema = z.object({
   callback_url: z.string().nullable(),
 });
 
+export const ShopifyWebhookDeliverySchema = z.object({
+  id: z.string().uuid(),
+  topic: z.enum([
+    "app/uninstalled",
+    "products/create",
+    "products/update",
+    "products/delete",
+  ]),
+  status: z.enum(["queued", "completed", "ignored", "failed"]),
+  signature_verified: z.literal(true),
+  received_at: z.string(),
+  processed_at: z.string().nullable(),
+  product_id: z.string().nullable(),
+  ingestion_job_id: z.string().uuid().nullable(),
+});
+
 export const ShopifyInstallationSchema = z.object({
   id: z.string().uuid(),
   workspace_id: z.string().uuid(),
@@ -46,6 +62,7 @@ export const ShopifyInstallationSchema = z.object({
   variant_count: z.number().int().nonnegative(),
   warning_count: z.number().int().nonnegative(),
   last_sync_error_type: z.string().nullable(),
+  latest_webhook: ShopifyWebhookDeliverySchema.nullable().optional(),
 });
 
 const ShopifyInstallStartSchema = z.object({
@@ -55,6 +72,7 @@ const ShopifyInstallStartSchema = z.object({
 
 export type ShopifyConfiguration = z.infer<typeof ShopifyConfigurationSchema>;
 export type ShopifyInstallation = z.infer<typeof ShopifyInstallationSchema>;
+export type ShopifyWebhookDelivery = z.infer<typeof ShopifyWebhookDeliverySchema>;
 
 export async function getShopifyConfiguration(
   workspaceId: string,
@@ -72,6 +90,15 @@ export async function getShopifyInstallation(
     `/api/v1/workspaces/${workspaceId}/shopify/installation`,
   );
   return payload === null ? null : ShopifyInstallationSchema.parse(payload);
+}
+
+export async function getLatestShopifyWebhook(
+  workspaceId: string,
+): Promise<ShopifyWebhookDelivery | null> {
+  const payload = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/shopify/webhooks/latest`,
+  );
+  return payload === null ? null : ShopifyWebhookDeliverySchema.parse(payload);
 }
 
 export async function startShopifyInstallation(

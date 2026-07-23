@@ -16,12 +16,15 @@ Add the complete callback URL to the app's allowed redirection URLs in the Shopi
 `shopify.app.toml.example` is the source-controlled, non-secret app configuration template. Link a local copy to the Codistan Dev Dashboard app with Shopify CLI, then deploy its configuration. The template registers:
 
 - API version `2026-07`;
+- standalone mode with `embedded = false`;
 - read-only `read_products` access;
 - `app/uninstalled`;
 - `products/create`;
 - `products/update`;
 - `products/delete`;
 - the canonical Catora webhook endpoint.
+
+All four webhook topics must be app-level subscriptions in the released Shopify app version. Do not replace the product topics with manually created store-admin webhooks: those use a separate store-level signing secret, while Catora verifies app webhook deliveries with the app client secret.
 
 Do not commit the linked app's real client ID, client secret, access tokens or encryption key.
 
@@ -62,6 +65,8 @@ Never rotate this key without an explicit credential migration or merchant recon
 10. The worker imports and normalizes the catalog, assigns the bundled taxonomy, runs a deterministic audit and persists reconciled product, variant and warning totals.
 11. The browser returns to the onboarding screen and shows connection health, synchronization status and the timestamp of the last verified analysis. No access or refresh token is returned by any API response.
 
+The app must be installed through Catora's **Connect Shopify** flow. A released app version or a direct Shopify Admin installation alone does not create the Catora installation record, protected credential reference or initial sync.
+
 ## Webhook lifecycle
 
 Catora verifies Shopify's HMAC over the exact raw request body before trusting headers or parsing JSON. Each delivery is persisted using the Shopify webhook delivery ID so retries are idempotent.
@@ -80,6 +85,30 @@ Product deletion immediately retires the matching canonical product and variants
 - cancels every queued, validating or running synchronization for that source;
 - records a non-sensitive audit event.
 
+## Presenter-visible webhook proof
+
+The onboarding card polls Catora while the installation is active and shows the latest persisted delivery's:
+
+- topic;
+- HMAC-verification status;
+- processing status;
+- received time;
+- bounded Shopify product identifier.
+
+Catora never exposes the raw webhook body, signature, payload hash, client secret or access token in this view.
+
+For the controlled Cloudline product update, start the acceptance watcher before saving the Shopify change:
+
+```bash
+export CATORA_SMOKE_API_URL=https://api.catora.codistan.org
+export CATORA_SMOKE_EMAIL=demo@catora.local
+export CATORA_SMOKE_PASSWORD='<private presenter password>'
+export CATORA_SHOPIFY_CHANGE_REPORT_PATH=/tmp/catora-shopify-change.json
+npm run demo:verify-shopify-change
+```
+
+The watcher ignores deliveries received before it starts and passes only when a new verified `products/update` webhook is processed, an incremental ingestion job exists, and a later completed sync and audit reconcile 1,000 products and 2,000 variants. Restore the original width after the report passes.
+
 ## Manual synchronization and verified fallback
 
 Owners and admins can press **Sync catalog now**. The same coalescing rules apply if another synchronization is active.
@@ -91,6 +120,7 @@ The onboarding screen displays:
 - product and variant counts;
 - warning count;
 - last successful sync time;
+- latest safe webhook proof;
 - a safe error category when the latest sync stops.
 
 A failed refresh does not erase the previous successful counts or timestamp. The presenter can continue with the last verified snapshot while the operator resolves the live dependency.
@@ -137,17 +167,20 @@ The `Shopify pilot lifecycle validation` GitHub workflow runs against PostgreSQL
 - raw-body webhook HMAC validation;
 - duplicate-delivery suppression;
 - uninstall credential revocation and active-job cancellation;
-- credential and source-reference removal on disconnect.
+- credential and source-reference removal on disconnect;
+- safe presenter-visible webhook summaries without raw payload or signature disclosure.
 
 ## Live acceptance gate
 
 The connected-demo release is complete only after all of these external checks pass against `northstar-living-demo.myshopify.com`:
 
 - the Dev Dashboard app uses the canonical Codistan app, callback and webhook URLs;
+- the released version has `embedded = false` and all four app-level subscriptions;
 - Railway contains the client ID, client secret and encryption key as secrets;
-- the browser completes the real Shopify grant and returns to Catora;
+- the browser completes the real Shopify grant through Catora and returns to onboarding;
 - the initial sync imports the Northstar catalog and displays reconciled counts;
 - one controlled product update reaches Catora through a verified webhook and incremental sync;
+- the onboarding card shows the verified delivery and the live-change watcher passes;
 - a repeated webhook delivery does not create duplicate work;
 - reconnect reuses the same installation and source;
 - uninstall or disconnect removes active credential access;

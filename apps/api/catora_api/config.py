@@ -3,9 +3,23 @@ from __future__ import annotations
 import base64
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _https_origin(value: str) -> bool:
+    parsed = urlsplit(value)
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.netloc)
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.path in ("", "/")
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 class Settings(BaseSettings):
@@ -80,11 +94,25 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_SHOPIFY_CLIENT_ID is required")
         if len(self.shopify_client_secret) < 16:
             raise ValueError("CATORA_SHOPIFY_CLIENT_SECRET is required")
-        if not self.shopify_callback_url.startswith(("http://localhost:", "https://")):
+
+        callback = urlsplit(self.shopify_callback_url)
+        if self.environment == "production":
+            if callback.scheme != "https" or not callback.netloc:
+                raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS in production")
+        elif not self.shopify_callback_url.startswith(("http://localhost:", "https://")):
             raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost")
+        if (
+            callback.path != "/api/v1/shopify/oauth/callback"
+            or callback.query
+            or callback.fragment
+        ):
+            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use the canonical callback path")
+
         scopes = [scope.strip() for scope in self.shopify_required_scopes if scope.strip()]
         if scopes != ["read_products"]:
             raise ValueError("Catora's pilot Shopify app must request only read_products")
+        if self.environment == "production" and not self.shopify_expiring_offline_tokens:
+            raise ValueError("Production Shopify installations must use expiring offline tokens")
         self.shopify_encryption_key_bytes()
 
     def validate_production(self) -> None:
@@ -114,6 +142,16 @@ class Settings(BaseSettings):
                 )
             if not self.enrichment_http_model.strip():
                 raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
+        if not _https_origin(self.frontend_url):
+            raise ValueError("CATORA_FRONTEND_URL must be an HTTPS origin in production")
+        if not self.cors_origins or any(not _https_origin(origin) for origin in self.cors_origins):
+            raise ValueError("CATORA_CORS_ORIGINS must contain only HTTPS origins in production")
+        normalized_frontend = self.frontend_url.rstrip("/")
+        normalized_origins = {origin.rstrip("/") for origin in self.cors_origins}
+        if normalized_frontend not in normalized_origins:
+            raise ValueError("CATORA_CORS_ORIGINS must include CATORA_FRONTEND_URL")
+        if not self.trust_proxy_headers:
+            raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         self.validate_shopify()
 
 

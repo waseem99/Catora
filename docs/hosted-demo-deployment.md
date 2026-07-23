@@ -173,7 +173,7 @@ demo@catora.local
 
 The password is the configured `CATORA_DEMO_PASSWORD`.
 
-## 6. Authenticated smoke test
+## 6. Authenticated go/no-go test
 
 Run from a trusted operator machine or CI secret context:
 
@@ -182,22 +182,57 @@ export CATORA_SMOKE_FRONTEND_URL=https://catora.codistan.org
 export CATORA_SMOKE_API_URL=https://api.catora.codistan.org
 export CATORA_SMOKE_EMAIL=demo@catora.local
 export CATORA_SMOKE_PASSWORD='<private presenter password>'
+export CATORA_SMOKE_REPORT_PATH=/tmp/catora-hosted-acceptance.json
 python scripts/smoke_hosted_demo.py
 ```
 
-The smoke test verifies:
+The test fails unless it verifies:
 
-- frontend response;
+- the frontend login page;
 - API liveness and dependency readiness;
-- authenticated login and demo workspace membership;
-- reconciled demo overview;
+- authenticated demo workspace membership;
+- presenter preflight with every component healthy;
+- a verified snapshot and demo overview with exactly 1,000 products and 2,000 variants;
+- source evidence, buyer-intent impact and a reviewable recommendation;
 - recommendation decision route registration;
-- editable PPTX download;
-- operational CSV download.
+- a structurally valid, editable, macro-free PPTX;
+- an operational CSV with the required columns and actionable finding/recommendation rows.
 
-It is deliberately read-only and does not consume the prepared recommendation decision state.
+After Shopify installation and the initial catalog synchronization, run the strict connected gate:
 
-## 7. Backups and recovery
+```bash
+export CATORA_SMOKE_REQUIRE_SHOPIFY=true
+python scripts/smoke_hosted_demo.py
+```
+
+That run additionally requires the canonical Northstar shop, an active healthy installation,
+exactly `read_products`, expiring offline tokens, a completed sync, 1,000/2,000 reconciled totals
+and persisted sync/audit metadata.
+
+The test is read-only and does not consume the prepared recommendation decision state. Its JSON
+report contains no password, token or secret value.
+
+## 7. Live-change acceptance
+
+Before changing the prepared Cloudline sofa width in Shopify, run:
+
+```bash
+export CATORA_SMOKE_API_URL=https://api.catora.codistan.org
+export CATORA_SMOKE_EMAIL=demo@catora.local
+export CATORA_SMOKE_PASSWORD='<private presenter password>'
+export CATORA_SHOPIFY_CHANGE_REPORT_PATH=/tmp/catora-shopify-change.json
+npm run demo:verify-shopify-change
+```
+
+Then change and save the width in Shopify. The watcher ignores older deliveries and passes only
+after Catora persists a new HMAC-verified `products/update` webhook, processes it, queues bounded
+incremental ingestion and completes a follow-up synchronization and audit with 1,000 products and
+2,000 variants. Restore the original width after the report passes.
+
+The onboarding card displays the latest safe webhook proof without exposing raw payloads,
+signatures or credentials.
+
+## 8. Backups and recovery
 
 Before using client data:
 
@@ -212,7 +247,7 @@ Before using client data:
 Railway buckets do not currently provide object versioning or lifecycle rules. Until a different
 S3 provider is selected, deletion and retention must be enforced by Catora/operator procedures.
 
-## 8. Rollback
+## 9. Rollback
 
 If a deployment fails:
 
@@ -226,7 +261,7 @@ If a deployment fails:
 Never restore a database over the active production database without first testing the backup in
 a separate environment.
 
-## 9. External monitoring
+## 10. External monitoring
 
 Railway's deployment health check is not continuous monitoring. Configure an external uptime
 monitor for:
