@@ -17,7 +17,8 @@
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "demo:seed": "docker compose exec api python scripts/seed_sales_demo.py"
+    "demo:seed": "docker compose exec api python scripts/seed_sales_demo.py",
+    "demo:smoke": "python scripts/smoke_hosted_demo.py"
   },
   "devDependencies": {
     "eslint": "9.39.2",
