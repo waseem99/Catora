@@ -31,6 +31,7 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
   const [shopDomain, setShopDomain] = useState("northstar-living-demo.myshopify.com");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const installationStatus = installation?.status;
 
   useEffect(() => {
     let active = true;
@@ -59,7 +60,7 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
   }, [workspaceId]);
 
   useEffect(() => {
-    if (!installation || installation.status !== "active") return;
+    if (installationStatus !== "active") return;
     const timer = window.setInterval(() => {
       void Promise.all([
         getShopifyInstallation(workspaceId),
@@ -72,7 +73,7 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
         .catch(() => undefined);
     }, 5000);
     return () => window.clearInterval(timer);
-  }, [installation?.status, workspaceId]);
+  }, [installationStatus, workspaceId]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
