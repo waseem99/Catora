@@ -28,12 +28,12 @@ def test_shopify_webhook_hmac_uses_raw_body() -> None:
 
 
 def test_shopify_webhook_topics_are_read_only_catalog_lifecycle() -> None:
-    assert SUPPORTED_TOPICS == {
+    assert {
         "app/uninstalled",
         "products/create",
         "products/update",
         "products/delete",
-    }
+    } == SUPPORTED_TOPICS
 
 
 def test_shopify_webhook_and_manual_sync_routes_are_exposed() -> None:
