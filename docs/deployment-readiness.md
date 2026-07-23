@@ -87,6 +87,22 @@ python scripts/smoke_hosted_demo.py
 
 That stricter run also requires the canonical Northstar store, an active healthy installation, exactly `read_products`, expiring offline tokens, a completed sync, reconciled 1,000/2,000 totals and persisted sync/audit metadata. The generated JSON report contains no password, token or secret value.
 
+## Live product-change proof
+
+The onboarding card polls Catora every five seconds while Shopify is connected. It shows the latest persisted webhook topic, HMAC-verification status, processing status, receipt time and bounded product identifier without exposing the raw payload or signature.
+
+Before changing the Cloudline sofa width in Shopify, start the acceptance watcher:
+
+```bash
+export CATORA_SMOKE_API_URL=https://api.catora.codistan.org
+export CATORA_SMOKE_EMAIL=demo@catora.local
+export CATORA_SMOKE_PASSWORD='<private presenter password>'
+export CATORA_SHOPIFY_CHANGE_REPORT_PATH=/tmp/catora-shopify-change.json
+npm run demo:verify-shopify-change
+```
+
+Then make and save the controlled width change. The watcher ignores old webhook deliveries and fails unless a new verified `products/update` delivery is processed, creates an incremental ingestion job and is followed by a completed sync and audit with reconciled 1,000-product and 2,000-variant totals. Restore the original width after the report passes.
+
 ## External acceptance still required
 
 Passing the repository gate does not prove that the hosted environment exists. The release operator must still:
@@ -98,8 +114,8 @@ Passing the repository gate does not prove that the hosted environment exists. T
 5. release the matching Shopify app version;
 6. install the app through Catora onboarding;
 7. reconcile 1,000 products and 2,000 variants;
-8. test a real product-update webhook and incremental analysis;
+8. run the live product-change watcher and restore the Cloudline width;
 9. run the authenticated hosted smoke test with Shopify required;
-10. retain the non-secret acceptance report and verify PPTX and CSV downloads.
+10. retain both non-secret acceptance reports and verify PPTX and CSV downloads.
 
 Never paste client secrets, access tokens, encryption keys, database URLs, passwords or webhook signing secrets into GitHub, chat, email or WhatsApp.
