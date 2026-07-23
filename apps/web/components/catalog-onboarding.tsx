@@ -3,18 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
-import {
-  createShopifyCsvSource,
-  startCatalogIngestion,
-  uploadShopifyCsv,
-  validateCatalogSource,
-} from "@/lib/onboarding";
+import { createDiagnostic, uploadDiagnosticCsv } from "@/lib/diagnostics";
 
 type Props = { workspaceId: string };
-type ResumeState = { sourceId?: string; jobId?: string };
+type ResumeState = { assessmentId?: string; diagnosticWorkspaceId?: string };
 
-function resumeKey(workspaceId: string, file: File): string {
-  return `catora:csv-onboarding:${workspaceId}:${file.name}:${file.size}:${file.lastModified}`;
+function resumeKey(workspaceId: string, file: File, companyName: string): string {
+  const company = companyName.trim().toLowerCase().replaceAll(/\s+/g, "-");
+  return `catora:prospect-diagnostic:${workspaceId}:${company}:${file.name}:${file.size}:${file.lastModified}`;
 }
 
 function readResume(key: string): ResumeState {
@@ -33,8 +29,16 @@ function writeResume(key: string, value: ResumeState): void {
 export function CatalogOnboarding({ workspaceId }: Props) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [sourceName, setSourceName] = useState("Shopify catalog diagnostic");
-  const [status, setStatus] = useState("Choose a Shopify product CSV to begin.");
+  const [companyName, setCompanyName] = useState("");
+  const [marketCode, setMarketCode] = useState("AE");
+  const [locale, setLocale] = useState("en-AE");
+  const [currency, setCurrency] = useState("AED");
+  const [storefrontDomain, setStorefrontDomain] = useState("");
+  const [retentionDays, setRetentionDays] = useState("30");
+  const [authorized, setAuthorized] = useState(false);
+  const [status, setStatus] = useState(
+    "Enter the prospect details and choose their Shopify product export.",
+  );
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -45,50 +49,58 @@ export function CatalogOnboarding({ workspaceId }: Props) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file || busy) return;
+    if (!file || busy || !authorized) return;
 
     setBusy(true);
     setError(null);
-    const key = resumeKey(workspaceId, file);
+    const key = resumeKey(workspaceId, file, companyName);
 
     try {
       const resume = readResume(key);
-      if (resume.jobId) {
-        router.push(`/workspace/${workspaceId}/processing/${resume.jobId}`);
-        return;
+      let assessmentId = resume.assessmentId;
+      let diagnosticWorkspaceId = resume.diagnosticWorkspaceId;
+
+      if (!assessmentId || !diagnosticWorkspaceId) {
+        setStatus("Creating an isolated prospect workspace…");
+        const diagnostic = await createDiagnostic(workspaceId, {
+          company_name: companyName.trim(),
+          market_code: marketCode.trim().toUpperCase(),
+          locale: locale.trim(),
+          currency: currency.trim().toUpperCase(),
+          retention_days: Number.parseInt(retentionDays, 10),
+          authorization_confirmed: authorized,
+          ...(storefrontDomain.trim()
+            ? { storefront_domain: storefrontDomain.trim() }
+            : {}),
+        });
+        assessmentId = diagnostic.id;
+        diagnosticWorkspaceId = diagnostic.workspace_id;
+        writeResume(key, { assessmentId, diagnosticWorkspaceId });
       }
 
-      let sourceId = resume.sourceId;
-      if (!sourceId) {
-        setStatus("Uploading the CSV securely…");
-        const upload = await uploadShopifyCsv(workspaceId, file);
-        setStatus("Creating a tenant-scoped catalog source…");
-        const source = await createShopifyCsvSource(
-          workspaceId,
-          upload.object_key,
-          sourceName.trim() || "Shopify catalog diagnostic",
-        );
-        sourceId = source.id;
-        writeResume(key, { sourceId });
-      }
-
-      setStatus("Validating Shopify headers and mappings…");
-      const validation = await validateCatalogSource(workspaceId, sourceId);
-      if (!validation.valid) {
-        throw new Error(validation.errors.join(" ") || "The CSV could not be validated.");
-      }
-
-      setStatus("Queueing product import and normalization…");
-      const job = await startCatalogIngestion(workspaceId, sourceId);
-      writeResume(key, { sourceId, jobId: job.id });
-      router.push(`/workspace/${workspaceId}/processing/${job.id}`);
+      setStatus("Uploading and validating the Shopify export…");
+      await uploadDiagnosticCsv(assessmentId, file);
+      setStatus("The automated assessment is running…");
+      router.push(
+        `/workspace/${diagnosticWorkspaceId}/diagnostic/${assessmentId}`,
+      );
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Unable to start the diagnostic.");
-      setStatus("Your progress is saved. Correct the issue and retry.");
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to start the prospect assessment.",
+      );
+      setStatus(
+        "Your assessment identifiers are saved. Correct the source issue and retry.",
+      );
     } finally {
       setBusy(false);
     }
   }
+
+  const canSubmit = Boolean(
+    file && companyName.trim().length >= 2 && authorized && !busy,
+  );
 
   return (
     <main className="shell onboarding-shell">
@@ -97,8 +109,8 @@ export function CatalogOnboarding({ workspaceId }: Props) {
           <p className="eyebrow">CHOOSE YOUR STARTING POINT</p>
           <h1>Bring a catalog into Catora</h1>
           <p className="lede">
-            Explore the prepared enterprise story, run a one-time Shopify CSV diagnostic, or prepare
-            a continuous Shopify pilot.
+            Explore the prepared enterprise story, run a prospect-specific Shopify CSV
+            assessment, or prepare a continuous Shopify pilot.
           </p>
         </div>
         <Link className="secondary onboarding-back" href={`/workspace/${workspaceId}`}>
@@ -112,8 +124,8 @@ export function CatalogOnboarding({ workspaceId }: Props) {
           <p className="eyebrow">NO SETUP · 2 MINUTES</p>
           <h2>Explore sample catalog</h2>
           <p>
-            Open the deterministic Northstar demonstration with 1,000 products, 2,000 SKUs,
-            evidence-backed defects and a complete recommendation story.
+            Open the deterministic Northstar demonstration with 1,000 products, 2,000
+            SKUs, evidence-backed defects and a complete recommendation story.
           </p>
           <ul>
             <li>No merchant permissions required</li>
@@ -125,22 +137,72 @@ export function CatalogOnboarding({ workspaceId }: Props) {
           </Link>
         </article>
 
-        <article className="onboarding-card">
+        <article className="onboarding-card diagnostic-intake-card">
           <span className="path-number">02</span>
-          <p className="eyebrow">ONE-TIME DIAGNOSTIC</p>
+          <p className="eyebrow">PROSPECT-SPECIFIC DIAGNOSTIC</p>
           <h2>Upload Shopify CSV</h2>
           <p>
-            Use Shopify’s product export format. Catora validates headers, imports variants and
-            preserves inherited product fields across Shopify’s multi-row products.
+            Create an isolated, branded workspace and automatically run ingestion,
+            normalization, taxonomy, audit, buyer-intent testing and reporting.
           </p>
           <form className="csv-onboarding-form" onSubmit={submit}>
             <label>
-              Diagnostic name
+              Prospect company
               <input
-                value={sourceName}
-                onChange={(event) => setSourceName(event.target.value)}
+                value={companyName}
+                onChange={(event) => setCompanyName(event.target.value)}
+                placeholder="Lama Furniture"
                 maxLength={200}
                 required
+              />
+            </label>
+            <div className="diagnostic-form-grid">
+              <label>
+                Market
+                <input
+                  value={marketCode}
+                  onChange={(event) => setMarketCode(event.target.value)}
+                  maxLength={35}
+                  required
+                />
+              </label>
+              <label>
+                Locale
+                <input
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value)}
+                  maxLength={35}
+                  required
+                />
+              </label>
+              <label>
+                Currency
+                <input
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value)}
+                  maxLength={3}
+                  required
+                />
+              </label>
+              <label>
+                Retention days
+                <input
+                  type="number"
+                  value={retentionDays}
+                  onChange={(event) => setRetentionDays(event.target.value)}
+                  min={1}
+                  max={90}
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              Shopify domain <span className="optional-label">optional</span>
+              <input
+                value={storefrontDomain}
+                onChange={(event) => setStorefrontDomain(event.target.value)}
+                placeholder="store.myshopify.com"
+                maxLength={255}
               />
             </label>
             <label className="file-field">
@@ -151,10 +213,22 @@ export function CatalogOnboarding({ workspaceId }: Props) {
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
                 required
               />
-              <span>{selectedFile ?? "Select the CSV exported from Shopify Products"}</span>
+              <span>{selectedFile ?? "Select Shopify’s all-products export"}</span>
             </label>
-            <button className="primary-button path-action" disabled={!file || busy} type="submit">
-              {busy ? "Starting diagnostic…" : "Upload and analyze"}
+            <label className="authorization-field">
+              <input
+                type="checkbox"
+                checked={authorized}
+                onChange={(event) => setAuthorized(event.target.checked)}
+                required
+              />
+              <span>
+                I confirm the prospect has authorized this catalog diagnostic and the
+                selected retention window.
+              </span>
+            </label>
+            <button className="primary-button path-action" disabled={!canSubmit} type="submit">
+              {busy ? "Starting assessment…" : "Upload and run full assessment"}
             </button>
             <p className="form-status" aria-live="polite">{status}</p>
             {error ? <p className="form-error" role="alert">{error}</p> : null}
@@ -166,8 +240,8 @@ export function CatalogOnboarding({ workspaceId }: Props) {
           <p className="eyebrow">CONTINUOUS PAID PILOT</p>
           <h2>Connect Shopify</h2>
           <p>
-            A private custom-app installation will keep products synchronized and process merchant
-            webhooks without requiring a public App Store listing.
+            A private custom-app installation will keep products synchronized and process
+            merchant webhooks without requiring a public App Store listing.
           </p>
           <ul>
             <li>Read-only catalog access first</li>
@@ -178,8 +252,8 @@ export function CatalogOnboarding({ workspaceId }: Props) {
             Available after pilot app registration
           </button>
           <small>
-            Your operator will enable this path after the Shopify development store and private app
-            are registered.
+            Your operator will enable this path after the Shopify development store and
+            private app are registered.
           </small>
         </article>
       </section>
