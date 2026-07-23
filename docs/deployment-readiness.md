@@ -55,6 +55,38 @@ The API now refuses to start in production when any of these conditions are unsa
 
 These checks do not print secret values.
 
+## Hosted go/no-go gate
+
+After deployment and seeding, run the authenticated hosted smoke test from a trusted operator machine or CI secret context:
+
+```bash
+export CATORA_SMOKE_FRONTEND_URL=https://catora.codistan.org
+export CATORA_SMOKE_API_URL=https://api.catora.codistan.org
+export CATORA_SMOKE_EMAIL=demo@catora.local
+export CATORA_SMOKE_PASSWORD='<private presenter password>'
+export CATORA_SMOKE_REPORT_PATH=/tmp/catora-hosted-acceptance.json
+python scripts/smoke_hosted_demo.py
+```
+
+The gate fails unless:
+
+- the frontend login page and API health endpoints respond correctly;
+- presenter preflight reports every dependency as healthy;
+- the last verified snapshot and demo overview both contain exactly 1,000 products and 2,000 variants;
+- source evidence, buyer-intent impact and a reviewable recommendation are present;
+- the recommendation decision route is registered;
+- the PPTX is a structurally valid, editable, macro-free Office package;
+- the operational CSV has the required columns plus finding and recommendation rows.
+
+After the Shopify app is installed and the initial synchronization is complete, add:
+
+```bash
+export CATORA_SMOKE_REQUIRE_SHOPIFY=true
+python scripts/smoke_hosted_demo.py
+```
+
+That stricter run also requires the canonical Northstar store, an active healthy installation, exactly `read_products`, expiring offline tokens, a completed sync, reconciled 1,000/2,000 totals and persisted sync/audit metadata. The generated JSON report contains no password, token or secret value.
+
 ## External acceptance still required
 
 Passing the repository gate does not prove that the hosted environment exists. The release operator must still:
@@ -67,7 +99,7 @@ Passing the repository gate does not prove that the hosted environment exists. T
 6. install the app through Catora onboarding;
 7. reconcile 1,000 products and 2,000 variants;
 8. test a real product-update webhook and incremental analysis;
-9. run the authenticated hosted smoke test;
-10. verify editable PPTX and operational CSV downloads.
+9. run the authenticated hosted smoke test with Shopify required;
+10. retain the non-secret acceptance report and verify PPTX and CSV downloads.
 
 Never paste client secrets, access tokens, encryption keys, database URLs, passwords or webhook signing secrets into GitHub, chat, email or WhatsApp.
