@@ -126,16 +126,6 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_AUTH_TOKEN_PEPPER must be a production secret")
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Production database must use PostgreSQL")
-        if not _https_origin(self.frontend_url):
-            raise ValueError("CATORA_FRONTEND_URL must be an HTTPS origin in production")
-        if not self.cors_origins or any(not _https_origin(origin) for origin in self.cors_origins):
-            raise ValueError("CATORA_CORS_ORIGINS must contain only HTTPS origins in production")
-        normalized_frontend = self.frontend_url.rstrip("/")
-        normalized_origins = {origin.rstrip("/") for origin in self.cors_origins}
-        if normalized_frontend not in normalized_origins:
-            raise ValueError("CATORA_CORS_ORIGINS must include CATORA_FRONTEND_URL")
-        if not self.trust_proxy_headers:
-            raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         if self.enrichment_provider == "mock":
             raise ValueError(
                 "The deterministic mock enrichment provider is not allowed in production"
@@ -152,6 +142,16 @@ class Settings(BaseSettings):
                 )
             if not self.enrichment_http_model.strip():
                 raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
+        if not _https_origin(self.frontend_url):
+            raise ValueError("CATORA_FRONTEND_URL must be an HTTPS origin in production")
+        if not self.cors_origins or any(not _https_origin(origin) for origin in self.cors_origins):
+            raise ValueError("CATORA_CORS_ORIGINS must contain only HTTPS origins in production")
+        normalized_frontend = self.frontend_url.rstrip("/")
+        normalized_origins = {origin.rstrip("/") for origin in self.cors_origins}
+        if normalized_frontend not in normalized_origins:
+            raise ValueError("CATORA_CORS_ORIGINS must include CATORA_FRONTEND_URL")
+        if not self.trust_proxy_headers:
+            raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         self.validate_shopify()
 
 
