@@ -19,6 +19,7 @@
     "check": "npm run lint && npm run typecheck && npm run test && npm run build",
     "demo:seed": "docker compose exec api python scripts/seed_enterprise_demo.py",
     "demo:export-shopify": "docker compose exec -T api python scripts/export_sales_demo_shopify_csv.py --output /tmp/northstar-shopify-products.csv && docker compose cp api:/tmp/northstar-shopify-products.csv ./northstar-shopify-products.csv",
+    "demo:package-shopify": "docker compose exec -T api python scripts/build_northstar_shopify_demo_package.py --output-dir /tmp/northstar-shopify-demo-package && rm -rf ./northstar-shopify-demo-package && docker compose cp api:/tmp/northstar-shopify-demo-package ./northstar-shopify-demo-package",
     "demo:smoke": "python scripts/smoke_hosted_demo.py"
   },
   "devDependencies": {
