@@ -22,6 +22,11 @@ The operator needs:
 - a production-safe demo password;
 - a production authentication pepper of at least 32 random characters.
 
+Create the provider-directed DNS records for these exact labels:
+
+- `katora` → the Vercel frontend project;
+- `api.katora` → the Railway API service.
+
 Never commit environment values, Shopify credentials or generated demo passwords.
 
 ## 2. Railway project
