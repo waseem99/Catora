@@ -70,7 +70,7 @@ Both are generated from the same persisted records shown by the guided route. Do
 
 ## Reset before another presentation
 
-An owner or admin can choose **Reset demo workspace** in the presenter panel. The API records the attributable request, queues one bounded Celery task and recreates only the deterministic `sales-demo` workspace. The panel polls the task using the recorded workspace/task identity and reloads the completed demo.
+An owner or admin can choose **Reset demo workspace** in the presenter panel. The API records the attributable request before enqueueing the exact Celery task identity, then recreates only the deterministic `sales-demo` workspace. The panel only polls task IDs recorded for that workspace and reloads the completed demo.
 
 The command-line fallback remains:
 
