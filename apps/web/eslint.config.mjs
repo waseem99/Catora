@@ -10,6 +10,7 @@ export default defineConfig([
       "components/client-demo.tsx",
       "components/presenter-readiness.tsx",
       "components/processing-journey.tsx",
+      "components/prospect-diagnostic.tsx",
     ],
     rules: {
       "react-hooks/set-state-in-effect": "off",
