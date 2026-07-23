@@ -20,6 +20,7 @@ from catora_api.api import (
     catalog_identity_router,
     catalog_router,
     demo_router,
+    diagnostics_router,
     enrichment_policy_router,
     ingestion_router,
     intent_parsing_router,
@@ -87,6 +88,7 @@ app.include_router(intent_runs_router)
 app.include_router(intent_templates_router)
 app.include_router(intents_router)
 app.include_router(demo_router)
+app.include_router(diagnostics_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
