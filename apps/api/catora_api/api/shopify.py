@@ -30,12 +30,19 @@ from catora_api.schemas.shopify_installations import (
     ShopifyInstallationView,
     ShopifyInstallStartRequest,
     ShopifyInstallStartResponse,
+    ShopifyWebhookResponse,
+    SyncStatus,
     TokenMode,
 )
 from catora_api.shopify.installations import (
     ShopifyCredentialError,
     ShopifyInstallationError,
     ShopifyInstallationService,
+)
+from catora_api.shopify.sync import queue_shopify_sync
+from catora_api.shopify.webhooks import (
+    ShopifyWebhookError,
+    receive_shopify_webhook,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["shopify catalog ingestion"])
@@ -79,6 +86,11 @@ def _snapshot_scopes(snapshot: dict[str, object]) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+def _snapshot_int(snapshot: dict[str, object], key: str) -> int:
+    value = snapshot.get(key)
+    return value if isinstance(value, int) and value >= 0 else 0
+
+
 def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
     snapshot = dict(installation.input_snapshot)
     access_expires_at = _snapshot_datetime(snapshot, "access_token_expires_at")
@@ -117,6 +129,19 @@ def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
         token_mode_value = "expiring_offline"
     token_mode = cast(TokenMode, token_mode_value)
 
+    sync_status_value = _snapshot_text(snapshot, "sync_status") or "not_started"
+    if sync_status_value not in {
+        "not_started",
+        "queued",
+        "coalesced",
+        "running",
+        "completed",
+        "failed",
+        "revoked",
+    }:
+        sync_status_value = "failed"
+    sync_status = cast(SyncStatus, sync_status_value)
+
     return ShopifyInstallationView(
         id=installation.id,
         workspace_id=cast(uuid.UUID, installation.workspace_id),
@@ -133,6 +158,48 @@ def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
         last_health_checked_at=_snapshot_datetime(snapshot, "last_health_checked_at"),
         health=health,
         detail=detail,
+        sync_status=sync_status,
+        last_successful_sync_at=_snapshot_datetime(snapshot, "last_successful_sync_at"),
+        last_sync_job_id=_snapshot_uuid(snapshot, "last_sync_job_id"),
+        last_audit_run_id=_snapshot_uuid(snapshot, "last_audit_run_id"),
+        product_count=_snapshot_int(snapshot, "product_count"),
+        variant_count=_snapshot_int(snapshot, "variant_count"),
+        warning_count=_snapshot_int(snapshot, "warning_count"),
+        last_sync_error_type=_snapshot_text(snapshot, "last_sync_error_type"),
+    )
+
+
+@router.post(
+    "/shopify/webhooks",
+    response_model=ShopifyWebhookResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def accept_shopify_webhook(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ShopifyWebhookResponse:
+    if not settings.shopify_enabled:
+        raise HTTPException(status_code=503, detail="Shopify integration is disabled")
+    body = await request.body()
+    try:
+        receipt = await receive_shopify_webhook(
+            session,
+            settings=settings,
+            body=body,
+            topic=request.headers.get("x-shopify-topic", ""),
+            shop_domain=request.headers.get("x-shopify-shop-domain", ""),
+            webhook_id=request.headers.get("x-shopify-webhook-id", ""),
+            event_id=request.headers.get("x-shopify-event-id"),
+            triggered_at=request.headers.get("x-shopify-triggered-at"),
+            supplied_signature=request.headers.get("x-shopify-hmac-sha256", ""),
+        )
+    except ShopifyWebhookError as exc:
+        code = 401 if "signature" in str(exc).casefold() else 400
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    return ShopifyWebhookResponse(
+        duplicate=receipt.duplicate,
+        delivery_id=receipt.delivery_id,
     )
 
 
@@ -210,6 +277,11 @@ async def complete_shopify_installation(
             query_items=list(request.query_params.multi_items()),
             state_cookie=state_cookie,
         )
+        await queue_shopify_sync(
+            session,
+            installation=installation,
+            reason="initial_install",
+        )
         target = (
             f"{settings.frontend_url}/workspace/{installation.workspace_id}/onboarding?"
             + urlencode(
@@ -242,6 +314,35 @@ async def get_shopify_installation(
         workspace_id=workspace_id,
     )
     return _installation_view(installation) if installation is not None else None
+
+
+@router.post(
+    "/workspaces/{workspace_id}/shopify/installation/sync",
+    response_model=ShopifyInstallationView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def sync_shopify_installation(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> ShopifyInstallationView:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_source_management(membership.role)
+    service = ShopifyInstallationService()
+    installation = await service.find_installation(session, workspace_id=workspace_id)
+    if installation is None:
+        raise HTTPException(status_code=404, detail="Shopify installation not found")
+    job = await queue_shopify_sync(
+        session,
+        installation=installation,
+        reason="manual",
+        actor_user_id=context.user.id,
+    )
+    if job is None:
+        raise HTTPException(status_code=409, detail="Shopify synchronization is unavailable")
+    await session.refresh(installation)
+    return _installation_view(installation)
 
 
 @router.post(
