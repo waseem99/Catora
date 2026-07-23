@@ -30,6 +30,22 @@ export const ShopifyInstallationSchema = z.object({
   last_health_checked_at: z.string().nullable(),
   health: z.enum(["healthy", "refresh_required", "disconnected", "unknown"]),
   detail: z.string(),
+  sync_status: z.enum([
+    "not_started",
+    "queued",
+    "coalesced",
+    "running",
+    "completed",
+    "failed",
+    "revoked",
+  ]),
+  last_successful_sync_at: z.string().nullable(),
+  last_sync_job_id: z.string().uuid().nullable(),
+  last_audit_run_id: z.string().uuid().nullable(),
+  product_count: z.number().int().nonnegative(),
+  variant_count: z.number().int().nonnegative(),
+  warning_count: z.number().int().nonnegative(),
+  last_sync_error_type: z.string().nullable(),
 });
 
 const ShopifyInstallStartSchema = z.object({
@@ -70,6 +86,16 @@ export async function startShopifyInstallation(
     },
   );
   return ShopifyInstallStartSchema.parse(payload).authorization_url;
+}
+
+export async function syncShopifyInstallation(
+  workspaceId: string,
+): Promise<ShopifyInstallation> {
+  const payload = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/shopify/installation/sync`,
+    { method: "POST" },
+  );
+  return ShopifyInstallationSchema.parse(payload);
 }
 
 export async function refreshShopifyInstallation(

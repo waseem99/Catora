@@ -1,0 +1,30 @@
+# Link this template to the Codistan Shopify Dev Dashboard app with Shopify CLI.
+# Shopify CLI writes the real client_id into the local linked configuration.
+
+name = "Catora Pilot"
+client_id = "LINK_WITH_SHOPIFY_CLI"
+application_url = "https://catora.codistan.org"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+
+[auth]
+redirect_urls = [
+  "https://api.catora.codistan.org/api/v1/shopify/oauth/callback"
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = [
+  "app/uninstalled",
+  "products/create",
+  "products/update",
+  "products/delete"
+]
+uri = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
+
+[access_scopes]
+scopes = "read_products"

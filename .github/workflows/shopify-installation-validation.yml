@@ -1,4 +1,4 @@
-name: Shopify installation validation
+name: Shopify pilot lifecycle validation
 
 on:
   pull_request:
@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: shopify-installation-${{ github.event.pull_request.number || github.ref }}
+  group: shopify-pilot-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
           print(f"CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY={key}")
           PY
       - run: python -m pip install --quiet -e 'apps/api[dev]'
-      - name: Validate encrypted install, reconnect and disconnect
+      - name: Validate install, webhooks, coalescing and uninstall
         shell: bash
         run: |
           set +e
@@ -66,15 +66,16 @@ jobs:
             alembic upgrade head
             python scripts/seed_enterprise_demo.py
             python scripts/validate_shopify_installation.py
-          ) > /tmp/shopify-installation-report.txt 2>&1
+            python scripts/validate_shopify_webhooks.py
+          ) > /tmp/shopify-pilot-report.txt 2>&1
           status=$?
-          tail -n 140 /tmp/shopify-installation-report.txt
+          tail -n 180 /tmp/shopify-pilot-report.txt
           exit "$status"
       - name: Upload Shopify lifecycle report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: shopify-installation-report
-          path: /tmp/shopify-installation-report.txt
+          name: shopify-pilot-report
+          path: /tmp/shopify-pilot-report.txt
           if-no-files-found: error
           retention-days: 3

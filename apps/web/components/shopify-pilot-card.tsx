@@ -9,6 +9,7 @@ import {
   getShopifyInstallation,
   refreshShopifyInstallation,
   startShopifyInstallation,
+  syncShopifyInstallation,
 } from "@/lib/shopify";
 
 type Props = { workspaceId: string };
@@ -24,7 +25,7 @@ function date(value: string | null): string {
 export function ShopifyPilotCard({ workspaceId }: Props) {
   const [configuration, setConfiguration] = useState<ShopifyConfiguration | null>(null);
   const [installation, setInstallation] = useState<ShopifyInstallation | null>(null);
-  const [shopDomain, setShopDomain] = useState("");
+  const [shopDomain, setShopDomain] = useState("northstar-living-demo.myshopify.com");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +53,18 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
     };
   }, [workspaceId]);
 
+  useEffect(() => {
+    if (!installation || !["queued", "coalesced", "running"].includes(installation.sync_status)) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      void getShopifyInstallation(workspaceId)
+        .then((connected) => setInstallation(connected))
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [installation, workspaceId]);
+
   async function connect(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy || !shopDomain.trim()) return;
@@ -62,6 +75,18 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
       window.location.assign(authorizationUrl);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unable to start Shopify authorization.");
+      setBusy(false);
+    }
+  }
+
+  async function syncNow() {
+    setBusy(true);
+    setError(null);
+    try {
+      setInstallation(await syncShopifyInstallation(workspaceId));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to start Shopify synchronization.");
+    } finally {
       setBusy(false);
     }
   }
@@ -89,6 +114,7 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
         ...installation,
         status: "disconnected",
         health: "disconnected",
+        sync_status: "revoked",
         detail: "The shop is disconnected and no credential is available.",
       });
     } catch (caught) {
@@ -100,6 +126,9 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
 
   const configured = configuration?.enabled === true;
   const connected = installation?.status === "active";
+  const syncing = installation
+    ? ["queued", "coalesced", "running"].includes(installation.sync_status)
+    : false;
 
   return (
     <article className="onboarding-card pilot-card">
@@ -107,23 +136,33 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
       <p className="eyebrow">CONTINUOUS PAID PILOT</p>
       <h2>Connect Shopify</h2>
       <p>
-        Authorize Catora’s controlled pilot app with read-only product access. Credentials are
-        encrypted at rest and never displayed or returned by the API.
+        Authorize Catora’s controlled pilot app with read-only product access. Installation starts
+        a real catalog sync, deterministic audit and webhook-monitored update cycle.
       </p>
       <ul>
         <li>Minimum scope: read_products</li>
-        <li>Expiring offline token rotation</li>
-        <li>Explicit reconnect and disconnect</li>
+        <li>Verified create, update, delete and uninstall webhooks</li>
+        <li>Encrypted expiring offline-token rotation</li>
       </ul>
 
       {installation ? (
         <section className={`shopify-connection-state shopify-${installation.health}`}>
-          <strong>{installation.shop_domain}</strong>
-          <span>{installation.health.replaceAll("_", " ")}</span>
+          <header>
+            <strong>{installation.shop_domain}</strong>
+            <span>{installation.health.replaceAll("_", " ")}</span>
+          </header>
           <p>{installation.detail}</p>
+          <div className="shopify-sync-metrics">
+            <div><span>Products</span><strong>{installation.product_count.toLocaleString()}</strong></div>
+            <div><span>Variants</span><strong>{installation.variant_count.toLocaleString()}</strong></div>
+            <div><span>Warnings</span><strong>{installation.warning_count.toLocaleString()}</strong></div>
+          </div>
           <small>
-            Scopes: {installation.granted_scopes.join(", ") || "none"} · Last refreshed: {date(installation.refreshed_at)}
+            Sync: {installation.sync_status.replaceAll("_", " ")} · Last verified: {date(installation.last_successful_sync_at)}
           </small>
+          {installation.last_sync_error_type ? (
+            <small className="form-error">Last sync stopped safely: {installation.last_sync_error_type}</small>
+          ) : null}
         </section>
       ) : null}
 
@@ -148,12 +187,17 @@ export function ShopifyPilotCard({ workspaceId }: Props) {
         </button>
       </form>
 
+      {connected ? (
+        <button className="primary-button" type="button" disabled={busy || syncing} onClick={syncNow}>
+          {syncing ? "Catalog synchronization running…" : "Sync catalog now"}
+        </button>
+      ) : null}
       {installation?.health === "refresh_required" ? (
         <button className="secondary-button" type="button" disabled={busy} onClick={refresh}>
           Try credential refresh
         </button>
       ) : null}
-      {installation && installation.status !== "disconnected" ? (
+      {installation && installation.status !== "disconnected" && installation.status !== "revoked" ? (
         <button className="danger-button" type="button" disabled={busy} onClick={disconnect}>
           Disconnect Shopify
         </button>

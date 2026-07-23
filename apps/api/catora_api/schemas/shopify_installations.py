@@ -21,6 +21,15 @@ InstallationHealth = Literal[
     "disconnected",
     "unknown",
 ]
+SyncStatus = Literal[
+    "not_started",
+    "queued",
+    "coalesced",
+    "running",
+    "completed",
+    "failed",
+    "revoked",
+]
 
 
 class ShopifyInstallationModel(BaseModel):
@@ -59,9 +68,23 @@ class ShopifyInstallationView(ShopifyInstallationModel):
     last_health_checked_at: datetime | None = None
     health: InstallationHealth
     detail: str
+    sync_status: SyncStatus = "not_started"
+    last_successful_sync_at: datetime | None = None
+    last_sync_job_id: uuid.UUID | None = None
+    last_audit_run_id: uuid.UUID | None = None
+    product_count: int = 0
+    variant_count: int = 0
+    warning_count: int = 0
+    last_sync_error_type: str | None = None
 
 
 class ShopifyConfigurationView(ShopifyInstallationModel):
     enabled: bool
     required_scopes: list[str]
     callback_url: str | None = None
+
+
+class ShopifyWebhookResponse(ShopifyInstallationModel):
+    accepted: bool = True
+    duplicate: bool
+    delivery_id: uuid.UUID
