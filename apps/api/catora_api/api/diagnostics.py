@@ -22,7 +22,6 @@ from catora_api.db.models import (
     IngestionJob,
     Organization,
     ReportJob,
-    Workspace,
 )
 from catora_api.diagnostics.reporting import (
     build_backlog_csv,

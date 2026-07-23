@@ -3,8 +3,6 @@ from __future__ import annotations
 import asyncio
 import uuid
 from collections import defaultdict
-from typing import Any
-
 from celery import shared_task
 from sqlalchemy import select
 
@@ -52,7 +50,11 @@ def _text_value(value: object) -> str | None:
     return None
 
 
-def _prepared_intents(*, locale: str, market_id: uuid.UUID | None) -> tuple[tuple[str, StructuredBuyerIntent], ...]:
+def _prepared_intents(
+    *,
+    locale: str,
+    market_id: uuid.UUID | None,
+) -> tuple[tuple[str, StructuredBuyerIntent], ...]:
     definitions: tuple[tuple[str, dict[str, object]], ...] = (
         (
             "Compact easy-care seating",
@@ -99,7 +101,10 @@ def _prepared_intents(*, locale: str, market_id: uuid.UUID | None) -> tuple[tupl
         (
             "Low-maintenance outdoor furniture",
             {
-                "query": "Which outdoor furniture is clearly suitable for outdoor use and easy care?",
+                "query": (
+                    "Which outdoor furniture is clearly suitable for outdoor use "
+                    "and easy care?"
+                ),
                 "category_keys": ["outdoor_furniture"],
                 "hard_constraints": [
                     {

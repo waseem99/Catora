@@ -28,7 +28,11 @@ class DiagnosticModel(BaseModel):
 class DiagnosticCreateRequest(DiagnosticModel):
     company_name: str = Field(min_length=2, max_length=200)
     market_code: str = Field(min_length=2, max_length=35, pattern=r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
-    locale: str = Field(min_length=2, max_length=35, pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+    locale: str = Field(
+        min_length=2,
+        max_length=35,
+        pattern=r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$",
+    )
     currency: str = Field(min_length=3, max_length=3, pattern=r"^[A-Za-z]{3}$")
     retention_days: int = Field(default=30, ge=1, le=90)
     authorization_confirmed: bool

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
-
 from sqlalchemy import delete, func, select
 
 from catora_api.database import SessionFactory
