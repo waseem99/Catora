@@ -23,4 +23,6 @@ jobs:
       - name: Validate source-controlled deployment contract
         run: |
           python -m py_compile scripts/validate_deployment_contract.py
+          python -m py_compile scripts/smoke_hosted_demo.py
+          python -m py_compile scripts/verify_shopify_live_change.py
           python scripts/validate_deployment_contract.py
