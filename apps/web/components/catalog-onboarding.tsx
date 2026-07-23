@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useMemo, useState } from "react";
 import { createDiagnostic, uploadDiagnosticCsv } from "@/lib/diagnostics";
+import { ShopifyPilotCard } from "@/components/shopify-pilot-card";
 
 type Props = { workspaceId: string };
 type ResumeState = { assessmentId?: string; diagnosticWorkspaceId?: string };
@@ -235,27 +236,7 @@ export function CatalogOnboarding({ workspaceId }: Props) {
           </form>
         </article>
 
-        <article className="onboarding-card pilot-card">
-          <span className="path-number">03</span>
-          <p className="eyebrow">CONTINUOUS PAID PILOT</p>
-          <h2>Connect Shopify</h2>
-          <p>
-            A private custom-app installation will keep products synchronized and process
-            merchant webhooks without requiring a public App Store listing.
-          </p>
-          <ul>
-            <li>Read-only catalog access first</li>
-            <li>Encrypted credential lifecycle</li>
-            <li>Explicit uninstall and data-retention controls</li>
-          </ul>
-          <button className="secondary-button path-action" type="button" disabled>
-            Available after pilot app registration
-          </button>
-          <small>
-            Your operator will enable this path after the Shopify development store and
-            private app are registered.
-          </small>
-        </article>
+        <ShopifyPilotCard workspaceId={workspaceId} />
       </section>
     </main>
   );

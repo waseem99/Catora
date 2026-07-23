@@ -1,0 +1,97 @@
+# Controlled Shopify pilot installation
+
+Catora's first merchant connection uses a custom-distribution Shopify app, not a public App Store listing. The app is a standalone integration and requests only the `read_products` Admin API scope used by the existing catalog connector.
+
+## Canonical URLs
+
+- App URL: `https://catora.codistan.org`
+- OAuth callback: `https://api.catora.codistan.org/api/v1/shopify/oauth/callback`
+
+Add the complete callback URL to the app's allowed redirection URLs in the Shopify Dev Dashboard.
+
+## Required environment
+
+Set the following on the Catora API and worker. Secrets must be entered directly in Railway or the approved secret manager.
+
+```text
+CATORA_SHOPIFY_ENABLED=true
+CATORA_SHOPIFY_CLIENT_ID=<Dev Dashboard client ID>
+CATORA_SHOPIFY_CLIENT_SECRET=<Dev Dashboard client secret>
+CATORA_SHOPIFY_CALLBACK_URL=https://api.catora.codistan.org/api/v1/shopify/oauth/callback
+CATORA_SHOPIFY_REQUIRED_SCOPES=["read_products"]
+CATORA_SHOPIFY_EXPIRING_OFFLINE_TOKENS=true
+CATORA_SHOPIFY_OAUTH_STATE_TTL_MINUTES=10
+CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY=<URL-safe base64 of 32 random bytes>
+```
+
+Generate the encryption key in a trusted shell and store only its output in the secret manager:
+
+```bash
+python -c 'import base64,secrets; print(base64.urlsafe_b64encode(secrets.token_bytes(32)).decode())'
+```
+
+Never rotate this key without an explicit credential migration or merchant reconnection plan. Existing encrypted installations cannot be decrypted with a replacement key.
+
+## Installation flow
+
+1. An owner or admin enters the store's permanent `*.myshopify.com` domain in Catora.
+2. Catora creates a short-lived, one-time OAuth state and sets an HTTP-only SameSite callback cookie.
+3. The browser is redirected to Shopify's grant screen.
+4. Catora validates the callback state, browser cookie, shop hostname and Shopify query HMAC.
+5. The authorization code is exchanged for an offline token.
+6. Catora validates that Shopify granted exactly `read_products`.
+7. Access and refresh tokens are encrypted with AES-GCM using installation and shop identity as associated data.
+8. A Shopify catalog source receives only a `shopify-installation:<uuid>` credential reference.
+9. The browser returns to the Catora onboarding screen. No access or refresh token is returned by any API response.
+
+## Expiry and refresh
+
+Catora requests expiring offline tokens by default. Before a connector resolves an access token, Catora refreshes credentials when the access token is within five minutes of expiry. Shopify refresh token rotation replaces both encrypted values atomically.
+
+When the refresh token is missing, expired, corrupt or rejected, the installation becomes `refresh_required`. The operator must authorize the shop again; Catora reuses the existing installation and source instead of duplicating them.
+
+## Disconnect
+
+The protected disconnect action:
+
+- clears encrypted access and refresh token material;
+- clears the catalog source credential reference;
+- marks the source and installation disconnected;
+- records a non-sensitive audit event.
+
+Disconnect does not delete historical immutable source evidence. Shopify uninstall and retention behavior are implemented with webhook lifecycle handling in #125.
+
+## Security boundaries
+
+- only owner/admin users with source-management permission can start or disconnect installation;
+- state records expire and cannot be replayed;
+- OAuth query HMAC verification and webhook HMAC verification are deliberately separate;
+- scopes are fail-closed and cannot expand beyond `read_products`;
+- tokens are excluded from schemas, logs and audit payloads;
+- the encryption key, client secret and tokens never belong in GitHub, WhatsApp or email;
+- the app performs no storefront write-back.
+
+## Acceptance test
+
+The `Shopify installation validation` GitHub workflow runs against PostgreSQL and proves:
+
+- minimum-scope authorization URL construction;
+- one-time state and callback verification;
+- token exchange with no plaintext persistence;
+- encrypted credential resolution;
+- idempotent reconnect;
+- credential and source-reference removal on disconnect.
+
+## Live acceptance gate
+
+The software release is complete only after all of these external checks pass against the Northstar development store:
+
+- the Dev Dashboard app uses the canonical Codistan app and callback URLs;
+- Railway contains the client ID, client secret and encryption key as secrets;
+- the browser completes the real Shopify grant and returns to Catora;
+- Catora displays `read_products` and a healthy connection without exposing a credential;
+- the connected source can resolve its protected credential and validate the Shopify catalog;
+- reconnect reuses the same installation and source;
+- disconnect removes the credential reference and leaves no active connection.
+
+Until this live checklist passes, the repository implementation is validated but the external Shopify environment is not yet verified.

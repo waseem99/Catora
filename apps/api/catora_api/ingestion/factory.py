@@ -15,7 +15,12 @@ from catora_api.connectors.shopify import (
     ShopifyConnectorConfig,
 )
 from catora_api.db.models.catalog import CatalogSource
-from catora_api.secrets import EnvironmentSecretResolver, SecretResolver
+from catora_api.secrets import EnvironmentSecretResolver, SecretResolver, SecretValue
+from catora_api.shopify.installations import (
+    SHOPIFY_CREDENTIAL_SCHEME,
+    ShopifyInstallationService,
+    parse_credential_reference,
+)
 from catora_api.storage import ObjectStorage
 
 
@@ -29,8 +34,11 @@ async def connector_for_source(
     if source.source_type == "csv":
         return await _csv_connector(config, storage)
     if source.source_type == "shopify":
-        resolver = secret_resolver or EnvironmentSecretResolver()
-        return _shopify_connector(source, config, resolver)
+        return await _shopify_connector(
+            source,
+            config,
+            secret_resolver=secret_resolver,
+        )
     if source.source_type in {"sitemap", "urls"}:
         return _public_catalog_connector(source.source_type, config)
     raise ValueError(f"Unsupported source type '{source.source_type}'")
@@ -63,10 +71,23 @@ async def _csv_connector(
     )
 
 
-def _shopify_connector(
+async def _resolve_shopify_credential(
+    reference: str,
+    *,
+    secret_resolver: SecretResolver | None,
+) -> SecretValue:
+    if reference.startswith(f"{SHOPIFY_CREDENTIAL_SCHEME}:"):
+        installation_id = parse_credential_reference(reference)
+        return await ShopifyInstallationService().resolve_access_token(installation_id)
+    resolver = secret_resolver or EnvironmentSecretResolver()
+    return resolver.resolve(reference)
+
+
+async def _shopify_connector(
     source: CatalogSource,
     config: Mapping[str, Any],
-    secret_resolver: SecretResolver,
+    *,
+    secret_resolver: SecretResolver | None,
 ) -> ShopifyCatalogConnector:
     shop_domain = config.get("shop_domain")
     if not isinstance(shop_domain, str) or not shop_domain:
@@ -82,16 +103,17 @@ def _shopify_connector(
                 updated_after_value.replace("Z", "+00:00")
             )
         except ValueError as exc:
-            raise ValueError(
-                "Shopify incremental timestamp is invalid"
-            ) from exc
+            raise ValueError("Shopify incremental timestamp is invalid") from exc
     elif updated_after_value is not None:
         raise ValueError("Shopify incremental timestamp is invalid")
 
     return ShopifyCatalogConnector(
         ShopifyConnectorConfig(
             shop_domain=shop_domain,
-            access_token=secret_resolver.resolve(source.credential_ref),
+            access_token=await _resolve_shopify_credential(
+                source.credential_ref,
+                secret_resolver=secret_resolver,
+            ),
             api_version=str(api_version or "2026-07"),
             updated_after=updated_after,
         )

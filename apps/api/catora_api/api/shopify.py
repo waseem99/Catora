@@ -1,24 +1,278 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
+from typing import cast
+from urllib.parse import urlencode
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 
 from catora_api.auth.dependencies import (
+    AuthContextDependency,
     AuthServiceDependency,
     CsrfContextDependency,
     SessionDependency,
+    SettingsDependency,
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
-from catora_api.db.models import AuditEvent
+from catora_api.db.models import AuditEvent, ReportJob
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.schemas.ingestion import (
     CatalogSourceView,
     ShopifySourceCreateRequest,
 )
+from catora_api.schemas.shopify_installations import (
+    ShopifyConfigurationView,
+    ShopifyInstallationView,
+    ShopifyInstallStartRequest,
+    ShopifyInstallStartResponse,
+)
+from catora_api.shopify.installations import (
+    ShopifyCredentialError,
+    ShopifyInstallationError,
+    ShopifyInstallationService,
+)
 
 router = APIRouter(prefix="/api/v1", tags=["shopify catalog ingestion"])
+OAUTH_COOKIE = "catora_shopify_oauth"
+
+
+def _require_source_management(role: str) -> None:
+    if not can(Role(role), "sources.write"):
+        raise AuthorizationError("Catalog source management permission required")
+
+
+def _snapshot_text(snapshot: dict[str, object], key: str) -> str | None:
+    value = snapshot.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _snapshot_uuid(snapshot: dict[str, object], key: str) -> uuid.UUID | None:
+    value = _snapshot_text(snapshot, key)
+    if value is None:
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        return None
+
+
+def _snapshot_datetime(snapshot: dict[str, object], key: str) -> datetime | None:
+    value = _snapshot_text(snapshot, key)
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _snapshot_scopes(snapshot: dict[str, object]) -> list[str]:
+    value = snapshot.get("granted_scopes")
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
+def _installation_view(installation: ReportJob) -> ShopifyInstallationView:
+    snapshot = dict(installation.input_snapshot)
+    access_expires_at = _snapshot_datetime(snapshot, "access_token_expires_at")
+    refresh_expires_at = _snapshot_datetime(snapshot, "refresh_token_expires_at")
+    if installation.status == "active":
+        health = "healthy"
+        detail = "Catora can resolve a protected Shopify catalog credential."
+        if refresh_expires_at is not None and refresh_expires_at <= datetime.now(UTC):
+            health = "refresh_required"
+            detail = "The Shopify refresh token expired; reconnect the shop."
+    elif installation.status == "refresh_required":
+        health = "refresh_required"
+        detail = "Shopify reauthorization is required."
+    elif installation.status in {"disconnected", "revoked"}:
+        health = "disconnected"
+        detail = "The shop is disconnected and no credential is available."
+    else:
+        health = "unknown"
+        detail = "The Shopify connection is not ready."
+    token_mode = _snapshot_text(snapshot, "token_mode")
+    return ShopifyInstallationView(
+        id=installation.id,
+        workspace_id=cast(uuid.UUID, installation.workspace_id),
+        catalog_source_id=_snapshot_uuid(snapshot, "catalog_source_id"),
+        shop_domain=_snapshot_text(snapshot, "shop_domain") or "unknown.myshopify.com",
+        status=cast(str, installation.status),
+        granted_scopes=_snapshot_scopes(snapshot),
+        token_mode=cast(
+            str,
+            token_mode
+            if token_mode in {"expiring_offline", "non_expiring_offline"}
+            else "expiring_offline",
+        ),
+        access_token_expires_at=access_expires_at,
+        refresh_token_expires_at=refresh_expires_at,
+        installed_at=_snapshot_datetime(snapshot, "installed_at"),
+        refreshed_at=_snapshot_datetime(snapshot, "refreshed_at"),
+        disconnected_at=_snapshot_datetime(snapshot, "disconnected_at"),
+        last_health_checked_at=_snapshot_datetime(snapshot, "last_health_checked_at"),
+        health=cast(str, health),
+        detail=detail,
+    )
+
+
+@router.get(
+    "/workspaces/{workspace_id}/shopify/configuration",
+    response_model=ShopifyConfigurationView,
+)
+async def get_shopify_configuration(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    settings: SettingsDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+) -> ShopifyConfigurationView:
+    await auth_service.membership(session, context.user.id, workspace_id)
+    return ShopifyConfigurationView(
+        enabled=settings.shopify_enabled,
+        required_scopes=list(settings.shopify_required_scopes),
+        callback_url=settings.shopify_callback_url if settings.shopify_enabled else None,
+    )
+
+
+@router.post(
+    "/workspaces/{workspace_id}/shopify/installations/start",
+    response_model=ShopifyInstallStartResponse,
+)
+async def start_shopify_installation(
+    workspace_id: uuid.UUID,
+    payload: ShopifyInstallStartRequest,
+    response: Response,
+    session: SessionDependency,
+    settings: SettingsDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> ShopifyInstallStartResponse:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_source_management(membership.role)
+    try:
+        authorization_url, state, expires_at = await ShopifyInstallationService(
+            settings
+        ).start(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            shop_domain=payload.shop_domain,
+        )
+    except ShopifyInstallationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    response.set_cookie(
+        OAUTH_COOKIE,
+        state,
+        max_age=settings.shopify_oauth_state_ttl_minutes * 60,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+        path="/api/v1/shopify/oauth/callback",
+    )
+    return ShopifyInstallStartResponse(
+        authorization_url=authorization_url,
+        expires_at=expires_at,
+    )
+
+
+@router.get("/shopify/oauth/callback", include_in_schema=False)
+async def complete_shopify_installation(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> RedirectResponse:
+    service = ShopifyInstallationService(settings)
+    state_cookie = request.cookies.get(OAUTH_COOKIE)
+    try:
+        installation = await service.complete_callback(
+            session,
+            query_items=list(request.query_params.multi_items()),
+            state_cookie=state_cookie,
+        )
+        target = (
+            f"{settings.frontend_url}/workspace/{installation.workspace_id}/onboarding?"
+            + urlencode(
+                {
+                    "shopify": "connected",
+                    "installation_id": str(installation.id),
+                }
+            )
+        )
+    except (ShopifyInstallationError, ValueError):
+        target = f"{settings.frontend_url}/workspaces?shopify=error"
+    response = RedirectResponse(target, status_code=status.HTTP_303_SEE_OTHER)
+    response.delete_cookie(OAUTH_COOKIE, path="/api/v1/shopify/oauth/callback")
+    return response
+
+
+@router.get(
+    "/workspaces/{workspace_id}/shopify/installation",
+    response_model=ShopifyInstallationView | None,
+)
+async def get_shopify_installation(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: AuthContextDependency,
+) -> ShopifyInstallationView | None:
+    await auth_service.membership(session, context.user.id, workspace_id)
+    installation = await ShopifyInstallationService().find_installation(
+        session,
+        workspace_id=workspace_id,
+    )
+    return _installation_view(installation) if installation is not None else None
+
+
+@router.post(
+    "/workspaces/{workspace_id}/shopify/installation/refresh",
+    response_model=ShopifyInstallationView,
+)
+async def refresh_shopify_installation(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> ShopifyInstallationView:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_source_management(membership.role)
+    service = ShopifyInstallationService()
+    installation = await service.find_installation(session, workspace_id=workspace_id)
+    if installation is None:
+        raise HTTPException(status_code=404, detail="Shopify installation not found")
+    try:
+        await service.resolve_access_token(installation.id)
+    except ShopifyCredentialError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await session.refresh(installation)
+    return _installation_view(installation)
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/shopify/installation",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def disconnect_shopify_installation(
+    workspace_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> None:
+    membership = await auth_service.membership(session, context.user.id, workspace_id)
+    _require_source_management(membership.role)
+    service = ShopifyInstallationService()
+    installation = await service.find_installation(session, workspace_id=workspace_id)
+    if installation is None:
+        raise HTTPException(status_code=404, detail="Shopify installation not found")
+    await service.disconnect(
+        session,
+        installation=installation,
+        actor_user_id=context.user.id,
+    )
 
 
 @router.post(
@@ -38,8 +292,7 @@ async def create_shopify_catalog_source(
         context.user.id,
         workspace_id,
     )
-    if not can(Role(membership.role), "sources.write"):
-        raise AuthorizationError("Catalog source management permission required")
+    _require_source_management(membership.role)
 
     source = CatalogSource(
         workspace_id=workspace_id,
