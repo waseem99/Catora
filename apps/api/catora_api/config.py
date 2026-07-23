@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import base64
 from functools import lru_cache
 from typing import Literal
 
@@ -45,8 +48,48 @@ class Settings(BaseSettings):
     enrichment_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     enrichment_http_max_request_cost_microunits: int = Field(default=100_000, ge=0)
 
+    shopify_enabled: bool = False
+    shopify_client_id: str = ""
+    shopify_client_secret: str = Field(default="", repr=False)
+    shopify_callback_url: str = "http://localhost:8000/api/v1/shopify/oauth/callback"
+    shopify_required_scopes: list[str] = ["read_products"]
+    shopify_expiring_offline_tokens: bool = True
+    shopify_oauth_state_ttl_minutes: int = Field(default=10, ge=5, le=30)
+    shopify_credential_encryption_key: str = Field(default="", repr=False)
+    shopify_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+
+    def shopify_encryption_key_bytes(self) -> bytes:
+        try:
+            key = base64.urlsafe_b64decode(
+                self.shopify_credential_encryption_key.encode("ascii")
+            )
+        except (ValueError, UnicodeEncodeError) as exc:
+            raise ValueError(
+                "CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY must be URL-safe base64"
+            ) from exc
+        if len(key) != 32:
+            raise ValueError(
+                "CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY must decode to 32 bytes"
+            )
+        return key
+
+    def validate_shopify(self) -> None:
+        if not self.shopify_enabled:
+            return
+        if len(self.shopify_client_id.strip()) < 8:
+            raise ValueError("CATORA_SHOPIFY_CLIENT_ID is required")
+        if len(self.shopify_client_secret) < 16:
+            raise ValueError("CATORA_SHOPIFY_CLIENT_SECRET is required")
+        if not self.shopify_callback_url.startswith(("http://localhost:", "https://")):
+            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost")
+        scopes = [scope.strip() for scope in self.shopify_required_scopes if scope.strip()]
+        if scopes != ["read_products"]:
+            raise ValueError("Catora's pilot Shopify app must request only read_products")
+        self.shopify_encryption_key_bytes()
+
     def validate_production(self) -> None:
         if self.environment != "production":
+            self.validate_shopify()
             return
         insecure = {"change-me-in-production", "test", "catora", ""}
         if self.s3_secret_key in insecure:
@@ -71,6 +114,7 @@ class Settings(BaseSettings):
                 )
             if not self.enrichment_http_model.strip():
                 raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
+        self.validate_shopify()
 
 
 @lru_cache

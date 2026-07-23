@@ -1,0 +1,80 @@
+name: Shopify installation validation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: shopify-installation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-acceptance:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: catora
+          POSTGRES_USER: catora
+          POSTGRES_PASSWORD: catora
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U catora -d catora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CATORA_DATABASE_URL: postgresql+asyncpg://catora:catora@localhost:5432/catora
+      CATORA_REDIS_URL: redis://localhost:6379/0
+      CATORA_S3_ENDPOINT_URL: http://localhost:9000
+      CATORA_S3_ACCESS_KEY: test
+      CATORA_S3_SECRET_KEY: test-secret
+      CATORA_DEMO_PASSWORD: ci-demo-password
+      CATORA_SHOPIFY_ENABLED: 'true'
+      CATORA_SHOPIFY_CLIENT_ID: test-client-id
+      CATORA_SHOPIFY_CALLBACK_URL: https://api.catora.codistan.org/api/v1/shopify/oauth/callback
+      CATORA_SHOPIFY_REQUIRED_SCOPES: '["read_products"]'
+      CATORA_SHOPIFY_EXPIRING_OFFLINE_TOKENS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Generate ephemeral validation secrets
+        shell: bash
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import base64
+          import secrets
+          print(f"CATORA_SHOPIFY_CLIENT_SECRET={secrets.token_urlsafe(32)}")
+          key = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode()
+          print(f"CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY={key}")
+          PY
+      - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Validate encrypted install, reconnect and disconnect
+        shell: bash
+        run: |
+          set +e
+          (
+            cd apps/api
+            alembic upgrade head
+            python scripts/seed_enterprise_demo.py
+            python scripts/validate_shopify_installation.py
+          ) > /tmp/shopify-installation-report.txt 2>&1
+          status=$?
+          tail -n 140 /tmp/shopify-installation-report.txt
+          exit "$status"
+      - name: Upload Shopify lifecycle report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-installation-report
+          path: /tmp/shopify-installation-report.txt
+          if-no-files-found: error
+          retention-days: 3
