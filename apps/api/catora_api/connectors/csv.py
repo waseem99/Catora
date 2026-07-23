@@ -56,11 +56,13 @@ class CsvCatalogConnector(CatalogConnector):
         mapping: CsvMapping,
         encoding: str = "utf-8-sig",
         delimiter: str | None = None,
+        shopify_profile: bool = False,
     ) -> None:
         self._content = content
         self._mapping = mapping
         self._encoding = encoding
         self._delimiter = delimiter
+        self._shopify_profile = shopify_profile
 
     @property
     def mapping(self) -> CsvMapping:
@@ -128,8 +130,15 @@ class CsvCatalogConnector(CatalogConnector):
         rejections: list[ConnectorRejection] = []
         processed_since_page = 0
         last_row = start_row
+        inherited_product_id: str | None = None
+        inherited_titles: dict[str, str] = {}
 
-        for row_number, row in enumerate(self._reader(), start=1):
+        for row_number, raw_row in enumerate(self._reader(), start=1):
+            row, inherited_product_id = self._effective_row(
+                raw_row,
+                inherited_product_id=inherited_product_id,
+                inherited_titles=inherited_titles,
+            )
             if row_number <= start_row:
                 continue
             last_row = row_number
@@ -156,6 +165,34 @@ class CsvCatalogConnector(CatalogConnector):
                 rejections=tuple(rejections),
                 next_checkpoint={"row": last_row},
             )
+
+    def _effective_row(
+        self,
+        row: Mapping[str, str | None],
+        *,
+        inherited_product_id: str | None,
+        inherited_titles: dict[str, str],
+    ) -> tuple[Mapping[str, str | None], str | None]:
+        if not self._shopify_profile:
+            return row, inherited_product_id
+
+        effective = dict(row)
+        product_column = self._mapping.product_id
+        title_column = self._mapping.title
+        product_id = (effective.get(product_column) or "").strip()
+        if product_id:
+            inherited_product_id = product_id
+        elif inherited_product_id is not None:
+            product_id = inherited_product_id
+            effective[product_column] = product_id
+
+        title = (effective.get(title_column) or "").strip()
+        if product_id and title:
+            inherited_titles[product_id] = title
+        elif product_id and product_id in inherited_titles:
+            effective[title_column] = inherited_titles[product_id]
+
+        return effective, inherited_product_id
 
     def _convert(
         self, row: Mapping[str, str | None], row_number: int
