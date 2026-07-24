@@ -162,7 +162,9 @@ async def _check_storage(settings: Settings) -> None:
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
         )
-        client.list_buckets()
+        # Railway Bucket credentials are scoped to one bucket and support
+        # bucket object operations, not the account-wide ListBuckets API.
+        client.list_objects_v2(Bucket=settings.s3_bucket, MaxKeys=1)
 
     await asyncio.to_thread(check)
 
