@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP_URL = "https://shopify.catora.codistan.org"
 CALLBACK_URL = f"{APP_URL}/auth/callback"
 WEBHOOK_URL = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
+COMPLIANCE_URL = "https://api.catora.codistan.org/api/v1/shopify/compliance"
 API_VERSION = "2026-07"
 EXPECTED_TOPICS = {
     "app/uninstalled",
@@ -16,12 +17,18 @@ EXPECTED_TOPICS = {
     "products/update",
     "products/delete",
 }
+EXPECTED_COMPLIANCE_TOPICS = {
+    "customers/data_request",
+    "customers/redact",
+    "shop/redact",
+}
 PUBLIC_ENV_KEYS = {
     "CATORA_SHOPIFY_PUBLIC_ENABLED",
     "CATORA_SHOPIFY_PUBLIC_CLIENT_ID",
     "CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET",
     "CATORA_SHOPIFY_PUBLIC_APP_URL",
     "CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES",
+    "CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
     "CATORA_SHOPIFY_PUBLIC_HTTP_TIMEOUT_SECONDS",
     "CATORA_SHOPIFY_PUBLIC_SESSION_CLOCK_SKEW_SECONDS",
 }
@@ -55,6 +62,7 @@ def _validate_environment(path: Path) -> list[str]:
     for key in (
         "CATORA_SHOPIFY_PUBLIC_CLIENT_ID",
         "CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET",
+        "CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
     ):
         if values.get(key, "__missing__") != "":
             errors.append(f"{path}: {key} example must remain blank")
@@ -108,21 +116,40 @@ def _validate(path: Path, *, development: bool) -> list[str]:
 
     subscriptions = webhooks.get("subscriptions")
     found_topics: set[str] = set()
-    invalid_uris: list[str] = []
+    found_compliance_topics: set[str] = set()
+    invalid_topic_uris: list[str] = []
+    invalid_compliance_uris: list[str] = []
     if isinstance(subscriptions, list):
         for subscription in subscriptions:
             if not isinstance(subscription, dict):
                 continue
             topics = subscription.get("topics")
-            if not isinstance(topics, list):
-                continue
-            found_topics.update(item for item in topics if isinstance(item, str))
-            if subscription.get("uri") != WEBHOOK_URL:
-                invalid_uris.extend(item for item in topics if isinstance(item, str))
+            if isinstance(topics, list):
+                found_topics.update(item for item in topics if isinstance(item, str))
+                if subscription.get("uri") != WEBHOOK_URL:
+                    invalid_topic_uris.extend(
+                        item for item in topics if isinstance(item, str)
+                    )
+            compliance_topics = subscription.get("compliance_topics")
+            if isinstance(compliance_topics, list):
+                found_compliance_topics.update(
+                    item for item in compliance_topics if isinstance(item, str)
+                )
+                if subscription.get("uri") != COMPLIANCE_URL:
+                    invalid_compliance_uris.extend(
+                        item for item in compliance_topics if isinstance(item, str)
+                    )
     if found_topics != EXPECTED_TOPICS:
         errors.append(f"{path}: webhook topics must equal {sorted(EXPECTED_TOPICS)}")
-    if invalid_uris:
+    if found_compliance_topics != EXPECTED_COMPLIANCE_TOPICS:
+        errors.append(
+            f"{path}: compliance topics must equal "
+            f"{sorted(EXPECTED_COMPLIANCE_TOPICS)}"
+        )
+    if invalid_topic_uris:
         errors.append(f"{path}: all webhook topics must use {WEBHOOK_URL}")
+    if invalid_compliance_uris:
+        errors.append(f"{path}: all compliance topics must use {COMPLIANCE_URL}")
 
     serialized = path.read_text(encoding="utf-8").casefold()
     forbidden = ("shpat_", "shprt_", "client_secret", "write_products")
