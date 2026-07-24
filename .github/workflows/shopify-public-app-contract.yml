@@ -15,10 +15,14 @@ on:
       - "apps/api/catora_api/shopify/invitations.py"
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
+      - "apps/api/catora_api/shopify/sync.py"
+      - "apps/api/catora_api/shopify/webhooks.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
+      - "apps/api/tests/test_shopify_sync_actor.py"
+      - "apps/api/tests/test_shopify_webhook_routing.py"
       - ".github/workflows/shopify-public-app-contract.yml"
   push:
     branches: [main]
@@ -35,10 +39,14 @@ on:
       - "apps/api/catora_api/shopify/invitations.py"
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
+      - "apps/api/catora_api/shopify/sync.py"
+      - "apps/api/catora_api/shopify/webhooks.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
+      - "apps/api/tests/test_shopify_sync_actor.py"
+      - "apps/api/tests/test_shopify_webhook_routing.py"
       - ".github/workflows/shopify-public-app-contract.yml"
 
 permissions:
@@ -63,7 +71,9 @@ jobs:
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
-            apps/api/tests/test_shopify_public_session.py
+            apps/api/tests/test_shopify_public_session.py \
+            apps/api/tests/test_shopify_sync_actor.py \
+            apps/api/tests/test_shopify_webhook_routing.py
       - name: Run Ruff on public app foundation
         run: |
           ruff check \
@@ -75,10 +85,14 @@ jobs:
             apps/api/catora_api/shopify/invitations.py \
             apps/api/catora_api/shopify/public_installations.py \
             apps/api/catora_api/shopify/public_session.py \
+            apps/api/catora_api/shopify/sync.py \
+            apps/api/catora_api/shopify/webhooks.py \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
+            apps/api/tests/test_shopify_sync_actor.py \
+            apps/api/tests/test_shopify_webhook_routing.py \
             scripts/validate_shopify_public_app_contract.py
       - name: Run strict MyPy on public app foundation
         working-directory: apps/api
@@ -91,4 +105,6 @@ jobs:
             catora_api/schemas/shopify_public.py \
             catora_api/shopify/invitations.py \
             catora_api/shopify/public_installations.py \
-            catora_api/shopify/public_session.py
+            catora_api/shopify/public_session.py \
+            catora_api/shopify/sync.py \
+            catora_api/shopify/webhooks.py
