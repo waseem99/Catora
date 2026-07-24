@@ -41,6 +41,7 @@ from catora_api.db.models.reporting import (
     ProductCohort,
     ReportJob,
 )
+from catora_api.db.models.shopify import ShopifyStoreInvitation
 from catora_api.db.models.taxonomy import ProductCategoryTag
 from catora_api.db.models.workflow import (
     ChangeSet,
@@ -97,6 +98,7 @@ __all__ = [
     "ReviewDecision",
     "RuleDefinition",
     "RuleVersion",
+    "ShopifyStoreInvitation",
     "SourceRecord",
     "Storefront",
     "TaxonomyField",
