@@ -25,6 +25,9 @@ api_version = "2026-07"
 topics = [
   "app/uninstalled",
   "bulk_operations/finish",
+  "collections/create",
+  "collections/update",
+  "collections/delete",
   "products/create",
   "products/update",
   "products/delete"
