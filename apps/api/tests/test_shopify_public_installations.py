@@ -11,9 +11,12 @@ from catora_api.config import Settings
 from catora_api.db.models import (
     AuditEvent,
     CatalogSource,
+    Locale,
+    Market,
     Organization,
     ReportJob,
     ShopifyStoreInvitation,
+    Storefront,
     Workspace,
 )
 from catora_api.shopify.public_installations import (
@@ -49,9 +52,19 @@ class ActivationSession:
         self.added.append(value)
 
     async def flush(self) -> None:
+        identified_types = (
+            AuditEvent,
+            CatalogSource,
+            Locale,
+            Market,
+            Organization,
+            ReportJob,
+            Storefront,
+            Workspace,
+        )
         for value in self.added:
-            if hasattr(value, "id") and getattr(value, "id") is None:
-                setattr(value, "id", uuid.uuid4())
+            if isinstance(value, identified_types) and value.id is None:
+                value.id = uuid.uuid4()
 
     async def commit(self) -> None:
         self.commit_count += 1
