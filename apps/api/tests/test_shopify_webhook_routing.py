@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import uuid
 from typing import Any, cast
 
@@ -133,6 +134,47 @@ async def test_webhook_binds_signature_to_matching_installation_identity(
     assert delivery.input_snapshot["installation_id"] == str(session.installations[0].id)
     assert session.commit_count == 1
     assert queued == [("catora.shopify.webhook", [str(delivery.id)])]
+
+
+@pytest.mark.asyncio
+async def test_bulk_finish_webhook_persists_only_bounded_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "admin_graphql_api_id": "gid://shopify/BulkOperation/9001",
+        "status": "completed",
+        "type": "query",
+        "completed_at": "2026-07-24T14:00:00Z",
+        "error_code": None,
+        "url": "https://signed-storage.example.test/secret-result.jsonl",
+        "partial_data_url": "https://signed-storage.example.test/partial.jsonl",
+    }
+    body = json.dumps(payload).encode()
+    session = WebhookSession([_installation(distribution="public")])
+    monkeypatch.setattr(webhooks.celery_app, "send_task", lambda *_args, **_kwargs: None)
+
+    await receive_shopify_webhook(
+        cast(Any, session),
+        settings=_settings(),
+        body=body,
+        topic="bulk_operations/finish",
+        shop_domain="prospect-store.myshopify.com",
+        webhook_id="bulk-finish-delivery",
+        event_id=None,
+        triggered_at="2026-07-24T14:00:01Z",
+        supplied_signature=_signature(body, "p" * 32),
+    )
+
+    delivery = cast(ReportJob, session.added[0])
+    snapshot = dict(delivery.input_snapshot)
+    assert snapshot["bulk_operation_id"] == "gid://shopify/BulkOperation/9001"
+    assert snapshot["bulk_status"] == "completed"
+    assert snapshot["bulk_type"] == "query"
+    assert snapshot["bulk_completed_at"] == "2026-07-24T14:00:00Z"
+    serialized = json.dumps(snapshot)
+    assert "signed-storage" not in serialized
+    assert "partial_data_url" not in serialized
+    assert "url" not in snapshot
 
 
 @pytest.mark.asyncio

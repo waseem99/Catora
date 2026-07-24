@@ -93,6 +93,7 @@ async def queue_shopify_sync(
     reason: str,
     actor_user_id: uuid.UUID | None = None,
     product_ids: Sequence[str] = (),
+    full_reconciliation: bool = False,
 ) -> IngestionJob | None:
     if installation.status != "active":
         return None
@@ -111,7 +112,11 @@ async def queue_shopify_sync(
     if source_id is None:
         return None
     source = await session.get(CatalogSource, source_id)
-    if source is None or source.credential_ref is None or source.status != "ready":
+    if (
+        source is None
+        or source.credential_ref is None
+        or source.status not in {"ready", "active"}
+    ):
         return None
 
     active_job = await session.scalar(
@@ -128,6 +133,10 @@ async def queue_shopify_sync(
             **snapshot,
             "sync_status": "coalesced",
             "pending_product_ids": list(dict.fromkeys([*pending, *bounded_ids]))[:100],
+            "pending_full_reconciliation": (
+                snapshot.get("pending_full_reconciliation") is True
+                or full_reconciliation
+            ),
             "last_sync_requested_at": _now().isoformat(),
             "last_sync_reason": reason,
         }
@@ -136,7 +145,7 @@ async def queue_shopify_sync(
 
     last_success = _text_value(snapshot, "last_successful_sync_at")
     updated_after: str | None = None
-    if last_success is not None:
+    if not full_reconciliation and last_success is not None:
         try:
             parsed = datetime.fromisoformat(last_success.replace("Z", "+00:00"))
             updated_after = (parsed - timedelta(minutes=5)).isoformat()
@@ -154,6 +163,7 @@ async def queue_shopify_sync(
             "shopify": {
                 "reason": reason,
                 "product_ids": bounded_ids,
+                "full_reconciliation": full_reconciliation,
                 "queued_at": _now().isoformat(),
             }
         },
@@ -166,7 +176,9 @@ async def queue_shopify_sync(
         "last_sync_requested_at": _now().isoformat(),
         "last_sync_reason": reason,
         "last_sync_job_id": str(job.id),
+        "last_sync_full_reconciliation": full_reconciliation,
         "pending_product_ids": [],
+        "pending_full_reconciliation": False,
     }
     session.add(
         AuditEvent(
@@ -179,6 +191,7 @@ async def queue_shopify_sync(
                 "catalog_source_id": str(source.id),
                 "reason": reason,
                 "product_id_count": len(bounded_ids),
+                "full_reconciliation": full_reconciliation,
             },
         )
     )

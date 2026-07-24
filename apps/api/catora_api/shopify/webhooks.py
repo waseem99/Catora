@@ -23,10 +23,12 @@ from catora_api.worker import celery_app
 SHOPIFY_WEBHOOK_DELIVERY_TYPE = "shopify_webhook_delivery"
 SUPPORTED_TOPICS = {
     "app/uninstalled",
+    "bulk_operations/finish",
     "products/create",
     "products/update",
     "products/delete",
 }
+_BULK_STATUSES = {"canceled", "canceling", "completed", "failed"}
 ShopifyAppDistribution = Literal["custom", "public"]
 
 
@@ -68,6 +70,31 @@ def _payload_product_id(payload: object) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def _bulk_metadata(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise ShopifyWebhookError("Shopify bulk operation payload is invalid")
+    operation_id = payload.get("admin_graphql_api_id")
+    status_value = payload.get("status")
+    operation_type = payload.get("type")
+    if (
+        not isinstance(operation_id, str)
+        or not operation_id.startswith("gid://shopify/BulkOperation/")
+        or not isinstance(status_value, str)
+        or status_value.casefold() not in _BULK_STATUSES
+        or operation_type != "query"
+    ):
+        raise ShopifyWebhookError("Shopify bulk operation payload is invalid")
+    completed_at = payload.get("completed_at")
+    error_code = payload.get("error_code")
+    return {
+        "bulk_operation_id": operation_id,
+        "bulk_status": status_value.casefold(),
+        "bulk_type": "query",
+        "bulk_completed_at": completed_at if isinstance(completed_at, str) else None,
+        "bulk_error_code": error_code if isinstance(error_code, str) else None,
+    }
 
 
 def _installation_distribution(installation: ReportJob) -> ShopifyAppDistribution:
@@ -170,7 +197,11 @@ async def receive_shopify_webhook(
     if not isinstance(payload, dict):
         raise ShopifyWebhookError("Shopify webhook payload is invalid")
 
-    product_id = _payload_product_id(payload)
+    bounded_payload: dict[str, object]
+    if topic == "bulk_operations/finish":
+        bounded_payload = _bulk_metadata(payload)
+    else:
+        bounded_payload = {"product_id": _payload_product_id(payload)}
     delivery = ReportJob(
         id=delivery_id,
         workspace_id=cast(uuid.UUID, installation.workspace_id),
@@ -186,9 +217,9 @@ async def receive_shopify_webhook(
             "triggered_at": triggered_at,
             "received_at": datetime.now(UTC).isoformat(),
             "payload_sha256": hashlib.sha256(body).hexdigest(),
-            "product_id": product_id,
+            **bounded_payload,
         },
-        template_version="shopify-webhook-v2",
+        template_version="shopify-webhook-v3",
     )
     session.add(delivery)
     await session.commit()

@@ -24,6 +24,7 @@ from catora_api.db.models import (
 )
 from catora_api.ingestion.tasks import _run_ingestion_job
 from catora_api.normalization.adapters import canonical_product_key
+from catora_api.shopify.installations import SHOPIFY_INSTALLATION_TYPE
 from catora_api.shopify.sync import queue_shopify_sync
 from catora_api.shopify.webhooks import SHOPIFY_WEBHOOK_DELIVERY_TYPE
 from catora_api.taxonomy.assignment import TaxonomyAssignmentService
@@ -62,6 +63,11 @@ def _string_list(snapshot: dict[str, object], key: str) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+def _job_full_reconciliation(job: IngestionJob) -> bool:
+    value = job.checkpoint.get("shopify")
+    return isinstance(value, dict) and value.get("full_reconciliation") is True
 
 
 async def _assign_taxonomy(workspace_id: uuid.UUID) -> tuple[str, int, int, int]:
@@ -241,12 +247,15 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
             completed_at = _now()
             current = dict(installation.input_snapshot)
             pending = _string_list(current, "pending_product_ids")
+            pending_full = current.get("pending_full_reconciliation") is True
+            completed_full = _job_full_reconciliation(job)
             installation.input_snapshot = {
                 **current,
                 "sync_status": "completed",
                 "last_successful_sync_at": completed_at.isoformat(),
                 "last_sync_job_id": str(job.id),
                 "last_audit_run_id": str(audit_run.id),
+                "last_completed_full_reconciliation": completed_full,
                 "product_count": int(product_count or 0),
                 "variant_count": int(variant_count or 0),
                 "warning_count": job.warning_count,
@@ -254,6 +263,7 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
                 "ambiguous_category_count": ambiguous,
                 "unclassified_category_count": unclassified,
                 "pending_product_ids": [],
+                "pending_full_reconciliation": False,
                 "last_sync_error_type": None,
             }
             source.config = {
@@ -273,17 +283,23 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
                         "variant_count": int(variant_count or 0),
                         "warning_count": job.warning_count,
                         "audit_run_id": str(audit_run.id),
+                        "full_reconciliation": completed_full,
                     },
                 )
             )
             await session.commit()
-            if pending:
+            if pending or pending_full:
                 await queue_shopify_sync(
                     session,
                     installation=installation,
-                    reason="coalesced_webhook",
+                    reason=(
+                        "coalesced_full_reconciliation"
+                        if pending_full
+                        else "coalesced_webhook"
+                    ),
                     actor_user_id=actor_user_id,
                     product_ids=pending,
+                    full_reconciliation=pending_full,
                 )
     except Exception as exc:
         async with SessionFactory() as session:
@@ -298,6 +314,49 @@ async def _run_shopify_sync(job_id: uuid.UUID, installation_id: uuid.UUID) -> No
             }
             await session.commit()
         raise
+
+
+@shared_task(
+    name="catora.shopify.reconcile_incremental",
+    ignore_result=True,
+)  # type: ignore[misc]
+def reconcile_shopify_incremental() -> None:
+    asyncio.run(_reconcile_shopify_installations(full_reconciliation=False))
+
+
+@shared_task(
+    name="catora.shopify.reconcile_full",
+    ignore_result=True,
+)  # type: ignore[misc]
+def reconcile_shopify_full() -> None:
+    asyncio.run(_reconcile_shopify_installations(full_reconciliation=True))
+
+
+async def _reconcile_shopify_installations(*, full_reconciliation: bool) -> None:
+    async with SessionFactory() as session:
+        installations = list(
+            (
+                await session.scalars(
+                    select(ReportJob)
+                    .where(
+                        ReportJob.report_type == SHOPIFY_INSTALLATION_TYPE,
+                        ReportJob.status == "active",
+                    )
+                    .order_by(ReportJob.created_at)
+                )
+            ).all()
+        )
+        for installation in installations:
+            await queue_shopify_sync(
+                session,
+                installation=installation,
+                reason=(
+                    "scheduled_full_reconciliation"
+                    if full_reconciliation
+                    else "scheduled_incremental_reconciliation"
+                ),
+                full_reconciliation=full_reconciliation,
+            )
 
 
 @shared_task(name="catora.shopify.webhook", ignore_result=True)  # type: ignore[misc]
@@ -343,6 +402,7 @@ async def _process_shopify_webhook(delivery_id: uuid.UUID) -> None:
                 "sync_status": "revoked",
                 "disconnected_at": _now().isoformat(),
                 "pending_product_ids": [],
+                "pending_full_reconciliation": False,
             }
             cancelled_jobs = 0
             if source is not None:
@@ -375,6 +435,27 @@ async def _process_shopify_webhook(delivery_id: uuid.UUID) -> None:
                 **snapshot,
                 "processed_at": _now().isoformat(),
                 "cancelled_job_count": cancelled_jobs,
+            }
+            await session.commit()
+            return
+
+        if topic == "bulk_operations/finish":
+            installation.input_snapshot = {
+                **installation_snapshot,
+                "last_bulk_operation_id": snapshot.get("bulk_operation_id"),
+                "last_bulk_operation_status": snapshot.get("bulk_status"),
+                "last_bulk_operation_completed_at": snapshot.get(
+                    "bulk_completed_at"
+                ),
+                "last_bulk_operation_error_code": snapshot.get(
+                    "bulk_error_code"
+                ),
+                "last_bulk_webhook_received_at": _now().isoformat(),
+            }
+            delivery.status = "completed"
+            delivery.input_snapshot = {
+                **snapshot,
+                "processed_at": _now().isoformat(),
             }
             await session.commit()
             return

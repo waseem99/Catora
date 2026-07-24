@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from catora_api.config import get_settings
 
@@ -12,6 +13,8 @@ celery_app.conf.update(
     task_time_limit=900,
     task_soft_time_limit=840,
     worker_prefetch_multiplier=1,
+    timezone="UTC",
+    enable_utc=True,
     imports=(
         "catora_api.ingestion.tasks",
         "catora_api.auditing.tasks",
@@ -21,6 +24,16 @@ celery_app.conf.update(
         "catora_api.shopify.tasks",
         "catora_api.shopify.compliance_tasks",
     ),
+    beat_schedule={
+        "shopify-incremental-reconciliation": {
+            "task": "catora.shopify.reconcile_incremental",
+            "schedule": crontab(minute="*/30"),
+        },
+        "shopify-full-reconciliation": {
+            "task": "catora.shopify.reconcile_full",
+            "schedule": crontab(hour=2, minute=30),
+        },
+    },
 )
 
 

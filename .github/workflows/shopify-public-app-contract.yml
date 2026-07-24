@@ -5,6 +5,7 @@ on:
     paths:
       - "shopify/public/**"
       - "apps/shopify/**"
+      - "apps/worker/Dockerfile"
       - ".env.example"
       - "docs/shopify-public-acceptance.md"
       - "scripts/accept_shopify_public_app.py"
@@ -24,6 +25,7 @@ on:
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
       - "apps/api/catora_api/shopify/sync.py"
+      - "apps/api/catora_api/shopify/tasks.py"
       - "apps/api/catora_api/shopify/webhooks.py"
       - "apps/api/catora_api/storage.py"
       - "apps/api/catora_api/worker.py"
@@ -36,8 +38,10 @@ on:
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
+      - "apps/api/tests/test_shopify_reconciliation.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
+      - "apps/api/tests/test_shopify_webhooks.py"
       - "apps/api/tests/test_storage_delete_prefix.py"
       - ".github/workflows/shopify-public-app-contract.yml"
   push:
@@ -45,6 +49,7 @@ on:
     paths:
       - "shopify/public/**"
       - "apps/shopify/**"
+      - "apps/worker/Dockerfile"
       - ".env.example"
       - "docs/shopify-public-acceptance.md"
       - "scripts/accept_shopify_public_app.py"
@@ -64,6 +69,7 @@ on:
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
       - "apps/api/catora_api/shopify/sync.py"
+      - "apps/api/catora_api/shopify/tasks.py"
       - "apps/api/catora_api/shopify/webhooks.py"
       - "apps/api/catora_api/storage.py"
       - "apps/api/catora_api/worker.py"
@@ -76,8 +82,10 @@ on:
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
+      - "apps/api/tests/test_shopify_reconciliation.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
+      - "apps/api/tests/test_shopify_webhooks.py"
       - "apps/api/tests/test_storage_delete_prefix.py"
       - ".github/workflows/shopify-public-app-contract.yml"
 
@@ -118,8 +126,10 @@ jobs:
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
+            apps/api/tests/test_shopify_reconciliation.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
+            apps/api/tests/test_shopify_webhooks.py \
             apps/api/tests/test_storage_delete_prefix.py \
             > shopify-public-pytest-report.txt 2>&1
           status=$?
@@ -150,6 +160,7 @@ jobs:
             apps/api/catora_api/shopify/public_installations.py \
             apps/api/catora_api/shopify/public_session.py \
             apps/api/catora_api/shopify/sync.py \
+            apps/api/catora_api/shopify/tasks.py \
             apps/api/catora_api/shopify/webhooks.py \
             apps/api/catora_api/storage.py \
             apps/api/catora_api/worker.py \
@@ -162,8 +173,10 @@ jobs:
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
+            apps/api/tests/test_shopify_reconciliation.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
+            apps/api/tests/test_shopify_webhooks.py \
             apps/api/tests/test_storage_delete_prefix.py \
             scripts/validate_shopify_public_app_contract.py
       - name: Run strict MyPy on public app foundation
@@ -183,6 +196,7 @@ jobs:
             catora_api/shopify/public_installations.py \
             catora_api/shopify/public_session.py \
             catora_api/shopify/sync.py \
+            catora_api/shopify/tasks.py \
             catora_api/shopify/webhooks.py \
             catora_api/storage.py \
             catora_api/worker.py

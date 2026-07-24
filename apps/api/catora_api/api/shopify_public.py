@@ -17,6 +17,7 @@ from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
 from catora_api.db.models import ReportJob, ShopifyStoreInvitation
 from catora_api.schemas.shopify_public import (
+    ShopifyBulkOperationStatus,
     ShopifyPublicActivationView,
     ShopifyPublicInstallationStatus,
     ShopifyPublicInstallationView,
@@ -62,6 +63,10 @@ def _snapshot_int(snapshot: dict[str, object], key: str) -> int:
         if isinstance(value, int) and not isinstance(value, bool) and value >= 0
         else 0
     )
+
+
+def _snapshot_bool(snapshot: dict[str, object], key: str) -> bool:
+    return snapshot.get(key) is True
 
 
 def _snapshot_uuid(snapshot: dict[str, object], key: str) -> uuid.UUID | None:
@@ -177,6 +182,12 @@ def _installation_view(
     }:
         sync_value = "failed"
     sync_status = cast(ShopifyPublicSyncStatus, sync_value)
+
+    bulk_value = _snapshot_text(snapshot, "last_bulk_operation_status")
+    if bulk_value not in {"canceled", "canceling", "completed", "failed"}:
+        bulk_value = None
+    bulk_status = cast(ShopifyBulkOperationStatus | None, bulk_value)
+
     feature_tier = cast(
         Literal["demo", "plus_demo"],
         invitation.feature_tier,
@@ -205,6 +216,27 @@ def _installation_view(
         last_sync_job_id=_snapshot_uuid(snapshot, "last_sync_job_id"),
         last_audit_run_id=_snapshot_uuid(snapshot, "last_audit_run_id"),
         last_sync_error_type=_snapshot_text(snapshot, "last_sync_error_type"),
+        last_sync_full_reconciliation=_snapshot_bool(
+            snapshot,
+            "last_sync_full_reconciliation",
+        ),
+        last_completed_full_reconciliation=_snapshot_bool(
+            snapshot,
+            "last_completed_full_reconciliation",
+        ),
+        last_bulk_operation_status=bulk_status,
+        last_bulk_operation_completed_at=_snapshot_datetime(
+            snapshot,
+            "last_bulk_operation_completed_at",
+        ),
+        last_bulk_webhook_received_at=_snapshot_datetime(
+            snapshot,
+            "last_bulk_webhook_received_at",
+        ),
+        last_bulk_operation_error_code=_snapshot_text(
+            snapshot,
+            "last_bulk_operation_error_code",
+        ),
         reauthorization_required=installation_status == "refresh_required",
     )
 

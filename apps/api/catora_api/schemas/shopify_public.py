@@ -20,6 +20,12 @@ ShopifyPublicInstallationStatus = Literal[
     "disconnected",
     "failed",
 ]
+ShopifyBulkOperationStatus = Literal[
+    "canceled",
+    "canceling",
+    "completed",
+    "failed",
+]
 
 
 class ShopifyStoreInvitationCreateRequest(BaseModel):
@@ -87,4 +93,10 @@ class ShopifyPublicInstallationView(BaseModel):
     last_sync_job_id: uuid.UUID | None = None
     last_audit_run_id: uuid.UUID | None = None
     last_sync_error_type: str | None = None
+    last_sync_full_reconciliation: bool = False
+    last_completed_full_reconciliation: bool = False
+    last_bulk_operation_status: ShopifyBulkOperationStatus | None = None
+    last_bulk_operation_completed_at: datetime | None = None
+    last_bulk_webhook_received_at: datetime | None = None
+    last_bulk_operation_error_code: str | None = None
     reauthorization_required: bool = False
