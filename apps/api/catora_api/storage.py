@@ -75,3 +75,46 @@ class ObjectStorage:
             self._client().delete_object(Bucket=self.settings.s3_bucket, Key=key)
 
         await asyncio.to_thread(remove)
+
+    async def delete_prefix(self, prefix: str) -> int:
+        normalized = prefix.strip("/")
+        if not normalized:
+            raise ValueError("Object storage deletion prefix cannot be empty")
+        normalized = f"{normalized}/"
+
+        def remove() -> int:
+            client = self._client()
+            continuation: str | None = None
+            deleted = 0
+            while True:
+                request: dict[str, object] = {
+                    "Bucket": self.settings.s3_bucket,
+                    "Prefix": normalized,
+                }
+                if continuation is not None:
+                    request["ContinuationToken"] = continuation
+                response = client.list_objects_v2(**request)
+                contents = response.get("Contents", [])
+                objects = [
+                    {"Key": item["Key"]}
+                    for item in contents
+                    if isinstance(item, dict)
+                    and isinstance(item.get("Key"), str)
+                    and item["Key"]
+                ]
+                if objects:
+                    client.delete_objects(
+                        Bucket=self.settings.s3_bucket,
+                        Delete={"Objects": objects, "Quiet": True},
+                    )
+                    deleted += len(objects)
+                if not response.get("IsTruncated"):
+                    return deleted
+                token = response.get("NextContinuationToken")
+                if not isinstance(token, str) or not token:
+                    raise RuntimeError(
+                        "Object storage pagination omitted the continuation token"
+                    )
+                continuation = token
+
+        return await asyncio.to_thread(remove)

@@ -134,6 +134,35 @@ The delivery record stores only bounded metadata, including the verified distrib
 
 Product lifecycle and uninstall processing remain shared after identity verification. An uninstall revokes the matched installation, clears its encrypted credentials, disconnects the source and cancels active synchronization jobs without affecting the other app identity.
 
+## Mandatory privacy and deletion webhooks
+
+Both public app templates declare Shopify's mandatory compliance topics:
+
+```text
+customers/data_request
+customers/redact
+shop/redact
+```
+
+They are delivered to:
+
+```text
+POST /api/v1/shopify/compliance
+```
+
+The endpoint verifies the raw request body using only the public-distribution app secret. It never persists the HMAC, raw payload, customer identifiers, order identifiers or cleartext shop domain.
+
+Catora requests only `read_products` and does not ingest Shopify customers or orders. Therefore valid `customers/data_request` and `customers/redact` deliveries are acknowledged as `no_customer_data_held`. Valid signed review probes for an unknown shop are also acknowledged without creating a database record because Catora has no data for that shop.
+
+For a known activated store, `shop/redact` queues deletion of:
+
+- the isolated Shopify prospect organization and workspace;
+- all workspace-scoped database records through foreign-key cascades;
+- the store invitation;
+- every object under `workspaces/{workspace_id}/` in object storage.
+
+Object deletion is paginated and rejects an empty prefix so the bucket cannot be deleted accidentally. After deletion, Catora retains only a sanitized receipt in the invitation issuer workspace containing the topic, action, hashes, timestamps and deleted-object count. Target workspace and organization identifiers are cleared from the completed receipt.
+
 ## Operator API
 
 Create or reissue an invitation:
@@ -175,7 +204,8 @@ Both public app templates require:
 - Shopify managed installation rather than the legacy install flow;
 - exact initial scope `read_products`;
 - Admin API version `2026-07`;
-- the product/uninstall webhook endpoint;
+- product and uninstall webhooks;
+- mandatory compliance webhooks;
 - separate development and production Shopify registrations.
 
 Public app runtime configuration is separate from the existing custom-distribution app:
@@ -203,10 +233,9 @@ python scripts/validate_shopify_public_app_contract.py
 
 The production public app must not be submitted for Shopify review until all remaining blockers are complete:
 
-1. add dedicated HMAC-validating privacy and deletion handlers for the mandatory compliance topics;
-2. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
-3. complete installation, reauthorization, product-webhook, uninstall and data-deletion acceptance tests on development stores;
-4. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
+1. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
+2. complete installation, reauthorization, product-webhook, uninstall and data-deletion acceptance tests on development stores;
+3. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
 
 ## External setup still required
 

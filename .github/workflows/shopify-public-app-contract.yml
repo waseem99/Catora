@@ -8,21 +8,29 @@ on:
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
       - "apps/api/catora_api/config.py"
+      - "apps/api/catora_api/api/__init__.py"
+      - "apps/api/catora_api/api/shopify_compliance.py"
       - "apps/api/catora_api/api/shopify_public.py"
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/ingestion/factory.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/compliance.py"
+      - "apps/api/catora_api/shopify/compliance_tasks.py"
       - "apps/api/catora_api/shopify/invitations.py"
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
       - "apps/api/catora_api/shopify/sync.py"
       - "apps/api/catora_api/shopify/webhooks.py"
+      - "apps/api/catora_api/storage.py"
+      - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_compliance.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
+      - "apps/api/tests/test_storage_delete_prefix.py"
       - ".github/workflows/shopify-public-app-contract.yml"
   push:
     branches: [main]
@@ -32,21 +40,29 @@ on:
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
       - "apps/api/catora_api/config.py"
+      - "apps/api/catora_api/api/__init__.py"
+      - "apps/api/catora_api/api/shopify_compliance.py"
       - "apps/api/catora_api/api/shopify_public.py"
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/ingestion/factory.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/compliance.py"
+      - "apps/api/catora_api/shopify/compliance_tasks.py"
       - "apps/api/catora_api/shopify/invitations.py"
       - "apps/api/catora_api/shopify/public_installations.py"
       - "apps/api/catora_api/shopify/public_session.py"
       - "apps/api/catora_api/shopify/sync.py"
       - "apps/api/catora_api/shopify/webhooks.py"
+      - "apps/api/catora_api/storage.py"
+      - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_compliance.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
+      - "apps/api/tests/test_storage_delete_prefix.py"
       - ".github/workflows/shopify-public-app-contract.yml"
 
 permissions:
@@ -69,42 +85,57 @@ jobs:
         run: |
           pytest -q \
             apps/api/tests/test_config.py \
-            apps/api/tests/test_shopify_public_installations.py \
-            apps/api/tests/test_shopify_public_invitations.py \
-            apps/api/tests/test_shopify_public_session.py \
-            apps/api/tests/test_shopify_sync_actor.py \
-            apps/api/tests/test_shopify_webhook_routing.py
-      - name: Run Ruff on public app foundation
-        run: |
-          ruff check \
-            apps/api/catora_api/config.py \
-            apps/api/catora_api/api/shopify_public.py \
-            apps/api/catora_api/db/models/shopify.py \
-            apps/api/catora_api/ingestion/factory.py \
-            apps/api/catora_api/schemas/shopify_public.py \
-            apps/api/catora_api/shopify/invitations.py \
-            apps/api/catora_api/shopify/public_installations.py \
-            apps/api/catora_api/shopify/public_session.py \
-            apps/api/catora_api/shopify/sync.py \
-            apps/api/catora_api/shopify/webhooks.py \
-            apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_compliance.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
+            apps/api/tests/test_storage_delete_prefix.py
+      - name: Run Ruff on public app foundation
+        run: |
+          ruff check \
+            apps/api/catora_api/config.py \
+            apps/api/catora_api/api/__init__.py \
+            apps/api/catora_api/api/shopify_compliance.py \
+            apps/api/catora_api/api/shopify_public.py \
+            apps/api/catora_api/db/models/shopify.py \
+            apps/api/catora_api/ingestion/factory.py \
+            apps/api/catora_api/schemas/shopify_public.py \
+            apps/api/catora_api/shopify/compliance.py \
+            apps/api/catora_api/shopify/compliance_tasks.py \
+            apps/api/catora_api/shopify/invitations.py \
+            apps/api/catora_api/shopify/public_installations.py \
+            apps/api/catora_api/shopify/public_session.py \
+            apps/api/catora_api/shopify/sync.py \
+            apps/api/catora_api/shopify/webhooks.py \
+            apps/api/catora_api/storage.py \
+            apps/api/catora_api/worker.py \
+            apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_compliance.py \
+            apps/api/tests/test_shopify_public_installations.py \
+            apps/api/tests/test_shopify_public_invitations.py \
+            apps/api/tests/test_shopify_public_session.py \
+            apps/api/tests/test_shopify_sync_actor.py \
+            apps/api/tests/test_shopify_webhook_routing.py \
+            apps/api/tests/test_storage_delete_prefix.py \
             scripts/validate_shopify_public_app_contract.py
       - name: Run strict MyPy on public app foundation
         working-directory: apps/api
         run: |
           mypy \
             catora_api/config.py \
+            catora_api/api/shopify_compliance.py \
             catora_api/api/shopify_public.py \
             catora_api/db/models/shopify.py \
             catora_api/ingestion/factory.py \
             catora_api/schemas/shopify_public.py \
+            catora_api/shopify/compliance.py \
+            catora_api/shopify/compliance_tasks.py \
             catora_api/shopify/invitations.py \
             catora_api/shopify/public_installations.py \
             catora_api/shopify/public_session.py \
             catora_api/shopify/sync.py \
-            catora_api/shopify/webhooks.py
+            catora_api/shopify/webhooks.py \
+            catora_api/storage.py \
+            catora_api/worker.py
