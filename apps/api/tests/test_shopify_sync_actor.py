@@ -6,7 +6,10 @@ from typing import Any, cast
 import pytest
 
 from catora_api.db.models import ReportJob
-from catora_api.shopify.sync import _installation_actor
+from catora_api.shopify.sync import (
+    _installation_actor,
+    _requires_full_reconciliation,
+)
 
 
 class ScalarSession:
@@ -66,3 +69,19 @@ async def test_custom_installation_does_not_query_public_invitation() -> None:
 
     assert actor is None
     assert session.calls == 1
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "collections/create",
+        "collections/update",
+        "collections/delete",
+    ],
+)
+def test_collection_webhooks_require_full_reconciliation(reason: str) -> None:
+    assert _requires_full_reconciliation(reason) is True
+
+
+def test_product_webhooks_remain_incremental() -> None:
+    assert _requires_full_reconciliation("products/update") is False

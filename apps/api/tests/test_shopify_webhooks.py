@@ -35,6 +35,9 @@ def test_shopify_webhook_topics_are_read_only_catalog_lifecycle() -> None:
     assert {
         "app/uninstalled",
         "bulk_operations/finish",
+        "collections/create",
+        "collections/update",
+        "collections/delete",
         "products/create",
         "products/update",
         "products/delete",
