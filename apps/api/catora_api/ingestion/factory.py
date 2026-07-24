@@ -118,7 +118,8 @@ async def _shopify_connector(
     elif updated_after_value is not None:
         raise ValueError("Shopify incremental timestamp is invalid")
 
-    initial_sync_mode = config.get("initial_sync_mode", "cursor")
+    default_mode = "bulk" if config.get("distribution") == "public" else "cursor"
+    initial_sync_mode = config.get("initial_sync_mode", default_mode)
     if initial_sync_mode not in {"cursor", "bulk"}:
         raise ValueError("Shopify initial sync mode is invalid")
     connector_config = ShopifyConnectorConfig(
