@@ -4,25 +4,35 @@ on:
   pull_request:
     paths:
       - "shopify/public/**"
+      - ".env.example"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/config.py"
       - "apps/api/catora_api/api/shopify_public.py"
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
       - "apps/api/catora_api/shopify/invitations.py"
+      - "apps/api/catora_api/shopify/public_session.py"
+      - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
+      - "apps/api/tests/test_shopify_public_session.py"
       - ".github/workflows/shopify-public-app-contract.yml"
   push:
     branches: [main]
     paths:
       - "shopify/public/**"
+      - ".env.example"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/config.py"
       - "apps/api/catora_api/api/shopify_public.py"
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
       - "apps/api/catora_api/shopify/invitations.py"
+      - "apps/api/catora_api/shopify/public_session.py"
+      - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
+      - "apps/api/tests/test_shopify_public_session.py"
       - ".github/workflows/shopify-public-app-contract.yml"
 
 permissions:
@@ -41,22 +51,32 @@ jobs:
         run: python scripts/validate_shopify_public_app_contract.py
       - name: Install API validation dependencies
         run: python -m pip install --quiet -e 'apps/api[dev]'
-      - name: Run focused invitation tests
-        run: pytest -q apps/api/tests/test_shopify_public_invitations.py
-      - name: Run Ruff on new public app foundation
+      - name: Run focused public app tests
+        run: |
+          pytest -q \
+            apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_public_invitations.py \
+            apps/api/tests/test_shopify_public_session.py
+      - name: Run Ruff on public app foundation
         run: |
           ruff check \
+            apps/api/catora_api/config.py \
             apps/api/catora_api/api/shopify_public.py \
             apps/api/catora_api/db/models/shopify.py \
             apps/api/catora_api/schemas/shopify_public.py \
             apps/api/catora_api/shopify/invitations.py \
+            apps/api/catora_api/shopify/public_session.py \
+            apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_public_invitations.py \
+            apps/api/tests/test_shopify_public_session.py \
             scripts/validate_shopify_public_app_contract.py
-      - name: Run strict MyPy on new public app foundation
+      - name: Run strict MyPy on public app foundation
         working-directory: apps/api
         run: |
           mypy \
+            catora_api/config.py \
             catora_api/api/shopify_public.py \
             catora_api/db/models/shopify.py \
             catora_api/schemas/shopify_public.py \
-            catora_api/shopify/invitations.py
+            catora_api/shopify/invitations.py \
+            catora_api/shopify/public_session.py
