@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any, cast
+from typing import Any
 
 import httpx
 from sqlalchemy import select
@@ -151,7 +151,7 @@ class ShopifyPublicInstallationService:
             )
             session.add(workspace)
             await session.flush()
-            workspace_id = cast(uuid.UUID, workspace.id)
+            workspace_id = workspace.id
             locale = Locale(
                 workspace_id=workspace_id,
                 code="en-US",
@@ -508,7 +508,7 @@ class ShopifyPublicInstallationService:
             raise ShopifyPublicInstallationError(
                 "Shopify public credential refresh returned an invalid response"
             )
-        return self._token_bundle(cast(dict[str, Any], payload))
+        return self._token_bundle(payload)
 
     def _token_bundle(self, payload: Mapping[str, Any]) -> ShopifyPublicTokenBundle:
         access_token = payload.get("access_token")
