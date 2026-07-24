@@ -2,11 +2,14 @@ name: Hosted availability
 
 on:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "17,47 * * * *"
 
 concurrency:
-  group: hosted-availability
+  group: hosted-availability-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
