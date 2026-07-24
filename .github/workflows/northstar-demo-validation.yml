@@ -61,7 +61,7 @@ jobs:
           package = Path('/tmp/northstar-shopify-demo-package')
           csv_path = package / 'northstar-shopify-products.csv'
           manifest = json.loads(
-              (package / 'northstar-shopify-manifest.json').read_text(encoding='utf-8')
+            (package / 'northstar-shopify-manifest.json').read_text(encoding='utf-8')
           )
           digest = hashlib.sha256(csv_path.read_bytes()).hexdigest()
           assert manifest['store_domain'] == 'northstar-living-demo.myshopify.com'
@@ -74,6 +74,14 @@ jobs:
           status=$?
           tail -n 140 /tmp/northstar-demo-report.txt
           exit "$status"
+      - name: Upload Northstar Shopify import package
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: northstar-shopify-demo-package
+          path: /tmp/northstar-shopify-demo-package/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload Northstar package report
         if: always()
         uses: actions/upload-artifact@v4
