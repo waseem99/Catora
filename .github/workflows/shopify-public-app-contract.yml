@@ -19,6 +19,8 @@ on:
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/ingestion/factory.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/analysis.py"
+      - "apps/api/catora_api/shopify/analysis_tasks.py"
       - "apps/api/catora_api/shopify/compliance.py"
       - "apps/api/catora_api/shopify/compliance_tasks.py"
       - "apps/api/catora_api/shopify/invitations.py"
@@ -32,6 +34,7 @@ on:
       - "apps/api/tests/connectors/test_shopify_bulk.py"
       - "apps/api/tests/ingestion/test_contracts.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_analysis.py"
       - "apps/api/tests/test_shopify_compliance.py"
       - "apps/api/tests/test_shopify_public_acceptance_script.py"
       - "apps/api/tests/test_shopify_public_embedded.py"
@@ -63,6 +66,8 @@ on:
       - "apps/api/catora_api/db/models/shopify.py"
       - "apps/api/catora_api/ingestion/factory.py"
       - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/analysis.py"
+      - "apps/api/catora_api/shopify/analysis_tasks.py"
       - "apps/api/catora_api/shopify/compliance.py"
       - "apps/api/catora_api/shopify/compliance_tasks.py"
       - "apps/api/catora_api/shopify/invitations.py"
@@ -76,6 +81,7 @@ on:
       - "apps/api/tests/connectors/test_shopify_bulk.py"
       - "apps/api/tests/ingestion/test_contracts.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_analysis.py"
       - "apps/api/tests/test_shopify_compliance.py"
       - "apps/api/tests/test_shopify_public_acceptance_script.py"
       - "apps/api/tests/test_shopify_public_embedded.py"
@@ -120,6 +126,7 @@ jobs:
             apps/api/tests/connectors/test_shopify_bulk.py \
             apps/api/tests/ingestion/test_contracts.py \
             apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_analysis.py \
             apps/api/tests/test_shopify_compliance.py \
             apps/api/tests/test_shopify_public_acceptance_script.py \
             apps/api/tests/test_shopify_public_embedded.py \
@@ -154,6 +161,8 @@ jobs:
             apps/api/catora_api/db/models/shopify.py \
             apps/api/catora_api/ingestion/factory.py \
             apps/api/catora_api/schemas/shopify_public.py \
+            apps/api/catora_api/shopify/analysis.py \
+            apps/api/catora_api/shopify/analysis_tasks.py \
             apps/api/catora_api/shopify/compliance.py \
             apps/api/catora_api/shopify/compliance_tasks.py \
             apps/api/catora_api/shopify/invitations.py \
@@ -167,6 +176,7 @@ jobs:
             apps/api/tests/connectors/test_shopify_bulk.py \
             apps/api/tests/ingestion/test_contracts.py \
             apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_analysis.py \
             apps/api/tests/test_shopify_compliance.py \
             apps/api/tests/test_shopify_public_acceptance_script.py \
             apps/api/tests/test_shopify_public_embedded.py \
@@ -190,6 +200,8 @@ jobs:
             catora_api/db/models/shopify.py \
             catora_api/ingestion/factory.py \
             catora_api/schemas/shopify_public.py \
+            catora_api/shopify/analysis.py \
+            catora_api/shopify/analysis_tasks.py \
             catora_api/shopify/compliance.py \
             catora_api/shopify/compliance_tasks.py \
             catora_api/shopify/invitations.py \
