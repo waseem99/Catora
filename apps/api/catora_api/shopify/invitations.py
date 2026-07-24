@@ -44,6 +44,7 @@ class ShopifyInvitationService:
         event_type = "shopify.public_invitation_created"
         if invitation is None:
             invitation = ShopifyStoreInvitation(
+                id=uuid.uuid4(),
                 issuer_workspace_id=issuer_workspace_id,
                 activated_workspace_id=None,
                 created_by_user_id=actor_user_id,
