@@ -19,6 +19,7 @@ celery_app.conf.update(
         "catora_api.demo.tasks",
         "catora_api.diagnostics.tasks",
         "catora_api.shopify.tasks",
+        "catora_api.shopify.compliance_tasks",
     ),
 )
 
