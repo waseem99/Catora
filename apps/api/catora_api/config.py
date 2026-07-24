@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+PUBLIC_SHOPIFY_APP_URL = "https://shopify.catora.codistan.org"
+
 
 def _https_origin(value: str) -> bool:
     parsed = urlsplit(value)
@@ -20,6 +22,18 @@ def _https_origin(value: str) -> bool:
         and not parsed.query
         and not parsed.fragment
     )
+
+
+def _local_or_https_origin(value: str) -> bool:
+    if value.startswith(("http://localhost:", "http://127.0.0.1:")):
+        parsed = urlsplit(value)
+        return (
+            bool(parsed.netloc)
+            and parsed.path in ("", "/")
+            and not parsed.query
+            and not parsed.fragment
+        )
+    return _https_origin(value)
 
 
 class Settings(BaseSettings):
@@ -62,6 +76,7 @@ class Settings(BaseSettings):
     enrichment_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     enrichment_http_max_request_cost_microunits: int = Field(default=100_000, ge=0)
 
+    # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
     shopify_client_secret: str = Field(default="", repr=False)
@@ -71,6 +86,15 @@ class Settings(BaseSettings):
     shopify_oauth_state_ttl_minutes: int = Field(default=10, ge=5, le=30)
     shopify_credential_encryption_key: str = Field(default="", repr=False)
     shopify_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+
+    # Embedded public-distribution app used for invite-only prospect demos.
+    shopify_public_enabled: bool = False
+    shopify_public_client_id: str = ""
+    shopify_public_client_secret: str = Field(default="", repr=False)
+    shopify_public_app_url: str = "http://localhost:3001"
+    shopify_public_required_scopes: list[str] = ["read_products"]
+    shopify_public_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    shopify_public_session_clock_skew_seconds: int = Field(default=5, ge=0, le=30)
 
     def shopify_encryption_key_bytes(self) -> bytes:
         try:
@@ -98,26 +122,63 @@ class Settings(BaseSettings):
         callback = urlsplit(self.shopify_callback_url)
         if self.environment == "production":
             if callback.scheme != "https" or not callback.netloc:
-                raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS in production")
+                raise ValueError(
+                    "CATORA_SHOPIFY_CALLBACK_URL must use HTTPS in production"
+                )
         elif not self.shopify_callback_url.startswith(("http://localhost:", "https://")):
-            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost")
+            raise ValueError(
+                "CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost"
+            )
         if (
             callback.path != "/api/v1/shopify/oauth/callback"
             or callback.query
             or callback.fragment
         ):
-            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use the canonical callback path")
+            raise ValueError(
+                "CATORA_SHOPIFY_CALLBACK_URL must use the canonical callback path"
+            )
 
         scopes = [scope.strip() for scope in self.shopify_required_scopes if scope.strip()]
         if scopes != ["read_products"]:
             raise ValueError("Catora's pilot Shopify app must request only read_products")
         if self.environment == "production" and not self.shopify_expiring_offline_tokens:
-            raise ValueError("Production Shopify installations must use expiring offline tokens")
+            raise ValueError(
+                "Production Shopify installations must use expiring offline tokens"
+            )
         self.shopify_encryption_key_bytes()
+
+    def validate_shopify_public(self) -> None:
+        if not self.shopify_public_enabled:
+            return
+        if len(self.shopify_public_client_id.strip()) < 8:
+            raise ValueError("CATORA_SHOPIFY_PUBLIC_CLIENT_ID is required")
+        if len(self.shopify_public_client_secret) < 16:
+            raise ValueError("CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET is required")
+        if not _local_or_https_origin(self.shopify_public_app_url):
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_APP_URL must be an HTTPS origin outside localhost"
+            )
+        if (
+            self.environment == "production"
+            and self.shopify_public_app_url.rstrip("/") != PUBLIC_SHOPIFY_APP_URL
+        ):
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_APP_URL must use the canonical production origin"
+            )
+        scopes = [
+            scope.strip()
+            for scope in self.shopify_public_required_scopes
+            if scope.strip()
+        ]
+        if scopes != ["read_products"]:
+            raise ValueError(
+                "Catora's public Shopify app must request only read_products"
+            )
 
     def validate_production(self) -> None:
         if self.environment != "production":
             self.validate_shopify()
+            self.validate_shopify_public()
             return
         insecure = {"change-me-in-production", "test", "catora", ""}
         if self.s3_secret_key in insecure:
@@ -144,8 +205,12 @@ class Settings(BaseSettings):
                 raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
         if not _https_origin(self.frontend_url):
             raise ValueError("CATORA_FRONTEND_URL must be an HTTPS origin in production")
-        if not self.cors_origins or any(not _https_origin(origin) for origin in self.cors_origins):
-            raise ValueError("CATORA_CORS_ORIGINS must contain only HTTPS origins in production")
+        if not self.cors_origins or any(
+            not _https_origin(origin) for origin in self.cors_origins
+        ):
+            raise ValueError(
+                "CATORA_CORS_ORIGINS must contain only HTTPS origins in production"
+            )
         normalized_frontend = self.frontend_url.rstrip("/")
         normalized_origins = {origin.rstrip("/") for origin in self.cors_origins}
         if normalized_frontend not in normalized_origins:
@@ -153,6 +218,7 @@ class Settings(BaseSettings):
         if not self.trust_proxy_headers:
             raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         self.validate_shopify()
+        self.validate_shopify_public()
 
 
 @lru_cache
