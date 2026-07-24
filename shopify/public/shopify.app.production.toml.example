@@ -30,5 +30,10 @@ topics = [
 ]
 uri = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
 
-# Mandatory App Store compliance subscriptions will be added with issue #162
-# only after the dedicated HMAC-validating deletion handlers exist.
+[[webhooks.subscriptions]]
+compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact"
+]
+uri = "https://api.catora.codistan.org/api/v1/shopify/compliance"
