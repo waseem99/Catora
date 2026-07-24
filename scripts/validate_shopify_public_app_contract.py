@@ -13,6 +13,7 @@ COMPLIANCE_URL = "https://api.catora.codistan.org/api/v1/shopify/compliance"
 API_VERSION = "2026-07"
 EXPECTED_TOPICS = {
     "app/uninstalled",
+    "bulk_operations/finish",
     "products/create",
     "products/update",
     "products/delete",
