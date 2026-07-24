@@ -27,6 +27,13 @@ def _uuid_value(snapshot: dict[str, object], key: str) -> uuid.UUID | None:
         return None
 
 
+def _nonnegative_int(snapshot: dict[str, object], key: str) -> int:
+    value = snapshot.get(key)
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return 0
+
+
 async def _ensure_operator_membership(
     *,
     workspace_id: uuid.UUID,
@@ -125,14 +132,17 @@ async def _run_shopify_sync_and_analysis(
                 ingestion_job=ingestion_job,
                 audit_run_id=audit_run_id,
                 actor_user_id=actor_user_id,
-                assigned_category_count=int(
-                    snapshot.get("assigned_category_count") or 0
+                assigned_category_count=_nonnegative_int(
+                    snapshot,
+                    "assigned_category_count",
                 ),
-                ambiguous_category_count=int(
-                    snapshot.get("ambiguous_category_count") or 0
+                ambiguous_category_count=_nonnegative_int(
+                    snapshot,
+                    "ambiguous_category_count",
                 ),
-                unclassified_category_count=int(
-                    snapshot.get("unclassified_category_count") or 0
+                unclassified_category_count=_nonnegative_int(
+                    snapshot,
+                    "unclassified_category_count",
                 ),
             )
         except Exception as exc:
