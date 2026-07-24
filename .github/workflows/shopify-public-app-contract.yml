@@ -6,6 +6,8 @@ on:
       - "shopify/public/**"
       - "apps/shopify/**"
       - ".env.example"
+      - "docs/shopify-public-acceptance.md"
+      - "scripts/accept_shopify_public_app.py"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
       - "apps/api/catora_api/config.py"
@@ -26,6 +28,7 @@ on:
       - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_compliance.py"
+      - "apps/api/tests/test_shopify_public_acceptance_script.py"
       - "apps/api/tests/test_shopify_public_embedded.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
@@ -40,6 +43,8 @@ on:
       - "shopify/public/**"
       - "apps/shopify/**"
       - ".env.example"
+      - "docs/shopify-public-acceptance.md"
+      - "scripts/accept_shopify_public_app.py"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
       - "apps/api/catora_api/config.py"
@@ -60,6 +65,7 @@ on:
       - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_compliance.py"
+      - "apps/api/tests/test_shopify_public_acceptance_script.py"
       - "apps/api/tests/test_shopify_public_embedded.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
@@ -86,6 +92,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
+      - name: Validate acceptance harness syntax
+        run: python -m py_compile scripts/accept_shopify_public_app.py
       - name: Validate public app source contract
         run: python scripts/validate_shopify_public_app_contract.py
       - name: Install API validation dependencies
@@ -95,6 +103,7 @@ jobs:
           pytest -q \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_compliance.py \
+            apps/api/tests/test_shopify_public_acceptance_script.py \
             apps/api/tests/test_shopify_public_embedded.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
@@ -123,6 +132,7 @@ jobs:
             apps/api/catora_api/worker.py \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_compliance.py \
+            apps/api/tests/test_shopify_public_acceptance_script.py \
             apps/api/tests/test_shopify_public_embedded.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
