@@ -39,10 +39,13 @@ def _validate(path: Path, *, development: bool) -> list[str]:
 
     build = config.get("build")
     expected_auto_urls = development
-    if not isinstance(build, dict) or build.get("automatically_update_urls_on_dev") is not expected_auto_urls:
-        errors.append(
-            f"{path}: automatically_update_urls_on_dev must be {str(expected_auto_urls).lower()}"
-        )
+    auto_urls_valid = (
+        isinstance(build, dict)
+        and build.get("automatically_update_urls_on_dev") is expected_auto_urls
+    )
+    if not auto_urls_valid:
+        expected = str(expected_auto_urls).lower()
+        errors.append(f"{path}: automatically_update_urls_on_dev must be {expected}")
 
     scopes = config.get("access_scopes")
     if not isinstance(scopes, dict):
