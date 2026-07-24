@@ -59,6 +59,38 @@ The endpoint returns only shop, user, invitation, feature-tier, activated-worksp
 
 An uninvited, expired or revoked store receives no activation or catalog processing.
 
+## Embedded App Home
+
+The merchant-facing public app lives under `apps/shopify` and is deployed independently from the standalone Catora operator application.
+
+It uses Shopify's iframe App Home model with App Bridge and Polaris web components loaded from Shopify's CDN. The build embeds only the linked public app client ID. For every backend request, App Bridge supplies a new short-lived ID token that is sent in the `Authorization` header and is never placed in local storage, session storage or cookies.
+
+The App Home provides only the bounded merchant workflow:
+
+- authenticate the current Shopify store;
+- show the invitation state;
+- activate an invited store;
+- display installation and synchronization health;
+- display product, variant, warning and taxonomy-readiness counts;
+- poll while catalog work is active;
+- request a new synchronization;
+- explain the read-only product scope and deletion behavior.
+
+The merchant does not receive access to the standalone Catora operator workspace, invitation administration, credential material, unrelated tenant data or internal audit controls.
+
+The App Home calls only:
+
+```text
+GET  /api/v1/shopify/public/session
+POST /api/v1/shopify/public/activate
+GET  /api/v1/shopify/public/installation
+POST /api/v1/shopify/public/installation/sync
+```
+
+A separate Vercel project rooted at `apps/shopify` serves static output and proxies only `/api/v1/shopify/public/*` to the Railway API. Its security policy permits Shopify Admin framing and the official Shopify CDN while disabling camera, microphone, geolocation and payment permissions. Proxied authenticated API responses use `private, no-store`.
+
+Production builds fail when `SHOPIFY_API_KEY` is absent, preventing an unlinked placeholder from reaching the production App Home.
+
 ## Store activation and first synchronization
 
 The embedded app activates an invited store through:
@@ -227,13 +259,14 @@ Run the source-controlled validation with:
 
 ```bash
 python scripts/validate_shopify_public_app_contract.py
+npm --prefix apps/shopify run check
 ```
 
 ## Remaining publication blockers
 
 The production public app must not be submitted for Shopify review until all remaining blockers are complete:
 
-1. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
+1. deploy the source-controlled App Home to `shopify.catora.codistan.org` with the linked public app client ID;
 2. complete installation, reauthorization, product-webhook, uninstall and data-deletion acceptance tests on development stores;
 3. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
 
@@ -243,8 +276,9 @@ An operator with Shopify app-development access must:
 
 1. create the two public-distribution app registrations;
 2. link each template with Shopify CLI without committing the generated client ID;
-3. create the `shopify.catora.codistan.org` deployment and DNS target for the embedded App Home;
-4. enter the environment-specific client credentials and public encryption key only in the deployment provider;
-5. deploy Shopify app configuration versions through Shopify CLI.
+3. create the Vercel project rooted at `apps/shopify` and attach `shopify.catora.codistan.org`;
+4. set the environment-specific public `SHOPIFY_API_KEY` in Vercel;
+5. enter the environment-specific client secret and public encryption key only in the Railway API service;
+6. deploy Shopify app configuration versions through Shopify CLI.
 
 The existing custom-distribution app remains available for controlled client demonstrations while the development public app moves through end-to-end testing and the production public app moves toward review.
