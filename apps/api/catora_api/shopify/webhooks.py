@@ -7,7 +7,7 @@ import json
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import cast
+from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,7 @@ SUPPORTED_TOPICS = {
     "products/update",
     "products/delete",
 }
+ShopifyAppDistribution = Literal["custom", "public"]
 
 
 class ShopifyWebhookError(ValueError):
@@ -37,6 +38,7 @@ class ShopifyWebhookError(ValueError):
 class ShopifyWebhookReceipt:
     delivery_id: uuid.UUID
     duplicate: bool
+    distribution: ShopifyAppDistribution
 
 
 def verify_shopify_webhook_hmac(
@@ -45,7 +47,7 @@ def verify_shopify_webhook_hmac(
     *,
     client_secret: str,
 ) -> bool:
-    if not supplied_signature:
+    if not supplied_signature or not client_secret:
         return False
     digest = base64.b64encode(
         hmac.new(client_secret.encode(), body, hashlib.sha256).digest()
@@ -68,6 +70,37 @@ def _payload_product_id(payload: object) -> str | None:
     return None
 
 
+def _installation_distribution(installation: ReportJob) -> ShopifyAppDistribution:
+    value = installation.input_snapshot.get("distribution")
+    return "public" if value == "public" else "custom"
+
+
+def _verified_distribution(
+    body: bytes,
+    supplied_signature: str,
+    *,
+    settings: Settings,
+) -> ShopifyAppDistribution:
+    verified: list[ShopifyAppDistribution] = []
+    if settings.shopify_enabled and verify_shopify_webhook_hmac(
+        body,
+        supplied_signature,
+        client_secret=settings.shopify_client_secret,
+    ):
+        verified.append("custom")
+    if settings.shopify_public_enabled and verify_shopify_webhook_hmac(
+        body,
+        supplied_signature,
+        client_secret=settings.shopify_public_client_secret,
+    ):
+        verified.append("public")
+    if not verified:
+        raise ShopifyWebhookError("Shopify webhook signature is invalid")
+    if len(verified) != 1:
+        raise ShopifyWebhookError("Shopify webhook signature is ambiguous")
+    return verified[0]
+
+
 async def receive_shopify_webhook(
     session: AsyncSession,
     *,
@@ -80,22 +113,33 @@ async def receive_shopify_webhook(
     triggered_at: str | None,
     supplied_signature: str,
 ) -> ShopifyWebhookReceipt:
-    if not verify_shopify_webhook_hmac(
-        body,
-        supplied_signature,
-        client_secret=settings.shopify_client_secret,
-    ):
-        raise ShopifyWebhookError("Shopify webhook signature is invalid")
     if topic not in SUPPORTED_TOPICS:
         raise ShopifyWebhookError("Shopify webhook topic is not supported")
     shop = normalize_shop_domain(shop_domain)
     if not webhook_id:
         raise ShopifyWebhookError("Shopify webhook delivery ID is missing")
+    distribution = _verified_distribution(
+        body,
+        supplied_signature,
+        settings=settings,
+    )
 
     delivery_id = _delivery_id(webhook_id)
     existing = await session.get(ReportJob, delivery_id)
     if existing is not None:
-        return ShopifyWebhookReceipt(delivery_id=delivery_id, duplicate=True)
+        existing_distribution = _installation_distribution(existing)
+        snapshot_distribution = existing.input_snapshot.get("distribution")
+        if snapshot_distribution in {"custom", "public"}:
+            existing_distribution = cast(ShopifyAppDistribution, snapshot_distribution)
+        if existing_distribution != distribution:
+            raise ShopifyWebhookError(
+                "Shopify webhook delivery identity does not match the original delivery"
+            )
+        return ShopifyWebhookReceipt(
+            delivery_id=delivery_id,
+            duplicate=True,
+            distribution=distribution,
+        )
 
     installations = list(
         (
@@ -107,16 +151,17 @@ async def receive_shopify_webhook(
             )
         ).all()
     )
-    installation = next(
-        (
-            item
-            for item in installations
-            if item.input_snapshot.get("shop_domain") == shop
-        ),
-        None,
-    )
-    if installation is None:
+    matches = [
+        item
+        for item in installations
+        if item.input_snapshot.get("shop_domain") == shop
+        and _installation_distribution(item) == distribution
+    ]
+    if not matches:
         raise ShopifyWebhookError("Shopify installation is not active")
+    if len(matches) != 1:
+        raise ShopifyWebhookError("Shopify installation identity is ambiguous")
+    installation = matches[0]
 
     try:
         payload = json.loads(body)
@@ -134,6 +179,7 @@ async def receive_shopify_webhook(
         input_snapshot={
             "installation_id": str(installation.id),
             "shop_domain": shop,
+            "distribution": distribution,
             "topic": topic,
             "webhook_id": webhook_id,
             "event_id": event_id,
@@ -142,7 +188,7 @@ async def receive_shopify_webhook(
             "payload_sha256": hashlib.sha256(body).hexdigest(),
             "product_id": product_id,
         },
-        template_version="shopify-webhook-v1",
+        template_version="shopify-webhook-v2",
     )
     session.add(delivery)
     await session.commit()
@@ -157,4 +203,8 @@ async def receive_shopify_webhook(
         }
         await session.commit()
         raise ShopifyWebhookError("Unable to enqueue Shopify webhook") from exc
-    return ShopifyWebhookReceipt(delivery_id=delivery.id, duplicate=False)
+    return ShopifyWebhookReceipt(
+        delivery_id=delivery.id,
+        duplicate=False,
+        distribution=distribution,
+    )

@@ -84,6 +84,8 @@ The response includes only workspace, installation, catalog-source, ingestion-jo
 
 Reauthorization for the same invited store reuses the existing workspace, storefront, installation and catalog source. A store cannot be activated into a different workspace.
 
+The first public synchronization uses the invitation issuer as its bounded Catora audit actor. This keeps the existing catalog audit pipeline accountable without creating a synthetic Shopify merchant password or granting the merchant access to unrelated Catora workspaces.
+
 ## Expiring offline credentials
 
 The backend exchanges a verified session token at the shop's OAuth token endpoint using:
@@ -109,6 +111,28 @@ shopify-public-installation:<installation UUID>
 ```
 
 The ingestion connector resolves that reference through `ShopifyPublicInstallationService`. Credentials are refreshed before expiry with the public app client identity, and Shopify must rotate the refresh token. A missing, expired or unrotated refresh credential puts the installation into `refresh_required` rather than falling back to the custom app identity.
+
+## Webhook app-identity routing
+
+The custom-distribution and public-distribution apps may use the same receiver:
+
+```text
+POST /api/v1/shopify/webhooks
+```
+
+The receiver can run with the custom app, the public app or both enabled. A delivery is accepted only when:
+
+1. its HMAC matches exactly one configured Shopify app secret;
+2. the permanent shop domain has exactly one active or refresh-required installation for that verified distribution;
+3. a repeated Shopify delivery ID resolves to the same distribution as the original delivery.
+
+Legacy installations without a distribution marker are treated as custom-distribution installations. Public installations carry `distribution=public` and cannot be targeted by a signature from the custom app, or vice versa.
+
+If both app secrets are accidentally identical, both signatures validate and the delivery is rejected as ambiguous. Catora does not guess which app sent it.
+
+The delivery record stores only bounded metadata, including the verified distribution, topic, shop domain, installation ID, event IDs, timestamps, product ID and a SHA-256 payload digest. The raw request body and HMAC signature are not persisted.
+
+Product lifecycle and uninstall processing remain shared after identity verification. An uninstall revokes the matched installation, clears its encrypted credentials, disconnects the source and cancels active synchronization jobs without affecting the other app identity.
 
 ## Operator API
 
@@ -179,11 +203,10 @@ python scripts/validate_shopify_public_app_contract.py
 
 The production public app must not be submitted for Shopify review until all remaining blockers are complete:
 
-1. route product and uninstall webhooks through the correct custom or public app signing secret;
-2. add dedicated HMAC-validating privacy and deletion handlers for the mandatory compliance topics;
-3. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
-4. complete installation, reauthorization, uninstall and data-deletion acceptance tests on development stores;
-5. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
+1. add dedicated HMAC-validating privacy and deletion handlers for the mandatory compliance topics;
+2. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
+3. complete installation, reauthorization, product-webhook, uninstall and data-deletion acceptance tests on development stores;
+4. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
 
 ## External setup still required
 
