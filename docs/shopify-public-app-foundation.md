@@ -4,13 +4,13 @@ This document covers the repository-controlled execution slices for epic #154.
 
 ## Distribution model
 
-Catora will use three independent Shopify app identities:
+Catora uses three independent Shopify app identities:
 
-- the existing custom-distribution Northstar pilot app;
+- the existing custom-distribution Northstar pilot app for controlled private client demonstrations;
 - `Catora Shopify — Development`, a public-distribution app linked only to Partner-owned development stores before review;
 - `Catora Shopify — Production`, a public-distribution app submitted for review and published with Limited visibility.
 
-The real Shopify client IDs and secrets are provider-side values. The templates under `shopify/public/` intentionally retain `LINK_WITH_SHOPIFY_CLI` and must be linked locally with Shopify CLI.
+The custom-distribution app and public-distribution apps have separate client identities and credentials. The real Shopify client IDs and secrets are provider-side values. The templates under `shopify/public/` intentionally retain `LINK_WITH_SHOPIFY_CLI` and must be linked locally with Shopify CLI.
 
 ## Public beta invitation boundary
 
@@ -59,9 +59,34 @@ The endpoint returns only shop, user, invitation, feature-tier, activated-worksp
 
 An uninvited, expired or revoked store receives no activation or catalog processing.
 
-## Expiring offline token exchange
+## Store activation and first synchronization
 
-After invitation activation and prospect-workspace provisioning are complete, the backend exchanges the verified session token at the shop's OAuth token endpoint using:
+The embedded app activates an invited store through:
+
+```text
+POST /api/v1/shopify/public/activate
+Authorization: Bearer <fresh Shopify session token>
+```
+
+The activation workflow:
+
+1. verifies the Shopify session token and permanent shop domain;
+2. rechecks and locks the store invitation;
+3. exchanges the session token for an expiring offline credential bundle;
+4. creates an isolated organization, workspace, locale, storefront and initial market on first activation;
+5. creates or reauthorizes the public Shopify installation;
+6. creates or repairs the Shopify catalog source;
+7. encrypts the access token and rotating refresh token with the public-app-specific AES-GCM key;
+8. binds the invitation to the new workspace;
+9. queues the first Shopify catalog synchronization.
+
+The response includes only workspace, installation, catalog-source, ingestion-job and synchronization metadata. Credential values are never returned.
+
+Reauthorization for the same invited store reuses the existing workspace, storefront, installation and catalog source. A store cannot be activated into a different workspace.
+
+## Expiring offline credentials
+
+The backend exchanges a verified session token at the shop's OAuth token endpoint using:
 
 ```text
 grant_type=urn:ietf:params:oauth:grant-type:token-exchange
@@ -70,14 +95,20 @@ requested_token_type=urn:shopify:params:oauth:token-type:offline-access-token
 expiring=1
 ```
 
-Catora requires all of the following before credentials can be persisted:
+Catora requires all of the following before credentials are persisted:
 
 - access token;
 - rotating refresh token;
 - positive access and refresh expiry metadata;
 - exact granted scope `read_products` and no write scope.
 
-Token bundle objects suppress credentials from their representation. The persistence/rotation wiring is the next #158 implementation slice.
+Public access and refresh tokens use the separate credential reference scheme:
+
+```text
+shopify-public-installation:<installation UUID>
+```
+
+The ingestion connector resolves that reference through `ShopifyPublicInstallationService`. Credentials are refreshed before expiry with the public app client identity, and Shopify must rotate the refresh token. A missing, expired or unrotated refresh credential puts the installation into `refresh_required` rather than falling back to the custom app identity.
 
 ## Operator API
 
@@ -120,10 +151,10 @@ Both public app templates require:
 - Shopify managed installation rather than the legacy install flow;
 - exact initial scope `read_products`;
 - Admin API version `2026-07`;
-- the existing HMAC-verified product/uninstall webhook endpoint;
+- the product/uninstall webhook endpoint;
 - separate development and production Shopify registrations.
 
-Public app runtime configuration is separate from the existing Northstar custom app:
+Public app runtime configuration is separate from the existing custom-distribution app:
 
 ```text
 CATORA_SHOPIFY_PUBLIC_ENABLED
@@ -131,9 +162,12 @@ CATORA_SHOPIFY_PUBLIC_CLIENT_ID
 CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET
 CATORA_SHOPIFY_PUBLIC_APP_URL
 CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES
+CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY
 CATORA_SHOPIFY_PUBLIC_HTTP_TIMEOUT_SECONDS
 CATORA_SHOPIFY_PUBLIC_SESSION_CLOCK_SKEW_SECONDS
 ```
+
+`CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY` must be a URL-safe Base64 encoding of exactly 32 random bytes and must not reuse the custom-distribution app encryption key.
 
 Run the source-controlled validation with:
 
@@ -141,7 +175,15 @@ Run the source-controlled validation with:
 python scripts/validate_shopify_public_app_contract.py
 ```
 
-Compliance webhooks are intentionally not declared until issue #162 adds dedicated HMAC-validating privacy and deletion handlers. Publishing the production app before that issue is complete is prohibited.
+## Remaining publication blockers
+
+The production public app must not be submitted for Shopify review until all remaining blockers are complete:
+
+1. route product and uninstall webhooks through the correct custom or public app signing secret;
+2. add dedicated HMAC-validating privacy and deletion handlers for the mandatory compliance topics;
+3. implement and deploy the embedded App Home at `shopify.catora.codistan.org`;
+4. complete installation, reauthorization, uninstall and data-deletion acceptance tests on development stores;
+5. prepare listing, review credentials, privacy policy, support details and reviewer instructions.
 
 ## External setup still required
 
@@ -149,8 +191,8 @@ An operator with Shopify app-development access must:
 
 1. create the two public-distribution app registrations;
 2. link each template with Shopify CLI without committing the generated client ID;
-3. create the `shopify.catora.codistan.org` deployment and DNS target when the embedded app shell is implemented;
-4. enter the environment-specific client credentials only in the deployment provider;
+3. create the `shopify.catora.codistan.org` deployment and DNS target for the embedded App Home;
+4. enter the environment-specific client credentials and public encryption key only in the deployment provider;
 5. deploy Shopify app configuration versions through Shopify CLI.
 
-The repository can continue with prospect-workspace provisioning, encrypted public-token persistence and the embedded App Home while those registrations are being prepared.
+The existing custom-distribution app remains available for controlled client demonstrations while the development public app moves through end-to-end testing and the production public app moves toward review.

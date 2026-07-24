@@ -14,7 +14,9 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
+from catora_api.db.models import ShopifyStoreInvitation
 from catora_api.schemas.shopify_public import (
+    ShopifyPublicActivationView,
     ShopifyPublicSessionView,
     ShopifyStoreInvitationCreateRequest,
     ShopifyStoreInvitationView,
@@ -23,10 +25,18 @@ from catora_api.shopify.invitations import (
     ShopifyInvitationError,
     ShopifyInvitationService,
 )
+from catora_api.shopify.public_installations import (
+    ShopifyPublicInstallationError,
+    ShopifyPublicInstallationService,
+)
 from catora_api.shopify.public_session import (
+    ShopifyPublicSession,
+    ShopifyPublicTokenExchange,
+    ShopifyPublicTokenExchangeError,
     bearer_session_token,
     verify_shopify_public_session_token,
 )
+from catora_api.shopify.sync import queue_shopify_sync
 
 router = APIRouter(tags=["shopify public app invitations"])
 
@@ -36,15 +46,10 @@ def _require_source_management(role: str) -> None:
         raise AuthorizationError("Catalog source management permission required")
 
 
-@router.get(
-    "/shopify/public/session",
-    response_model=ShopifyPublicSessionView,
-)
-async def authenticate_shopify_public_session(
+def _authenticated_shopify_session(
     request: Request,
-    session: SessionDependency,
     settings: SettingsDependency,
-) -> ShopifyPublicSessionView:
+) -> tuple[str, ShopifyPublicSession]:
     if not settings.shopify_public_enabled:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -65,9 +70,15 @@ async def authenticate_shopify_public_session(
             detail="The Shopify session could not be authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
+    return token, shopify_session
 
+
+async def _invitation_for_session(
+    session: SessionDependency,
+    shopify_session: ShopifyPublicSession,
+) -> ShopifyStoreInvitation:
     try:
-        invitation = await ShopifyInvitationService().require_activatable(
+        return await ShopifyInvitationService().require_activatable(
             session,
             shop_domain=shopify_session.shop_domain,
         )
@@ -76,6 +87,19 @@ async def authenticate_shopify_public_session(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+
+
+@router.get(
+    "/shopify/public/session",
+    response_model=ShopifyPublicSessionView,
+)
+async def authenticate_shopify_public_session(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ShopifyPublicSessionView:
+    _, shopify_session = _authenticated_shopify_session(request, settings)
+    invitation = await _invitation_for_session(session, shopify_session)
 
     invitation_status = cast(
         Literal["pending", "activated"],
@@ -93,6 +117,75 @@ async def authenticate_shopify_public_session(
         invitation_expires_at=invitation.expires_at,
         activated_workspace_id=invitation.activated_workspace_id,
         session_expires_at=shopify_session.expires_at,
+    )
+
+
+@router.post(
+    "/shopify/public/activate",
+    response_model=ShopifyPublicActivationView,
+)
+async def activate_shopify_public_installation(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ShopifyPublicActivationView:
+    session_token, shopify_session = _authenticated_shopify_session(request, settings)
+    invitation = await _invitation_for_session(session, shopify_session)
+    try:
+        token_bundle = await ShopifyPublicTokenExchange(settings).exchange(
+            session_token=session_token,
+            session=shopify_session,
+        )
+    except ShopifyPublicTokenExchangeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Shopify could not complete the public app credential exchange",
+        ) from exc
+
+    try:
+        activation = await ShopifyPublicInstallationService(settings).activate(
+            session,
+            invitation=invitation,
+            shopify_session=shopify_session,
+            token_bundle=token_bundle,
+        )
+    except ShopifyPublicInstallationError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    snapshot = dict(activation.installation.input_snapshot)
+    ingestion_job = None
+    if activation.created or not snapshot.get("last_sync_job_id"):
+        ingestion_job = await queue_shopify_sync(
+            session,
+            installation=activation.installation,
+            reason="public_app_activation",
+        )
+        snapshot = dict(activation.installation.input_snapshot)
+
+    sync_status = cast(
+        Literal[
+            "not_started",
+            "queued",
+            "coalesced",
+            "running",
+            "completed",
+            "failed",
+        ],
+        snapshot.get("sync_status") or "not_started",
+    )
+    feature_tier = cast(
+        Literal["demo", "plus_demo"],
+        activation.feature_tier,
+    )
+    return ShopifyPublicActivationView(
+        shop_domain=shopify_session.shop_domain,
+        workspace_id=activation.workspace_id,
+        installation_id=activation.installation.id,
+        catalog_source_id=activation.catalog_source.id,
+        ingestion_job_id=ingestion_job.id if ingestion_job is not None else None,
+        feature_tier=feature_tier,
+        sync_status=sync_status,
+        created=activation.created,
     )
 
 

@@ -21,6 +21,11 @@ from catora_api.shopify.installations import (
     ShopifyInstallationService,
     parse_credential_reference,
 )
+from catora_api.shopify.public_installations import (
+    SHOPIFY_PUBLIC_CREDENTIAL_SCHEME,
+    ShopifyPublicInstallationService,
+    parse_public_credential_reference,
+)
 from catora_api.storage import ObjectStorage
 
 
@@ -76,6 +81,11 @@ async def _resolve_shopify_credential(
     *,
     secret_resolver: SecretResolver | None,
 ) -> SecretValue:
+    if reference.startswith(f"{SHOPIFY_PUBLIC_CREDENTIAL_SCHEME}:"):
+        installation_id = parse_public_credential_reference(reference)
+        return await ShopifyPublicInstallationService().resolve_access_token(
+            installation_id
+        )
     if reference.startswith(f"{SHOPIFY_CREDENTIAL_SCHEME}:"):
         installation_id = parse_credential_reference(reference)
         return await ShopifyInstallationService().resolve_access_token(installation_id)

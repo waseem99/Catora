@@ -36,6 +36,16 @@ def _local_or_https_origin(value: str) -> bool:
     return _https_origin(value)
 
 
+def _decode_encryption_key(value: str, *, variable: str) -> bytes:
+    try:
+        key = base64.urlsafe_b64decode(value.encode("ascii"))
+    except (ValueError, UnicodeEncodeError) as exc:
+        raise ValueError(f"{variable} must be URL-safe base64") from exc
+    if len(key) != 32:
+        raise ValueError(f"{variable} must decode to 32 bytes")
+    return key
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CATORA_",
@@ -93,23 +103,21 @@ class Settings(BaseSettings):
     shopify_public_client_secret: str = Field(default="", repr=False)
     shopify_public_app_url: str = "http://localhost:3001"
     shopify_public_required_scopes: list[str] = ["read_products"]
+    shopify_public_credential_encryption_key: str = Field(default="", repr=False)
     shopify_public_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     shopify_public_session_clock_skew_seconds: int = Field(default=5, ge=0, le=30)
 
     def shopify_encryption_key_bytes(self) -> bytes:
-        try:
-            key = base64.urlsafe_b64decode(
-                self.shopify_credential_encryption_key.encode("ascii")
-            )
-        except (ValueError, UnicodeEncodeError) as exc:
-            raise ValueError(
-                "CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY must be URL-safe base64"
-            ) from exc
-        if len(key) != 32:
-            raise ValueError(
-                "CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY must decode to 32 bytes"
-            )
-        return key
+        return _decode_encryption_key(
+            self.shopify_credential_encryption_key,
+            variable="CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY",
+        )
+
+    def shopify_public_encryption_key_bytes(self) -> bytes:
+        return _decode_encryption_key(
+            self.shopify_public_credential_encryption_key,
+            variable="CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
+        )
 
     def validate_shopify(self) -> None:
         if not self.shopify_enabled:
@@ -174,6 +182,7 @@ class Settings(BaseSettings):
             raise ValueError(
                 "Catora's public Shopify app must request only read_products"
             )
+        self.shopify_public_encryption_key_bytes()
 
     def validate_production(self) -> None:
         if self.environment != "production":

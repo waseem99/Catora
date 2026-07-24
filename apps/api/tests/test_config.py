@@ -32,6 +32,9 @@ def production_settings(**overrides: object) -> Settings:
         "shopify_public_client_secret": "q" * 32,
         "shopify_public_app_url": "https://shopify.catora.codistan.org",
         "shopify_public_required_scopes": ["read_products"],
+        "shopify_public_credential_encryption_key": base64.urlsafe_b64encode(
+            b"u" * 32
+        ).decode(),
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -77,6 +80,10 @@ def test_valid_production_settings_pass() -> None:
             {"shopify_public_required_scopes": ["read_products", "write_products"]},
             "public Shopify app must request only read_products",
         ),
+        (
+            {"shopify_public_credential_encryption_key": "not-a-key"},
+            "CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
+        ),
     ],
 )
 def test_invalid_production_settings_fail(
@@ -100,4 +107,5 @@ def test_disabled_public_shopify_does_not_require_public_secrets() -> None:
         shopify_public_enabled=False,
         shopify_public_client_id="",
         shopify_public_client_secret="",
+        shopify_public_credential_encryption_key="",
     ).validate_production()
