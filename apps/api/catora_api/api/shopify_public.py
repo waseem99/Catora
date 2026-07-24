@@ -14,6 +14,7 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
+from catora_api.db.models import ShopifyStoreInvitation
 from catora_api.schemas.shopify_public import (
     ShopifyPublicActivationView,
     ShopifyPublicSessionView,
@@ -75,7 +76,7 @@ def _authenticated_shopify_session(
 async def _invitation_for_session(
     session: SessionDependency,
     shopify_session: ShopifyPublicSession,
-):
+) -> ShopifyStoreInvitation:
     try:
         return await ShopifyInvitationService().require_activatable(
             session,
