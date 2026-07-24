@@ -14,6 +14,7 @@ from catora_api.connectors.shopify import (
     ShopifyCatalogConnector,
     ShopifyConnectorConfig,
 )
+from catora_api.connectors.shopify_bulk import ShopifyBulkCatalogConnector
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.secrets import EnvironmentSecretResolver, SecretResolver, SecretValue
 from catora_api.shopify.installations import (
@@ -117,17 +118,21 @@ async def _shopify_connector(
     elif updated_after_value is not None:
         raise ValueError("Shopify incremental timestamp is invalid")
 
-    return ShopifyCatalogConnector(
-        ShopifyConnectorConfig(
-            shop_domain=shop_domain,
-            access_token=await _resolve_shopify_credential(
-                source.credential_ref,
-                secret_resolver=secret_resolver,
-            ),
-            api_version=str(api_version or "2026-07"),
-            updated_after=updated_after,
-        )
+    initial_sync_mode = config.get("initial_sync_mode", "cursor")
+    if initial_sync_mode not in {"cursor", "bulk"}:
+        raise ValueError("Shopify initial sync mode is invalid")
+    connector_config = ShopifyConnectorConfig(
+        shop_domain=shop_domain,
+        access_token=await _resolve_shopify_credential(
+            source.credential_ref,
+            secret_resolver=secret_resolver,
+        ),
+        api_version=str(api_version or "2026-07"),
+        updated_after=updated_after,
     )
+    if initial_sync_mode == "bulk" and updated_after is None:
+        return ShopifyBulkCatalogConnector(connector_config)
+    return ShopifyCatalogConnector(connector_config)
 
 
 def _public_catalog_connector(
