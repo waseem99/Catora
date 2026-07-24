@@ -80,7 +80,7 @@ def _invitation(
 
 
 @pytest.mark.asyncio
-async def test_create_invitation_normalizes_store_and_records_bounded_audit() -> None:
+async def test_create_invitation_normalizes_store_and_audits() -> None:
     issuer_workspace_id = uuid.uuid4()
     actor_user_id = uuid.uuid4()
     session = InvitationSession(scalar_values=[None])
@@ -109,8 +109,11 @@ async def test_create_invitation_normalizes_store_and_records_bounded_audit() ->
 
 
 @pytest.mark.asyncio
-async def test_activated_store_cannot_be_reinvited_into_another_tenant() -> None:
-    invitation = _invitation(status="activated", activated_workspace_id=uuid.uuid4())
+async def test_activated_store_cannot_be_reinvited() -> None:
+    invitation = _invitation(
+        status="activated",
+        activated_workspace_id=uuid.uuid4(),
+    )
     session = InvitationSession(scalar_values=[invitation])
 
     with pytest.raises(ShopifyInvitationError, match="cannot be replaced"):
@@ -129,7 +132,9 @@ async def test_activated_store_cannot_be_reinvited_into_another_tenant() -> None
 
 @pytest.mark.asyncio
 async def test_expired_invitation_fails_closed_and_is_persisted() -> None:
-    invitation = _invitation(expires_at=datetime.now(UTC) - timedelta(seconds=1))
+    invitation = _invitation(
+        expires_at=datetime.now(UTC) - timedelta(seconds=1)
+    )
     session = InvitationSession(scalar_values=[invitation])
 
     with pytest.raises(ShopifyInvitationError, match="expired"):
@@ -143,7 +148,7 @@ async def test_expired_invitation_fails_closed_and_is_persisted() -> None:
 
 
 @pytest.mark.asyncio
-async def test_activation_is_store_bound_and_idempotent_for_the_same_workspace() -> None:
+async def test_activation_is_store_bound_and_idempotent() -> None:
     target_workspace_id = uuid.uuid4()
     invitation = _invitation()
     session = InvitationSession(scalar_values=[invitation])
@@ -174,7 +179,10 @@ async def test_activation_is_store_bound_and_idempotent_for_the_same_workspace()
     assert idempotent_session.commit_count == 0
 
     conflict_session = InvitationSession(scalar_values=[activated])
-    with pytest.raises(ShopifyInvitationError, match="another Catora workspace"):
+    with pytest.raises(
+        ShopifyInvitationError,
+        match="another Catora workspace",
+    ):
         await ShopifyInvitationService().activate(
             cast(Any, conflict_session),
             shop_domain=invitation.shop_domain,
@@ -183,7 +191,7 @@ async def test_activation_is_store_bound_and_idempotent_for_the_same_workspace()
 
 
 @pytest.mark.asyncio
-async def test_invitation_listing_is_scoped_to_the_issuer_workspace_query() -> None:
+async def test_invitation_listing_uses_issuer_workspace_scope() -> None:
     first = _invitation()
     second = _invitation(status="revoked")
     session = InvitationSession(scalars_values=[[first, second]])
@@ -205,5 +213,6 @@ def test_public_invitation_routes_never_expose_credentials() -> None:
     assert item in paths
     serialized = str(schema).casefold()
     assert "shopify_client_secret" not in serialized
-    assert "access_token" not in str(schema["paths"][collection]).casefold()
-    assert "refresh_token" not in str(schema["paths"][collection]).casefold()
+    collection_schema = str(schema["paths"][collection]).casefold()
+    assert "access_token" not in collection_schema
+    assert "refresh_token" not in collection_schema
