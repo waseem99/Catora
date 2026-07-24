@@ -64,7 +64,7 @@ def _invitation(
     now = datetime.now(UTC)
     return ShopifyStoreInvitation(
         id=uuid.uuid4(),
-        issuer_workspace_id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
         activated_workspace_id=activated_workspace_id,
         created_by_user_id=uuid.uuid4(),
         shop_domain="prospect-store.myshopify.com",
@@ -94,6 +94,7 @@ async def test_create_invitation_normalizes_store_and_audits() -> None:
         expires_in_hours=168,
     )
 
+    assert invitation.workspace_id == issuer_workspace_id
     assert invitation.shop_domain == "prospect-store.myshopify.com"
     assert invitation.prospect_name == "Prospect Store"
     assert invitation.status == "pending"
@@ -191,14 +192,14 @@ async def test_activation_is_store_bound_and_idempotent() -> None:
 
 
 @pytest.mark.asyncio
-async def test_invitation_listing_uses_issuer_workspace_scope() -> None:
+async def test_invitation_listing_uses_workspace_scope() -> None:
     first = _invitation()
     second = _invitation(status="revoked")
     session = InvitationSession(scalars_values=[[first, second]])
 
     result = await ShopifyInvitationService().list_for_workspace(
         cast(Any, session),
-        issuer_workspace_id=first.issuer_workspace_id,
+        issuer_workspace_id=first.workspace_id,
     )
 
     assert result == (first, second)
