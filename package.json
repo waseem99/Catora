@@ -22,7 +22,8 @@
     "demo:export-shopify": "docker compose exec -T api python scripts/export_sales_demo_shopify_csv.py --output /tmp/northstar-shopify-products.csv && docker compose cp api:/tmp/northstar-shopify-products.csv ./northstar-shopify-products.csv",
     "demo:package-shopify": "docker compose exec -T api python scripts/build_northstar_shopify_demo_package.py --output-dir /tmp/northstar-shopify-demo-package && rm -rf ./northstar-shopify-demo-package && docker compose cp api:/tmp/northstar-shopify-demo-package ./northstar-shopify-demo-package",
     "demo:smoke": "python scripts/smoke_hosted_demo.py",
-    "demo:verify-shopify-change": "python scripts/verify_shopify_live_change.py"
+    "demo:verify-shopify-change": "python scripts/verify_shopify_live_change.py",
+    "shopify:accept": "python scripts/accept_shopify_public_app.py"
   },
   "devDependencies": {
     "eslint": "9.39.2",
