@@ -31,9 +31,13 @@ class ShopifyInvitationService:
         if not name:
             raise ShopifyInvitationError("Prospect name is required")
         if expires_in_hours < 1 or expires_in_hours > 720:
-            raise ShopifyInvitationError("Invitation lifetime must be between 1 and 720 hours")
+            raise ShopifyInvitationError(
+                "Invitation lifetime must be between 1 and 720 hours"
+            )
         if feature_tier not in {"demo", "plus_demo"}:
-            raise ShopifyInvitationError("Unsupported Shopify invitation feature tier")
+            raise ShopifyInvitationError(
+                "Unsupported Shopify invitation feature tier"
+            )
 
         now = datetime.now(UTC)
         invitation = await session.scalar(
@@ -119,15 +123,25 @@ class ShopifyInvitationService:
             )
         )
         if invitation is None:
-            raise ShopifyInvitationError("This Shopify store is not invited to Catora")
+            raise ShopifyInvitationError(
+                "This Shopify store is not invited to Catora"
+            )
         if invitation.status == "activated":
             return invitation
-        if invitation.status == "pending" and invitation.expires_at <= datetime.now(UTC):
+        has_expired = (
+            invitation.status == "pending"
+            and invitation.expires_at <= datetime.now(UTC)
+        )
+        if has_expired:
             invitation.status = "expired"
             await session.commit()
-            raise ShopifyInvitationError("This Shopify store invitation has expired")
+            raise ShopifyInvitationError(
+                "This Shopify store invitation has expired"
+            )
         if invitation.status != "pending":
-            raise ShopifyInvitationError("This Shopify store invitation is not active")
+            raise ShopifyInvitationError(
+                "This Shopify store invitation is not active"
+            )
         return invitation
 
     async def activate(
@@ -137,7 +151,10 @@ class ShopifyInvitationService:
         shop_domain: str,
         activated_workspace_id: uuid.UUID,
     ) -> ShopifyStoreInvitation:
-        invitation = await self.require_activatable(session, shop_domain=shop_domain)
+        invitation = await self.require_activatable(
+            session,
+            shop_domain=shop_domain,
+        )
         if invitation.status == "activated":
             if invitation.activated_workspace_id != activated_workspace_id:
                 raise ShopifyInvitationError(
@@ -182,7 +199,9 @@ class ShopifyInvitationService:
             )
         )
         if invitation is None:
-            raise ShopifyInvitationError("Shopify store invitation not found")
+            raise ShopifyInvitationError(
+                "Shopify store invitation not found"
+            )
         if invitation.status == "revoked":
             return invitation
 
