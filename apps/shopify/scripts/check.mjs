@@ -28,11 +28,17 @@ requireText(
 );
 requireText("index.html", files.html, "<s-page");
 requireText("index.html", files.html, "<s-section");
+requireText("index.html", files.html, 'id="analysis-badge"');
+requireText("index.html", files.html, 'id="report-action"');
+requireText("index.html", files.html, 'id="backlog-action"');
 requireText("app.js", files.app, "globalThis.shopify");
 requireText("app.js", files.app, ".idToken()");
 requireText("app.js", files.app, "/api/v1/shopify/public/session");
 requireText("app.js", files.app, "/api/v1/shopify/public/activate");
 requireText("app.js", files.app, "/api/v1/shopify/public/installation/sync");
+requireText("app.js", files.app, "/api/v1/shopify/public/report.pptx");
+requireText("app.js", files.app, "/api/v1/shopify/public/backlog.csv");
+requireText("app.js", files.app, "Authorization: `Bearer ${token}`");
 requireText("vercel.json", files.vercel, "https://api.catora.codistan.org");
 requireText("vercel.json", files.vercel, "frame-ancestors");
 

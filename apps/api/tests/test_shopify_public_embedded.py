@@ -27,6 +27,7 @@ def _invitation() -> ShopifyStoreInvitation:
 
 def test_public_installation_view_exposes_bounded_catalog_status() -> None:
     invitation = _invitation()
+    report_id = uuid.uuid4()
     installation = ReportJob(
         id=uuid.uuid4(),
         workspace_id=invitation.activated_workspace_id,
@@ -52,6 +53,15 @@ def test_public_installation_view_exposes_bounded_catalog_status() -> None:
             "last_bulk_operation_completed_at": "2026-07-24T11:59:00Z",
             "last_bulk_webhook_received_at": "2026-07-24T11:59:01Z",
             "last_bulk_operation_error_code": None,
+            "analysis_status": "completed",
+            "analysis_stale": False,
+            "analysis_completed_at": "2026-07-24T12:02:00Z",
+            "last_verified_analysis_report_job_id": str(report_id),
+            "analysis_finding_count": 18,
+            "analysis_intent_run_count": 4,
+            "analysis_intent_match_count": 480,
+            "analysis_confident_match_count": 24,
+            "analysis_possible_match_missing_data_count": 61,
             "encrypted_access_token": "must-not-appear",
             "encrypted_refresh_token": "must-not-appear",
         },
@@ -74,11 +84,53 @@ def test_public_installation_view_exposes_bounded_catalog_status() -> None:
     assert view.last_bulk_operation_status == "completed"
     assert view.last_bulk_operation_completed_at is not None
     assert view.last_bulk_webhook_received_at is not None
+    assert view.analysis_status == "completed"
+    assert view.analysis_stale is False
+    assert view.analysis_completed_at is not None
+    assert view.finding_count == 18
+    assert view.intent_run_count == 4
+    assert view.intent_match_count == 480
+    assert view.confident_match_count == 24
+    assert view.possible_match_missing_data_count == 61
+    assert view.report_ready is True
+    assert view.report_path == "/api/v1/shopify/public/report.pptx"
+    assert view.backlog_path == "/api/v1/shopify/public/backlog.csv"
     assert view.reauthorization_required is False
     serialized = view.model_dump_json()
     assert "encrypted_access_token" not in serialized
     assert "encrypted_refresh_token" not in serialized
     assert "must-not-appear" not in serialized
+    assert str(report_id) not in serialized
+
+
+def test_public_installation_view_preserves_stale_verified_result() -> None:
+    invitation = _invitation()
+    installation = ReportJob(
+        id=uuid.uuid4(),
+        workspace_id=invitation.activated_workspace_id,
+        report_type="shopify_installation",
+        status="active",
+        input_snapshot={
+            "distribution": "public",
+            "shop_domain": invitation.shop_domain,
+            "sync_status": "completed",
+            "analysis_status": "failed",
+            "analysis_stale": True,
+            "analysis_error_type": "IntentRunError",
+            "analysis_completed_at": "2026-07-24T12:02:00Z",
+            "last_verified_analysis_report_job_id": str(uuid.uuid4()),
+            "analysis_finding_count": 18,
+        },
+        template_version="shopify-public-installation-v1",
+    )
+
+    view = _installation_view(installation, invitation)
+
+    assert view.analysis_status == "failed"
+    assert view.analysis_stale is True
+    assert view.analysis_error_type == "IntentRunError"
+    assert view.report_ready is True
+    assert view.finding_count == 18
 
 
 def test_public_installation_view_marks_reauthorization() -> None:
@@ -103,13 +155,16 @@ def test_public_installation_view_marks_reauthorization() -> None:
     assert view.sync_status == "failed"
     assert view.reauthorization_required is True
     assert view.last_sync_error_type == "CredentialExpired"
+    assert view.report_ready is False
 
 
-def test_embedded_status_and_sync_routes_never_expose_credentials() -> None:
+def test_embedded_status_sync_and_report_routes_never_expose_credentials() -> None:
     schema = app.openapi()
     for route in (
         "/api/v1/shopify/public/installation",
         "/api/v1/shopify/public/installation/sync",
+        "/api/v1/shopify/public/report.pptx",
+        "/api/v1/shopify/public/backlog.csv",
     ):
         assert route in schema["paths"]
         serialized = str(schema["paths"][route]).casefold()

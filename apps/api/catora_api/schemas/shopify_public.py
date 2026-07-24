@@ -26,6 +26,12 @@ ShopifyBulkOperationStatus = Literal[
     "completed",
     "failed",
 ]
+ShopifyAnalysisStatus = Literal[
+    "not_started",
+    "running",
+    "completed",
+    "failed",
+]
 
 
 class ShopifyStoreInvitationCreateRequest(BaseModel):
@@ -99,4 +105,16 @@ class ShopifyPublicInstallationView(BaseModel):
     last_bulk_operation_completed_at: datetime | None = None
     last_bulk_webhook_received_at: datetime | None = None
     last_bulk_operation_error_code: str | None = None
+    analysis_status: ShopifyAnalysisStatus = "not_started"
+    analysis_stale: bool = False
+    analysis_completed_at: datetime | None = None
+    analysis_error_type: str | None = None
+    finding_count: int = Field(default=0, ge=0)
+    intent_run_count: int = Field(default=0, ge=0)
+    intent_match_count: int = Field(default=0, ge=0)
+    confident_match_count: int = Field(default=0, ge=0)
+    possible_match_missing_data_count: int = Field(default=0, ge=0)
+    report_ready: bool = False
+    report_path: str | None = None
+    backlog_path: str | None = None
     reauthorization_required: bool = False

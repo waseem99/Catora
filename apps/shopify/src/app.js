@@ -15,6 +15,8 @@ const endpoints = {
   activate: "/api/v1/shopify/public/activate",
   installation: "/api/v1/shopify/public/installation",
   sync: "/api/v1/shopify/public/installation/sync",
+  report: "/api/v1/shopify/public/report.pptx",
+  backlog: "/api/v1/shopify/public/backlog.csv",
 };
 
 const elements = {
@@ -43,12 +45,25 @@ const elements = {
   assignedCount: document.querySelector("#assigned-count"),
   ambiguousCount: document.querySelector("#ambiguous-count"),
   unclassifiedCount: document.querySelector("#unclassified-count"),
+  analysisBadge: document.querySelector("#analysis-badge"),
+  analysisUpdated: document.querySelector("#analysis-updated"),
+  analysisRunningBanner: document.querySelector("#analysis-running-banner"),
+  analysisStaleBanner: document.querySelector("#analysis-stale-banner"),
+  analysisErrorBanner: document.querySelector("#analysis-error-banner"),
+  analysisErrorMessage: document.querySelector("#analysis-error-message"),
+  findingCount: document.querySelector("#finding-count"),
+  intentRunCount: document.querySelector("#intent-run-count"),
+  confidentMatchCount: document.querySelector("#confident-match-count"),
+  missingDataCount: document.querySelector("#missing-data-count"),
+  reportAction: document.querySelector("#report-action"),
+  backlogAction: document.querySelector("#backlog-action"),
   workspaceReference: document.querySelector("#workspace-reference"),
   liveStatus: document.querySelector("#live-status"),
 };
 
 let pollTimer = null;
 let requestInFlight = false;
+let lastInstallation = null;
 
 class ApiRequestError extends Error {
   constructor(status, payload) {
@@ -68,6 +83,11 @@ function setBusy(button, busy) {
   if (!button) return;
   button.toggleAttribute("loading", busy);
   button.toggleAttribute("disabled", busy);
+}
+
+function setDisabled(button, disabled) {
+  if (!button) return;
+  button.toggleAttribute("disabled", disabled);
 }
 
 function announce(message) {
@@ -111,6 +131,36 @@ async function apiRequest(path, options = {}) {
     : { detail: await response.text() };
   if (!response.ok) throw new ApiRequestError(response.status, payload);
   return payload;
+}
+
+async function downloadAuthenticated(path, filename, accept) {
+  const token = await sessionToken();
+  const response = await fetch(path, {
+    headers: {
+      Accept: accept,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const contentType = response.headers.get("content-type") ?? "";
+    const payload = contentType.includes("application/json")
+      ? await response.json()
+      : { detail: await response.text() };
+    throw new ApiRequestError(response.status, payload);
+  }
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = filename;
+    link.rel = "noopener";
+    document.body.append(link);
+    link.click();
+    link.remove();
+  } finally {
+    globalThis.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  }
 }
 
 function showLoading() {
@@ -158,14 +208,73 @@ function setBadge(element, label, tone) {
   element.setAttribute("tone", tone);
 }
 
+function analysisLabel(status, stale) {
+  if (status === "running") return "Analyzing";
+  if (status === "completed" && stale) return "Verified · refresh pending";
+  if (status === "completed") return "Verified";
+  if (status === "failed" && stale) return "Verified · latest refresh failed";
+  if (status === "failed") return "Analysis failed";
+  return "Not started";
+}
+
+function analysisTone(status, stale) {
+  if (status === "completed" && !stale) return "success";
+  if (status === "failed" && !stale) return "critical";
+  if (stale) return "warning";
+  return "info";
+}
+
+function renderAnalysis(status) {
+  const running = status.analysis_status === "running";
+  const stale = status.analysis_stale === true;
+  const reportReady = status.report_ready === true;
+  setBadge(
+    elements.analysisBadge,
+    analysisLabel(status.analysis_status, stale),
+    analysisTone(status.analysis_status, stale),
+  );
+  if (elements.analysisUpdated) {
+    elements.analysisUpdated.textContent = `Last verified analysis: ${formatTimestamp(
+      status.analysis_completed_at,
+      document.documentElement.lang || "en-US",
+    )}`;
+  }
+  setHidden(elements.analysisRunningBanner, !running);
+  setHidden(elements.analysisStaleBanner, !stale || status.analysis_status === "failed");
+  setHidden(elements.analysisErrorBanner, status.analysis_status !== "failed");
+  if (elements.analysisErrorMessage && status.analysis_error_type) {
+    elements.analysisErrorMessage.textContent = reportReady
+      ? `Catora preserved the last verified report. The latest refresh failed with: ${status.analysis_error_type}`
+      : `Catora could not complete the assessment. Retry synchronization; error: ${status.analysis_error_type}`;
+  }
+  if (elements.findingCount) {
+    elements.findingCount.textContent = String(status.finding_count ?? 0);
+  }
+  if (elements.intentRunCount) {
+    elements.intentRunCount.textContent = String(status.intent_run_count ?? 0);
+  }
+  if (elements.confidentMatchCount) {
+    elements.confidentMatchCount.textContent = String(status.confident_match_count ?? 0);
+  }
+  if (elements.missingDataCount) {
+    elements.missingDataCount.textContent = String(
+      status.possible_match_missing_data_count ?? 0,
+    );
+  }
+  setDisabled(elements.reportAction, !reportReady || requestInFlight);
+  setDisabled(elements.backlogAction, !reportReady || requestInFlight);
+}
+
 function renderInstallation(status) {
+  lastInstallation = status;
   setHidden(elements.loadingView, true);
   setHidden(elements.activationView, true);
   setHidden(elements.errorBanner, true);
   setHidden(elements.dashboardView, false);
 
   const syncing = isActiveSync(status.sync_status);
-  const canSync = status.installation_status === "active" && !syncing;
+  const analyzing = status.analysis_status === "running";
+  const canSync = status.installation_status === "active" && !syncing && !analyzing;
   setHidden(elements.syncAction, false);
   setBusy(elements.syncAction, syncing);
   setBusy(elements.inlineSyncAction, syncing);
@@ -208,12 +317,18 @@ function renderInstallation(status) {
   if (elements.unclassifiedCount) {
     elements.unclassifiedCount.textContent = String(coverage.unclassified);
   }
+  renderAnalysis(status);
   if (elements.workspaceReference) {
     elements.workspaceReference.textContent = `Isolated workspace: ${status.workspace_id}`;
   }
 
-  announce(`Catalog status: ${syncLabel(status.sync_status)}.`);
-  if (syncing) schedulePoll();
+  announce(
+    `Catalog status: ${syncLabel(status.sync_status)}. Analysis: ${analysisLabel(
+      status.analysis_status,
+      status.analysis_stale === true,
+    )}.`,
+  );
+  if (syncing || analyzing) schedulePoll();
   else clearPoll();
 }
 
@@ -234,6 +349,7 @@ async function bootstrap() {
     showError(error);
   } finally {
     requestInFlight = false;
+    if (lastInstallation) renderAnalysis(lastInstallation);
   }
 }
 
@@ -276,6 +392,52 @@ async function sync() {
   }
 }
 
+async function downloadReport() {
+  if (requestInFlight || !lastInstallation?.report_ready) return;
+  requestInFlight = true;
+  setBusy(elements.reportAction, true);
+  setDisabled(elements.backlogAction, true);
+  try {
+    await downloadAuthenticated(
+      endpoints.report,
+      "catora-shopify-catalog-assessment.pptx",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    );
+    toast("Executive report downloaded");
+  } catch (error) {
+    toast(apiErrorMessage(error?.payload, "The report could not be downloaded."), {
+      isError: true,
+    });
+  } finally {
+    requestInFlight = false;
+    setBusy(elements.reportAction, false);
+    renderAnalysis(lastInstallation);
+  }
+}
+
+async function downloadBacklog() {
+  if (requestInFlight || !lastInstallation?.report_ready) return;
+  requestInFlight = true;
+  setBusy(elements.backlogAction, true);
+  setDisabled(elements.reportAction, true);
+  try {
+    await downloadAuthenticated(
+      endpoints.backlog,
+      "catora-shopify-remediation-backlog.csv",
+      "text/csv",
+    );
+    toast("Remediation backlog downloaded");
+  } catch (error) {
+    toast(apiErrorMessage(error?.payload, "The backlog could not be downloaded."), {
+      isError: true,
+    });
+  } finally {
+    requestInFlight = false;
+    setBusy(elements.backlogAction, false);
+    renderAnalysis(lastInstallation);
+  }
+}
+
 function clearPoll() {
   if (pollTimer !== null) globalThis.clearTimeout(pollTimer);
   pollTimer = null;
@@ -300,6 +462,8 @@ elements.retryAction?.addEventListener("click", bootstrap);
 elements.activateAction?.addEventListener("click", activate);
 elements.syncAction?.addEventListener("click", sync);
 elements.inlineSyncAction?.addEventListener("click", sync);
+elements.reportAction?.addEventListener("click", downloadReport);
+elements.backlogAction?.addEventListener("click", downloadBacklog);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !requestInFlight) bootstrap();
 });

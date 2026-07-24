@@ -64,7 +64,7 @@
               <s-heading>What happens next</s-heading>
               <s-paragraph>1. Catora creates an isolated workspace for this store.</s-paragraph>
               <s-paragraph>2. Products and variants are imported using read-only access.</s-paragraph>
-              <s-paragraph>3. Taxonomy assignment and catalog quality checks run automatically.</s-paragraph>
+              <s-paragraph>3. Taxonomy, audit and buyer-intent analysis run automatically.</s-paragraph>
             </s-grid>
           </s-box>
         </s-grid>
@@ -156,6 +156,65 @@
                 <s-heading id="unclassified-count">0</s-heading>
               </s-box>
             </s-grid>
+          </s-grid>
+        </s-section>
+
+        <s-section heading="Catalog intelligence and reports">
+          <s-grid gap="base">
+            <s-stack direction="inline" gap="small-200" alignItems="center">
+              <s-badge id="analysis-badge">Not started</s-badge>
+              <s-paragraph color="subdued" id="analysis-updated">
+                Last verified analysis: Not yet
+              </s-paragraph>
+            </s-stack>
+
+            <s-banner id="analysis-running-banner" tone="info" heading="Catora is testing buyer intents" hidden>
+              <s-paragraph>
+                The synchronized catalog is being audited and tested against prepared buying
+                scenarios. The last verified report remains available while a refresh runs.
+              </s-paragraph>
+            </s-banner>
+
+            <s-banner id="analysis-stale-banner" tone="warning" heading="A verified report is available, but a refresh is pending" hidden>
+              <s-paragraph>
+                Downloaded reports use the last completed analysis until the current catalog refresh
+                finishes successfully.
+              </s-paragraph>
+            </s-banner>
+
+            <s-banner id="analysis-error-banner" tone="critical" heading="The latest analysis needs attention" hidden>
+              <s-paragraph id="analysis-error-message">
+                Catora preserved the last verified result, but could not refresh the assessment.
+              </s-paragraph>
+            </s-banner>
+
+            <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Evidence-backed findings</s-paragraph>
+                <s-heading id="finding-count">0</s-heading>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Buyer-intent tests</s-paragraph>
+                <s-heading id="intent-run-count">0</s-heading>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Confident matches</s-paragraph>
+                <s-heading id="confident-match-count">0</s-heading>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Blocked by missing data</s-paragraph>
+                <s-heading id="missing-data-count">0</s-heading>
+              </s-box>
+            </s-grid>
+
+            <s-stack direction="inline" gap="base">
+              <s-button id="report-action" variant="primary" disabled>
+                Download executive PPTX
+              </s-button>
+              <s-button id="backlog-action" disabled>
+                Download remediation CSV
+              </s-button>
+            </s-stack>
           </s-grid>
         </s-section>
 
