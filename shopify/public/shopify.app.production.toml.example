@@ -1,0 +1,34 @@
+# Link this file to the Catora Shopify — Production public app with Shopify CLI.
+# Shopify CLI writes the real client_id into a local linked configuration; never commit it.
+
+name = "Catora Catalog Intelligence"
+client_id = "LINK_WITH_SHOPIFY_CLI"
+application_url = "https://shopify.catora.codistan.org"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "read_products"
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://shopify.catora.codistan.org/auth/callback"
+]
+
+[webhooks]
+api_version = "2026-07"
+
+[[webhooks.subscriptions]]
+topics = [
+  "app/uninstalled",
+  "products/create",
+  "products/update",
+  "products/delete"
+]
+uri = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
+
+# Mandatory App Store compliance subscriptions will be added with issue #162
+# only after the dedicated HMAC-validating deletion handlers exist.
