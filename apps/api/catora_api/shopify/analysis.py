@@ -13,7 +13,6 @@ from catora_api.db.models import (
     AuditFinding,
     BuyerIntent,
     IngestionJob,
-    IntentProductMatch,
     Locale,
     Market,
     Organization,
