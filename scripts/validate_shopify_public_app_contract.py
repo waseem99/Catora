@@ -14,6 +14,9 @@ API_VERSION = "2026-07"
 EXPECTED_TOPICS = {
     "app/uninstalled",
     "bulk_operations/finish",
+    "collections/create",
+    "collections/update",
+    "collections/delete",
     "products/create",
     "products/update",
     "products/delete",
