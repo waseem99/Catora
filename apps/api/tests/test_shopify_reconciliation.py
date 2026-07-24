@@ -136,9 +136,36 @@ async def test_active_source_can_queue_incremental_reconciliation(
     assert job.checkpoint["shopify"]["full_reconciliation"] is False
     assert catalog_source.config["updated_after"] == "2026-07-24T09:55:00+00:00"
     assert app_installation.input_snapshot["sync_status"] == "queued"
+    assert app_installation.input_snapshot["analysis_stale"] is False
     assert queued == [
-        ("catora.shopify.sync", [str(job.id), str(app_installation.id)])
+        ("catora.shopify.sync_and_analyze", [str(job.id), str(app_installation.id)])
     ]
+
+
+@pytest.mark.asyncio
+async def test_verified_analysis_is_marked_stale_when_sync_is_queued(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_source = source(status="active")
+    app_installation = installation(catalog_source)
+    app_installation.input_snapshot = {
+        **dict(app_installation.input_snapshot),
+        "last_verified_analysis_report_job_id": str(uuid.uuid4()),
+        "analysis_status": "completed",
+        "analysis_stale": False,
+    }
+    session = SyncSession(catalog_source)
+    monkeypatch.setattr(sync.celery_app, "send_task", lambda *_args, **_kwargs: None)
+
+    job = await queue_shopify_sync(
+        cast(Any, session),
+        installation=app_installation,
+        reason="products/update",
+        actor_user_id=uuid.uuid4(),
+    )
+
+    assert job is not None
+    assert app_installation.input_snapshot["analysis_stale"] is True
 
 
 @pytest.mark.asyncio
