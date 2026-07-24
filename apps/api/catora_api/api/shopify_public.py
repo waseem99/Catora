@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 from typing import Literal, cast
 
 from fastapi import APIRouter, HTTPException, Request, status
@@ -14,10 +15,13 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
-from catora_api.db.models import ShopifyStoreInvitation
+from catora_api.db.models import ReportJob, ShopifyStoreInvitation
 from catora_api.schemas.shopify_public import (
     ShopifyPublicActivationView,
+    ShopifyPublicInstallationStatus,
+    ShopifyPublicInstallationView,
     ShopifyPublicSessionView,
+    ShopifyPublicSyncStatus,
     ShopifyStoreInvitationCreateRequest,
     ShopifyStoreInvitationView,
 )
@@ -44,6 +48,40 @@ router = APIRouter(tags=["shopify public app invitations"])
 def _require_source_management(role: str) -> None:
     if not can(Role(role), "sources.write"):
         raise AuthorizationError("Catalog source management permission required")
+
+
+def _snapshot_text(snapshot: dict[str, object], key: str) -> str | None:
+    value = snapshot.get(key)
+    return value if isinstance(value, str) and value else None
+
+
+def _snapshot_int(snapshot: dict[str, object], key: str) -> int:
+    value = snapshot.get(key)
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else 0
+    )
+
+
+def _snapshot_uuid(snapshot: dict[str, object], key: str) -> uuid.UUID | None:
+    value = _snapshot_text(snapshot, key)
+    if value is None:
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        return None
+
+
+def _snapshot_datetime(snapshot: dict[str, object], key: str) -> datetime | None:
+    value = _snapshot_text(snapshot, key)
+    if value is None:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _authenticated_shopify_session(
@@ -87,6 +125,88 @@ async def _invitation_for_session(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(exc),
         ) from exc
+
+
+async def _installation_for_invitation(
+    session: SessionDependency,
+    settings: SettingsDependency,
+    invitation: ShopifyStoreInvitation,
+) -> ReportJob:
+    workspace_id = invitation.activated_workspace_id
+    if workspace_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The invited Shopify store has not been activated",
+        )
+    installation = await ShopifyPublicInstallationService(settings).find_installation(
+        session,
+        workspace_id=workspace_id,
+        shop_domain=invitation.shop_domain,
+    )
+    if installation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="The Shopify public installation was not found",
+        )
+    return installation
+
+
+def _installation_view(
+    installation: ReportJob,
+    invitation: ShopifyStoreInvitation,
+) -> ShopifyPublicInstallationView:
+    snapshot = dict(installation.input_snapshot)
+    status_value = installation.status
+    if status_value not in {
+        "active",
+        "refresh_required",
+        "disconnected",
+        "failed",
+    }:
+        status_value = "failed"
+    installation_status = cast(ShopifyPublicInstallationStatus, status_value)
+
+    sync_value = _snapshot_text(snapshot, "sync_status") or "not_started"
+    if sync_value not in {
+        "not_started",
+        "queued",
+        "coalesced",
+        "running",
+        "completed",
+        "failed",
+    }:
+        sync_value = "failed"
+    sync_status = cast(ShopifyPublicSyncStatus, sync_value)
+    feature_tier = cast(
+        Literal["demo", "plus_demo"],
+        invitation.feature_tier,
+    )
+    return ShopifyPublicInstallationView(
+        shop_domain=invitation.shop_domain,
+        workspace_id=cast(uuid.UUID, installation.workspace_id),
+        installation_id=installation.id,
+        catalog_source_id=_snapshot_uuid(snapshot, "catalog_source_id"),
+        feature_tier=feature_tier,
+        installation_status=installation_status,
+        sync_status=sync_status,
+        product_count=_snapshot_int(snapshot, "product_count"),
+        variant_count=_snapshot_int(snapshot, "variant_count"),
+        warning_count=_snapshot_int(snapshot, "warning_count"),
+        assigned_category_count=_snapshot_int(snapshot, "assigned_category_count"),
+        ambiguous_category_count=_snapshot_int(snapshot, "ambiguous_category_count"),
+        unclassified_category_count=_snapshot_int(
+            snapshot,
+            "unclassified_category_count",
+        ),
+        last_successful_sync_at=_snapshot_datetime(
+            snapshot,
+            "last_successful_sync_at",
+        ),
+        last_sync_job_id=_snapshot_uuid(snapshot, "last_sync_job_id"),
+        last_audit_run_id=_snapshot_uuid(snapshot, "last_audit_run_id"),
+        last_sync_error_type=_snapshot_text(snapshot, "last_sync_error_type"),
+        reauthorization_required=installation_status == "refresh_required",
+    )
 
 
 @router.get(
@@ -163,14 +283,7 @@ async def activate_shopify_public_installation(
         snapshot = dict(activation.installation.input_snapshot)
 
     sync_status = cast(
-        Literal[
-            "not_started",
-            "queued",
-            "coalesced",
-            "running",
-            "completed",
-            "failed",
-        ],
+        ShopifyPublicSyncStatus,
         snapshot.get("sync_status") or "not_started",
     )
     feature_tier = cast(
@@ -187,6 +300,53 @@ async def activate_shopify_public_installation(
         sync_status=sync_status,
         created=activation.created,
     )
+
+
+@router.get(
+    "/shopify/public/installation",
+    response_model=ShopifyPublicInstallationView,
+)
+async def get_shopify_public_installation(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ShopifyPublicInstallationView:
+    _, shopify_session = _authenticated_shopify_session(request, settings)
+    invitation = await _invitation_for_session(session, shopify_session)
+    installation = await _installation_for_invitation(session, settings, invitation)
+    return _installation_view(installation, invitation)
+
+
+@router.post(
+    "/shopify/public/installation/sync",
+    response_model=ShopifyPublicInstallationView,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def sync_shopify_public_installation(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> ShopifyPublicInstallationView:
+    _, shopify_session = _authenticated_shopify_session(request, settings)
+    invitation = await _invitation_for_session(session, shopify_session)
+    installation = await _installation_for_invitation(session, settings, invitation)
+    if installation.status != "active":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The Shopify public installation requires reauthorization",
+        )
+    job = await queue_shopify_sync(
+        session,
+        installation=installation,
+        reason="embedded_app_manual",
+    )
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Shopify synchronization is unavailable",
+        )
+    await session.refresh(installation)
+    return _installation_view(installation, invitation)
 
 
 @router.post(
