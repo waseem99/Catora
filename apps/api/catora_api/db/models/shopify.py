@@ -3,7 +3,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, Uuid
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    String,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from catora_api.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -41,8 +48,14 @@ class ShopifyStoreInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     shop_domain: Mapped[str] = mapped_column(String(255), nullable=False)
     prospect_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    feature_tier: Mapped[str] = mapped_column(String(30), nullable=False, default="demo")
-    status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    feature_tier: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="demo"
+    )
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="pending"
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
     activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
