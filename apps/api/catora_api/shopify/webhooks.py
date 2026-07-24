@@ -24,6 +24,9 @@ SHOPIFY_WEBHOOK_DELIVERY_TYPE = "shopify_webhook_delivery"
 SUPPORTED_TOPICS = {
     "app/uninstalled",
     "bulk_operations/finish",
+    "collections/create",
+    "collections/update",
+    "collections/delete",
     "products/create",
     "products/update",
     "products/delete",
@@ -61,7 +64,7 @@ def _delivery_id(webhook_id: str) -> uuid.UUID:
     return uuid.uuid5(uuid.NAMESPACE_URL, f"catora:shopify:webhook:{webhook_id}")
 
 
-def _payload_product_id(payload: object) -> str | None:
+def _payload_resource_id(payload: object) -> str | None:
     if not isinstance(payload, dict):
         return None
     value = payload.get("id")
@@ -200,8 +203,12 @@ async def receive_shopify_webhook(
     bounded_payload: dict[str, object]
     if topic == "bulk_operations/finish":
         bounded_payload = _bulk_metadata(payload)
+    elif topic.startswith("products/"):
+        bounded_payload = {"product_id": _payload_resource_id(payload)}
+    elif topic.startswith("collections/"):
+        bounded_payload = {"collection_id": _payload_resource_id(payload)}
     else:
-        bounded_payload = {"product_id": _payload_product_id(payload)}
+        bounded_payload = {}
     delivery = ReportJob(
         id=delivery_id,
         workspace_id=cast(uuid.UUID, installation.workspace_id),
