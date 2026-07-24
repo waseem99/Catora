@@ -39,3 +39,23 @@ class ShopifyPublicSessionView(BaseModel):
     invitation_expires_at: datetime
     activated_workspace_id: uuid.UUID | None
     session_expires_at: datetime
+
+
+class ShopifyPublicActivationView(BaseModel):
+    shop_domain: str
+    workspace_id: uuid.UUID
+    installation_id: uuid.UUID
+    catalog_source_id: uuid.UUID
+    ingestion_job_id: uuid.UUID | None = None
+    invitation_status: Literal["activated"] = "activated"
+    installation_status: Literal["active"] = "active"
+    feature_tier: Literal["demo", "plus_demo"]
+    sync_status: Literal[
+        "not_started",
+        "queued",
+        "coalesced",
+        "running",
+        "completed",
+        "failed",
+    ]
+    created: bool
