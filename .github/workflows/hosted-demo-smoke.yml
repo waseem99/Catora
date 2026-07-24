@@ -1,0 +1,65 @@
+name: Hosted demo smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      require_shopify:
+        description: Require a healthy Northstar Shopify installation and reconciled 1000/2000 counts
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: hosted-demo-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  production-smoke:
+    name: Authenticate and verify production demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CATORA_SMOKE_API_URL: https://api.catora.codistan.org
+      CATORA_SMOKE_FRONTEND_URL: https://catora.codistan.org
+      CATORA_SMOKE_EMAIL: demo@catora.local
+      CATORA_SMOKE_PASSWORD: ${{ secrets.CATORA_DEMO_PASSWORD }}
+      CATORA_SMOKE_REQUIRE_SHOPIFY: ${{ inputs.require_shopify }}
+      CATORA_SMOKE_REPORT_PATH: hosted-demo-smoke-report.json
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Confirm the production demo password secret exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CATORA_SMOKE_PASSWORD:-}" ]; then
+            echo "::error::Repository secret CATORA_DEMO_PASSWORD is not configured. Add the same private demo password used by Railway, then run this workflow again."
+            exit 1
+          fi
+
+      - name: Run authenticated hosted smoke test
+        shell: bash
+        run: |
+          set +e
+          python scripts/smoke_hosted_demo.py > hosted-demo-smoke.log 2>&1
+          status=$?
+          cat hosted-demo-smoke.log
+          exit "$status"
+
+      - name: Upload bounded smoke-test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-demo-smoke-evidence
+          path: |
+            hosted-demo-smoke.log
+            hosted-demo-smoke-report.json
+          if-no-files-found: warn
+          retention-days: 7
