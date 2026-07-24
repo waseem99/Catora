@@ -18,7 +18,7 @@ class ShopifyStoreInvitationView(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    issuer_workspace_id: uuid.UUID
+    workspace_id: uuid.UUID
     activated_workspace_id: uuid.UUID | None
     shop_domain: str
     prospect_name: str
