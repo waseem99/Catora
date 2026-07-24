@@ -29,3 +29,11 @@ topics = [
   "products/delete"
 ]
 uri = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
+
+[[webhooks.subscriptions]]
+compliance_topics = [
+  "customers/data_request",
+  "customers/redact",
+  "shop/redact"
+]
+uri = "https://api.catora.codistan.org/api/v1/shopify/compliance"
