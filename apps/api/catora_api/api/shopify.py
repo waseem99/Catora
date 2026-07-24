@@ -179,7 +179,7 @@ async def accept_shopify_webhook(
     session: SessionDependency,
     settings: SettingsDependency,
 ) -> ShopifyWebhookResponse:
-    if not settings.shopify_enabled:
+    if not (settings.shopify_enabled or settings.shopify_public_enabled):
         raise HTTPException(status_code=503, detail="Shopify integration is disabled")
     body = await request.body()
     try:
