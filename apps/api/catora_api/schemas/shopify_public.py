@@ -29,3 +29,13 @@ class ShopifyStoreInvitationView(BaseModel):
     revoked_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+
+class ShopifyPublicSessionView(BaseModel):
+    shop_domain: str
+    shopify_user_id: str
+    invitation_status: Literal["pending", "activated"]
+    feature_tier: Literal["demo", "plus_demo"]
+    invitation_expires_at: datetime
+    activated_workspace_id: uuid.UUID | None
+    session_expires_at: datetime
