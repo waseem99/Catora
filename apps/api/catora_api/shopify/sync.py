@@ -204,7 +204,7 @@ async def queue_shopify_sync(
     await session.commit()
     try:
         celery_app.send_task(
-            "catora.shopify.sync",
+            "catora.shopify.sync_and_analyze",
             args=[str(job.id), str(installation.id)],
         )
     except Exception as exc:
