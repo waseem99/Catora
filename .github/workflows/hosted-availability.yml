@@ -1,0 +1,139 @@
+name: Hosted availability
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17,47 * * * *"
+
+concurrency:
+  group: hosted-availability-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  public-endpoints:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check frontend and API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee hosted-availability-report.txt
+          from __future__ import annotations
+
+          import json
+          import ssl
+          import sys
+          import urllib.error
+          import urllib.request
+          from datetime import UTC, datetime
+
+          FRONTEND_URL = "https://catora.codistan.org/login"
+          LIVE_URL = "https://api.catora.codistan.org/health/live"
+          READY_URL = "https://api.catora.codistan.org/health/ready"
+          TIMEOUT_SECONDS = 20
+
+
+          def fetch(url: str) -> tuple[int, bytes, str]:
+              request = urllib.request.Request(
+                  url,
+                  headers={
+                      "Accept": "application/json,text/html;q=0.9,*/*;q=0.8",
+                      "User-Agent": "catora-hosted-availability/1.0",
+                  },
+              )
+              context = ssl.create_default_context()
+              try:
+                  with urllib.request.urlopen(
+                      request,
+                      timeout=TIMEOUT_SECONDS,
+                      context=context,
+                  ) as response:
+                      return response.status, response.read(1_000_000), response.headers.get_content_type()
+              except urllib.error.HTTPError as exc:
+                  body = exc.read(4_096)
+                  raise RuntimeError(
+                      f"{url} returned HTTP {exc.code}: {body.decode('utf-8', errors='replace')[:500]}"
+                  ) from exc
+              except urllib.error.URLError as exc:
+                  raise RuntimeError(f"{url} failed DNS/TLS/network validation: {exc.reason}") from exc
+
+
+          report: dict[str, object] = {
+              "checked_at": datetime.now(UTC).isoformat(),
+              "checks": [],
+          }
+          failures: list[str] = []
+
+          for name, url in (
+              ("frontend_login", FRONTEND_URL),
+              ("api_live", LIVE_URL),
+              ("api_ready", READY_URL),
+          ):
+              try:
+                  status, body, content_type = fetch(url)
+                  check: dict[str, object] = {
+                      "name": name,
+                      "url": url,
+                      "status": status,
+                      "content_type": content_type,
+                      "bytes_sampled": len(body),
+                  }
+                  if status < 200 or status >= 300:
+                      raise RuntimeError(f"{url} returned non-success HTTP {status}")
+
+                  if name == "frontend_login":
+                      text = body.decode("utf-8", errors="replace").casefold()
+                      if "catora" not in text:
+                          raise RuntimeError("Frontend response did not contain the Catora application marker")
+                  else:
+                      payload = json.loads(body)
+                      check["payload"] = payload
+                      if name == "api_live" and payload.get("status") != "ok":
+                          raise RuntimeError(f"Unexpected live payload: {payload}")
+                      if name == "api_ready":
+                          if payload.get("status") != "ready":
+                              raise RuntimeError(f"Unexpected readiness payload: {payload}")
+                          dependencies = payload.get("dependencies")
+                          if not isinstance(dependencies, list) or not dependencies:
+                              raise RuntimeError("Readiness payload did not include dependencies")
+                          unhealthy = [
+                              dependency
+                              for dependency in dependencies
+                              if not isinstance(dependency, dict)
+                              or dependency.get("status") != "ok"
+                          ]
+                          if unhealthy:
+                              raise RuntimeError(f"Unhealthy dependencies: {unhealthy}")
+                  report["checks"].append(check)
+              except Exception as exc:  # noqa: BLE001 - bounded operator diagnostic
+                  failures.append(f"{name}: {exc}")
+                  report["checks"].append(
+                      {
+                          "name": name,
+                          "url": url,
+                          "error": str(exc),
+                      }
+                  )
+
+          report["ok"] = not failures
+          if failures:
+              report["failures"] = failures
+          print(json.dumps(report, indent=2, sort_keys=True))
+          if failures:
+              sys.exit(1)
+          PY
+      - name: Upload bounded availability report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hosted-availability-report
+          path: hosted-availability-report.txt
+          if-no-files-found: error
+          retention-days: 7
