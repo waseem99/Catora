@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Literal, cast
 
 from fastapi import APIRouter, HTTPException, Request, status
 
@@ -23,7 +24,6 @@ from catora_api.shopify.invitations import (
     ShopifyInvitationService,
 )
 from catora_api.shopify.public_session import (
-    ShopifyPublicSessionError,
     bearer_session_token,
     verify_shopify_public_session_token,
 )
@@ -59,7 +59,7 @@ async def authenticate_shopify_public_session(
             client_secret=settings.shopify_public_client_secret,
             clock_skew_seconds=settings.shopify_public_session_clock_skew_seconds,
         )
-    except (ValueError, ShopifyPublicSessionError) as exc:
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="The Shopify session could not be authenticated",
@@ -77,11 +77,19 @@ async def authenticate_shopify_public_session(
             detail=str(exc),
         ) from exc
 
+    invitation_status = cast(
+        Literal["pending", "activated"],
+        invitation.status,
+    )
+    feature_tier = cast(
+        Literal["demo", "plus_demo"],
+        invitation.feature_tier,
+    )
     return ShopifyPublicSessionView(
         shop_domain=shopify_session.shop_domain,
         shopify_user_id=shopify_session.user_id,
-        invitation_status=invitation.status,
-        feature_tier=invitation.feature_tier,
+        invitation_status=invitation_status,
+        feature_tier=feature_tier,
         invitation_expires_at=invitation.expires_at,
         activated_workspace_id=invitation.activated_workspace_id,
         session_expires_at=shopify_session.expires_at,
