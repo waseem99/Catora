@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="shopify-api-key" content="__SHOPIFY_API_KEY__" />
+    <meta name="description" content="Catora catalog intelligence for Shopify" />
+    <title>Catora Catalog Intelligence</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
+    <script src="https://cdn.shopify.com/shopifycloud/polaris.js"></script>
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <s-app-nav>
+      <s-link href="/" rel="home">Overview</s-link>
+      <s-link href="/#privacy">Privacy</s-link>
+    </s-app-nav>
+
+    <s-page heading="Catora Catalog Intelligence">
+      <s-button id="sync-action" slot="primary-action" variant="primary" hidden>
+        Sync now
+      </s-button>
+
+      <s-banner id="error-banner" tone="critical" heading="Catora needs attention" hidden>
+        <s-paragraph id="error-message">
+          Catora could not load this Shopify installation.
+        </s-paragraph>
+        <s-button id="retry-action" slot="secondary-actions">Try again</s-button>
+      </s-banner>
+
+      <s-section id="loading-view" accessibilityLabel="Loading Catora">
+        <s-grid gap="base" justifyItems="center">
+          <s-spinner accessibilityLabel="Loading Catora"></s-spinner>
+          <s-paragraph>Authenticating this Shopify store…</s-paragraph>
+        </s-grid>
+      </s-section>
+
+      <s-section id="activation-view" heading="Connect your catalog" hidden>
+        <s-grid gap="base">
+          <s-banner tone="info" heading="Private Catora preview">
+            <s-paragraph>
+              This store has been invited to a controlled Catora demonstration. Catora
+              requests read-only product access and does not import customers or orders.
+            </s-paragraph>
+          </s-banner>
+
+          <s-grid gridTemplateColumns="1fr auto" gap="base" alignItems="center">
+            <s-grid gap="small-200">
+              <s-heading>Start catalog intelligence</s-heading>
+              <s-paragraph>
+                Connect the invited store, import its product catalog, normalize taxonomy,
+                and run the first evidence-backed catalog audit.
+              </s-paragraph>
+              <s-paragraph color="subdued" id="invited-store">
+                Invited Shopify store
+              </s-paragraph>
+            </s-grid>
+            <s-button id="activate-action" variant="primary">Connect catalog</s-button>
+          </s-grid>
+
+          <s-box border="base" borderRadius="base" padding="base" background="subdued">
+            <s-grid gap="small-200">
+              <s-heading>What happens next</s-heading>
+              <s-paragraph>1. Catora creates an isolated workspace for this store.</s-paragraph>
+              <s-paragraph>2. Products and variants are imported using read-only access.</s-paragraph>
+              <s-paragraph>3. Taxonomy assignment and catalog quality checks run automatically.</s-paragraph>
+            </s-grid>
+          </s-box>
+        </s-grid>
+      </s-section>
+
+      <div id="dashboard-view" hidden>
+        <s-section heading="Catalog status">
+          <s-grid gap="base">
+            <s-grid gridTemplateColumns="1fr auto" gap="base" alignItems="center">
+              <s-grid gap="small-200">
+                <s-stack direction="inline" gap="small-200" alignItems="center">
+                  <s-badge id="installation-badge">Connected</s-badge>
+                  <s-badge id="sync-badge">Not started</s-badge>
+                </s-stack>
+                <s-paragraph id="store-domain">Shopify store</s-paragraph>
+                <s-paragraph color="subdued" id="last-sync">
+                  Last successful sync: Not yet
+                </s-paragraph>
+              </s-grid>
+              <s-button id="inline-sync-action">Sync now</s-button>
+            </s-grid>
+
+            <s-banner id="sync-banner" tone="info" heading="Catalog synchronization is running" hidden>
+              <s-paragraph>
+                Catora is importing products, assigning taxonomy, and preparing the catalog audit.
+                This page refreshes automatically while work is in progress.
+              </s-paragraph>
+            </s-banner>
+
+            <s-banner id="reauthorize-banner" tone="critical" heading="Reconnect this Shopify app" hidden>
+              <s-paragraph>
+                The offline credential can no longer be refreshed. Reopen or reinstall the app to
+                authorize Catora again before another synchronization.
+              </s-paragraph>
+            </s-banner>
+
+            <s-banner id="sync-error-banner" tone="critical" heading="The latest sync needs attention" hidden>
+              <s-paragraph id="sync-error-message">
+                Catora could not complete the latest catalog synchronization.
+              </s-paragraph>
+            </s-banner>
+
+            <s-grid gridTemplateColumns="repeat(auto-fit, minmax(150px, 1fr))" gap="base">
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-grid gap="small-100">
+                  <s-paragraph color="subdued">Products</s-paragraph>
+                  <s-heading id="product-count">0</s-heading>
+                </s-grid>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-grid gap="small-100">
+                  <s-paragraph color="subdued">Variants</s-paragraph>
+                  <s-heading id="variant-count">0</s-heading>
+                </s-grid>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-grid gap="small-100">
+                  <s-paragraph color="subdued">Warnings</s-paragraph>
+                  <s-heading id="warning-count">0</s-heading>
+                </s-grid>
+              </s-box>
+              <s-box border="base" borderRadius="base" padding="base">
+                <s-grid gap="small-100">
+                  <s-paragraph color="subdued">Taxonomy coverage</s-paragraph>
+                  <s-heading id="coverage-percent">0%</s-heading>
+                </s-grid>
+              </s-box>
+            </s-grid>
+          </s-grid>
+        </s-section>
+
+        <s-section heading="Taxonomy readiness">
+          <s-grid gap="base">
+            <s-paragraph>
+              Catora classifies active products into a deterministic furniture taxonomy and flags
+              records that need catalog-team review.
+            </s-paragraph>
+            <s-grid gridTemplateColumns="repeat(auto-fit, minmax(160px, 1fr))" gap="base">
+              <s-box background="subdued" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Assigned</s-paragraph>
+                <s-heading id="assigned-count">0</s-heading>
+              </s-box>
+              <s-box background="subdued" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Ambiguous</s-paragraph>
+                <s-heading id="ambiguous-count">0</s-heading>
+              </s-box>
+              <s-box background="subdued" borderRadius="base" padding="base">
+                <s-paragraph color="subdued">Unclassified</s-paragraph>
+                <s-heading id="unclassified-count">0</s-heading>
+              </s-box>
+            </s-grid>
+          </s-grid>
+        </s-section>
+
+        <s-section id="privacy" heading="Privacy and access">
+          <s-grid gap="small-200">
+            <s-paragraph>
+              Catora requests only read-only product access. It does not import Shopify customers,
+              orders, payments, or checkout data.
+            </s-paragraph>
+            <s-paragraph>
+              Uninstall and Shopify privacy requests revoke credentials and remove the isolated
+              store workspace, including its catalog exports and reports.
+            </s-paragraph>
+            <s-paragraph color="subdued" id="workspace-reference">
+              Isolated workspace active
+            </s-paragraph>
+          </s-grid>
+        </s-section>
+      </div>
+    </s-page>
+
+    <div class="sr-only" aria-live="polite" id="live-status"></div>
+  </body>
+</html>
