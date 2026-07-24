@@ -18,6 +18,11 @@ from catora_api.db.models import (
 from catora_api.worker import celery_app
 
 ACTIVE_JOB_STATUSES = ("queued", "validating", "running")
+_COLLECTION_RECONCILIATION_REASONS = {
+    "collections/create",
+    "collections/update",
+    "collections/delete",
+}
 
 
 def _now() -> datetime:
@@ -101,6 +106,9 @@ async def queue_shopify_sync(
 ) -> IngestionJob | None:
     if installation.status != "active":
         return None
+    full_reconciliation = (
+        full_reconciliation or reason in _COLLECTION_RECONCILIATION_REASONS
+    )
     workspace_id = cast(uuid.UUID, installation.workspace_id)
     snapshot = dict(installation.input_snapshot)
     actor_user_id = await _installation_actor(
