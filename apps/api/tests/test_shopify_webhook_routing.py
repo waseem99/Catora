@@ -8,10 +8,15 @@ from typing import Any, cast
 
 import pytest
 
+from catora_api.api import shopify as shopify_api
 from catora_api.config import Settings
 from catora_api.db.models import ReportJob
 from catora_api.shopify import webhooks
-from catora_api.shopify.webhooks import ShopifyWebhookError, receive_shopify_webhook
+from catora_api.shopify.webhooks import (
+    ShopifyWebhookError,
+    ShopifyWebhookReceipt,
+    receive_shopify_webhook,
+)
 
 
 class ScalarList:
@@ -39,6 +44,20 @@ class WebhookSession:
 
     async def commit(self) -> None:
         self.commit_count += 1
+
+
+class RequestStub:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+        self.headers = {
+            "x-shopify-topic": "products/update",
+            "x-shopify-shop-domain": "prospect-store.myshopify.com",
+            "x-shopify-webhook-id": "public-only-delivery",
+            "x-shopify-hmac-sha256": "signed",
+        }
+
+    async def body(self) -> bytes:
+        return self._body
 
 
 def _signature(body: bytes, secret: str) -> str:
@@ -162,3 +181,37 @@ async def test_shared_app_secrets_fail_closed_as_ambiguous() -> None:
 
     assert session.added == []
     assert session.commit_count == 0
+
+
+@pytest.mark.asyncio
+async def test_receiver_accepts_public_only_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    delivery_id = uuid.uuid4()
+    called = False
+
+    async def receive(*_args: object, **_kwargs: object) -> ShopifyWebhookReceipt:
+        nonlocal called
+        called = True
+        return ShopifyWebhookReceipt(
+            delivery_id=delivery_id,
+            duplicate=False,
+            distribution="public",
+        )
+
+    monkeypatch.setattr(shopify_api, "receive_shopify_webhook", receive)
+    response = await shopify_api.accept_shopify_webhook(
+        cast(Any, RequestStub(b'{"id":123}')),
+        cast(Any, object()),
+        Settings(
+            _env_file=None,
+            shopify_enabled=False,
+            shopify_public_enabled=True,
+            shopify_public_client_id="public-client-123456",
+            shopify_public_client_secret="p" * 32,
+        ),
+    )
+
+    assert called is True
+    assert response.delivery_id == delivery_id
+    assert response.duplicate is False
