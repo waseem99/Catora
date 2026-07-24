@@ -55,6 +55,10 @@ def _analysis_stale(snapshot: dict[str, object]) -> bool:
     return _uuid_value(snapshot, "last_verified_analysis_report_job_id") is not None
 
 
+def _requires_full_reconciliation(reason: str) -> bool:
+    return reason in _COLLECTION_RECONCILIATION_REASONS
+
+
 async def _installation_actor(
     session: AsyncSession,
     *,
@@ -106,9 +110,7 @@ async def queue_shopify_sync(
 ) -> IngestionJob | None:
     if installation.status != "active":
         return None
-    full_reconciliation = (
-        full_reconciliation or reason in _COLLECTION_RECONCILIATION_REASONS
-    )
+    full_reconciliation = full_reconciliation or _requires_full_reconciliation(reason)
     workspace_id = cast(uuid.UUID, installation.workspace_id)
     snapshot = dict(installation.input_snapshot)
     actor_user_id = await _installation_actor(
