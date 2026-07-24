@@ -112,7 +112,11 @@ async def queue_shopify_sync(
     if source_id is None:
         return None
     source = await session.get(CatalogSource, source_id)
-    if source is None or source.credential_ref is None or source.status != "ready":
+    if (
+        source is None
+        or source.credential_ref is None
+        or source.status not in {"ready", "active"}
+    ):
         return None
 
     active_job = await session.scalar(
