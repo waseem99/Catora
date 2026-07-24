@@ -24,7 +24,14 @@ def production_settings(**overrides: object) -> Settings:
         ),
         "shopify_required_scopes": ["read_products"],
         "shopify_expiring_offline_tokens": True,
-        "shopify_credential_encryption_key": base64.urlsafe_b64encode(b"k" * 32).decode(),
+        "shopify_credential_encryption_key": base64.urlsafe_b64encode(
+            b"k" * 32
+        ).decode(),
+        "shopify_public_enabled": True,
+        "shopify_public_client_id": "public-client-id-123456",
+        "shopify_public_client_secret": "public-client-secret-1234567890",
+        "shopify_public_app_url": "https://shopify.catora.codistan.org",
+        "shopify_public_required_scopes": ["read_products"],
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -58,6 +65,18 @@ def test_valid_production_settings_pass() -> None:
             "canonical callback path",
         ),
         ({"shopify_expiring_offline_tokens": False}, "expiring offline tokens"),
+        (
+            {"shopify_public_app_url": "http://shopify.catora.codistan.org"},
+            "HTTPS origin",
+        ),
+        (
+            {"shopify_public_app_url": "https://other.example"},
+            "canonical production origin",
+        ),
+        (
+            {"shopify_public_required_scopes": ["read_products", "write_products"]},
+            "public Shopify app must request only read_products",
+        ),
     ],
 )
 def test_invalid_production_settings_fail(
@@ -73,4 +92,12 @@ def test_disabled_shopify_does_not_require_shopify_secrets() -> None:
         shopify_client_id="",
         shopify_client_secret="",
         shopify_credential_encryption_key="",
+    ).validate_production()
+
+
+def test_disabled_public_shopify_does_not_require_public_secrets() -> None:
+    production_settings(
+        shopify_public_enabled=False,
+        shopify_public_client_id="",
+        shopify_public_client_secret="",
     ).validate_production()
