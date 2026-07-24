@@ -124,7 +124,7 @@ def test_valid_shopify_public_session_is_verified() -> None:
                     "dest": "https://prospect-store.myshopify.com/admin",
                 }
             ),
-            "destination",
+            "dest",
         ),
         (_session_token(header={"alg": "none", "typ": "JWT"}), "HS256"),
     ],
