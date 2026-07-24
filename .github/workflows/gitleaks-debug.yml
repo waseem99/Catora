@@ -1,0 +1,44 @@
+name: Gitleaks diagnostic
+
+on:
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - ".env.example"
+      - "docs/shopify-public-app-foundation.md"
+      - "scripts/validate_shopify_public_app_contract.py"
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Capture redacted finding
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set +e
+          docker run --rm \
+            -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo \
+            --log-opts="${PR_BASE_SHA}..${PR_HEAD_SHA}" \
+            --redact \
+            --no-banner \
+            --report-format=json \
+            --report-path=/repo/gitleaks-report.json
+          test -s gitleaks-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gitleaks-redacted-diagnostic
+          path: gitleaks-report.json
+          if-no-files-found: error
+          retention-days: 1
