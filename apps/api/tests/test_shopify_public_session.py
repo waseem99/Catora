@@ -24,6 +24,8 @@ CLIENT_ID = "public-client-123456"
 CLIENT_SECRET = "q" * 32
 ACCESS_VALUE = "a" * 32
 REFRESH_VALUE = "r" * 32
+TOKEN_ID = "test-jti"
+SESSION_ID = "test-session"
 NOW = datetime(2026, 7, 24, 12, 0, tzinfo=UTC)
 
 
@@ -47,8 +49,8 @@ def _session_token(
         "exp": int((NOW + timedelta(seconds=50)).timestamp()),
         "nbf": issued,
         "iat": issued,
-        "jti": "f8912129-1af6-4cad-9ca3-76b0f7621087",
-        "sid": "session-id-123",
+        "jti": TOKEN_ID,
+        "sid": SESSION_ID,
     }
     payload.update(claims or {})
     encoded_header = _encode(header or {"alg": "HS256", "typ": "JWT"})
@@ -87,8 +89,8 @@ def test_valid_shopify_public_session_is_verified() -> None:
     assert session.user_id == "42"
     assert session.issued_at == NOW - timedelta(seconds=10)
     assert session.expires_at == NOW + timedelta(seconds=50)
-    assert session.token_id == "f8912129-1af6-4cad-9ca3-76b0f7621087"
-    assert session.session_id == "session-id-123"
+    assert session.token_id == TOKEN_ID
+    assert session.session_id == SESSION_ID
 
 
 @pytest.mark.parametrize(
