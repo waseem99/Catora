@@ -13,10 +13,20 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from catora_api.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from catora_api.db.base import (
+    Base,
+    TimestampMixin,
+    UUIDPrimaryKeyMixin,
+    WorkspaceScopedMixin,
+)
 
 
-class ShopifyStoreInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+class ShopifyStoreInvitation(
+    UUIDPrimaryKeyMixin,
+    WorkspaceScopedMixin,
+    TimestampMixin,
+    Base,
+):
     __tablename__ = "shopify_store_invitations"
     __table_args__ = (
         UniqueConstraint("shop_domain"),
@@ -30,12 +40,6 @@ class ShopifyStoreInvitation(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         ),
     )
 
-    issuer_workspace_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("workspaces.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
     activated_workspace_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("workspaces.id", ondelete="SET NULL"),
