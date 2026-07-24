@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "shopify/public/**"
+      - "apps/shopify/**"
       - ".env.example"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
@@ -25,6 +26,7 @@ on:
       - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_compliance.py"
+      - "apps/api/tests/test_shopify_public_embedded.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
@@ -36,6 +38,7 @@ on:
     branches: [main]
     paths:
       - "shopify/public/**"
+      - "apps/shopify/**"
       - ".env.example"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
@@ -57,6 +60,7 @@ on:
       - "apps/api/catora_api/worker.py"
       - "apps/api/tests/test_config.py"
       - "apps/api/tests/test_shopify_compliance.py"
+      - "apps/api/tests/test_shopify_public_embedded.py"
       - "apps/api/tests/test_shopify_public_installations.py"
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
@@ -74,6 +78,11 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate embedded App Home
+        run: npm --prefix apps/shopify run check
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -86,6 +95,7 @@ jobs:
           pytest -q \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_compliance.py \
+            apps/api/tests/test_shopify_public_embedded.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
@@ -113,6 +123,7 @@ jobs:
             apps/api/catora_api/worker.py \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_compliance.py \
+            apps/api/tests/test_shopify_public_embedded.py \
             apps/api/tests/test_shopify_public_installations.py \
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \

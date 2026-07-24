@@ -1,0 +1,17 @@
+{
+  "name": "@catora/shopify-app-home",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "lint": "node scripts/check.mjs",
+    "typecheck": "node --check src/app.js && node --check src/state.js && node --check scripts/build.mjs && node --check scripts/check.mjs && node --check scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build"
+  }
+}
