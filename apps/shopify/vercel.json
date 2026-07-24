@@ -4,17 +4,14 @@
   "installCommand": "echo 'No dependency installation required'",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "routes": [
+  "rewrites": [
     {
-      "src": "/api/v1/shopify/public/(.*)",
-      "dest": "https://api.catora.codistan.org/api/v1/shopify/public/$1"
+      "source": "/api/v1/shopify/public/:path*",
+      "destination": "https://api.catora.codistan.org/api/v1/shopify/public/:path*"
     },
     {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
@@ -36,6 +33,15 @@
         {
           "key": "X-Content-Type-Options",
           "value": "nosniff"
+        }
+      ]
+    },
+    {
+      "source": "/api/v1/shopify/public/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "private, no-store"
         }
       ]
     }
