@@ -99,7 +99,9 @@ jobs:
       - name: Install API validation dependencies
         run: python -m pip install --quiet -e 'apps/api[dev]'
       - name: Run focused public app tests
+        shell: bash
         run: |
+          set +e
           pytest -q \
             apps/api/tests/test_config.py \
             apps/api/tests/test_shopify_compliance.py \
@@ -110,7 +112,19 @@ jobs:
             apps/api/tests/test_shopify_public_session.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
-            apps/api/tests/test_storage_delete_prefix.py
+            apps/api/tests/test_storage_delete_prefix.py \
+            > shopify-public-pytest-report.txt 2>&1
+          status=$?
+          cat shopify-public-pytest-report.txt
+          exit "$status"
+      - name: Upload focused public app test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-public-pytest-report
+          path: shopify-public-pytest-report.txt
+          if-no-files-found: error
+          retention-days: 3
       - name: Run Ruff on public app foundation
         run: |
           ruff check \
