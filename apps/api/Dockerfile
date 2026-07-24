@@ -4,4 +4,4 @@ WORKDIR /app
 COPY apps/api /app
 RUN pip install --no-cache-dir .
 EXPOSE 8000
-CMD ["fastapi", "run", "catora_api/main.py", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "catora_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
