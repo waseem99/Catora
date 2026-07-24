@@ -46,6 +46,10 @@ def _string_list(snapshot: dict[str, object], key: str) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
+def _analysis_stale(snapshot: dict[str, object]) -> bool:
+    return _uuid_value(snapshot, "last_verified_analysis_report_job_id") is not None
+
+
 async def _installation_actor(
     session: AsyncSession,
     *,
@@ -132,6 +136,7 @@ async def queue_shopify_sync(
         installation.input_snapshot = {
             **snapshot,
             "sync_status": "coalesced",
+            "analysis_stale": _analysis_stale(snapshot),
             "pending_product_ids": list(dict.fromkeys([*pending, *bounded_ids]))[:100],
             "pending_full_reconciliation": (
                 snapshot.get("pending_full_reconciliation") is True
@@ -173,6 +178,7 @@ async def queue_shopify_sync(
     installation.input_snapshot = {
         **snapshot,
         "sync_status": "queued",
+        "analysis_stale": _analysis_stale(snapshot),
         "last_sync_requested_at": _now().isoformat(),
         "last_sync_reason": reason,
         "last_sync_job_id": str(job.id),
