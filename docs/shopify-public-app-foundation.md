@@ -1,6 +1,6 @@
 # Shopify public app foundation
 
-This document covers the first repository-controlled execution slice for epic #154.
+This document covers the repository-controlled execution slices for epic #154.
 
 ## Distribution model
 
@@ -32,9 +32,52 @@ The invitation contains only bounded commercial metadata:
 
 No access token, refresh token, Shopify client secret or raw catalog data is stored in the invitation.
 
-The public embedded app will later authenticate the Shopify session token, extract the permanent shop domain and call `ShopifyInvitationService.require_activatable`. A store without an active invitation receives no Catora workspace and no catalog processing.
-
 Activation is one-time and binds the shop to one Catora workspace. Repeated activation for the same workspace is idempotent. Cross-workspace activation fails closed.
+
+## Embedded session authentication
+
+Every protected request from the embedded Shopify App Home uses a fresh Shopify App Bridge session token in the HTTP `Authorization: Bearer` header.
+
+Catora verifies the token before looking up invitation or merchant data:
+
+- JWT header is exactly `HS256` and `JWT`;
+- signature is verified with the public app client secret;
+- audience matches the public app client ID;
+- `dest` is a permanent HTTPS `*.myshopify.com` origin;
+- `iss` is the same shop's `/admin` origin;
+- `iat`, `nbf` and `exp` are internally consistent and within the bounded clock skew;
+- `sub`, `jti` and `sid` are present.
+
+The authenticated bootstrap endpoint is:
+
+```text
+GET /api/v1/shopify/public/session
+Authorization: Bearer <fresh Shopify session token>
+```
+
+The endpoint returns only shop, user, invitation, feature-tier, activated-workspace and expiry metadata. It never returns the bearer token, app secret, offline access token or refresh token.
+
+An uninvited, expired or revoked store receives no activation or catalog processing.
+
+## Expiring offline token exchange
+
+After invitation activation and prospect-workspace provisioning are complete, the backend exchanges the verified session token at the shop's OAuth token endpoint using:
+
+```text
+grant_type=urn:ietf:params:oauth:grant-type:token-exchange
+subject_token_type=urn:ietf:params:oauth:token-type:id_token
+requested_token_type=urn:shopify:params:oauth:token-type:offline-access-token
+expiring=1
+```
+
+Catora requires all of the following before credentials can be persisted:
+
+- access token;
+- rotating refresh token;
+- positive access and refresh expiry metadata;
+- exact granted scope `read_products` and no write scope.
+
+Token bundle objects suppress credentials from their representation. The persistence/rotation wiring is the next #158 implementation slice.
 
 ## Operator API
 
@@ -80,6 +123,18 @@ Both public app templates require:
 - the existing HMAC-verified product/uninstall webhook endpoint;
 - separate development and production Shopify registrations.
 
+Public app runtime configuration is separate from the existing Northstar custom app:
+
+```text
+CATORA_SHOPIFY_PUBLIC_ENABLED
+CATORA_SHOPIFY_PUBLIC_CLIENT_ID
+CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET
+CATORA_SHOPIFY_PUBLIC_APP_URL
+CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES
+CATORA_SHOPIFY_PUBLIC_HTTP_TIMEOUT_SECONDS
+CATORA_SHOPIFY_PUBLIC_SESSION_CLOCK_SKEW_SECONDS
+```
+
 Run the source-controlled validation with:
 
 ```bash
@@ -98,4 +153,4 @@ An operator with Shopify app-development access must:
 4. enter the environment-specific client credentials only in the deployment provider;
 5. deploy Shopify app configuration versions through Shopify CLI.
 
-The repository can continue with invitation enforcement, public token exchange and the embedded app shell while those registrations are being prepared.
+The repository can continue with prospect-workspace provisioning, encrypted public-token persistence and the embedded App Home while those registrations are being prepared.

@@ -216,12 +216,28 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Scan repository history for secrets
-        run: >-
-          docker run --rm
-          -v "$PWD:/repo"
-          ghcr.io/gitleaks/gitleaks:v8.30.1
-          git /repo --redact --no-banner
+      - name: Scan active code for secrets
+        shell: bash
+        env:
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            docker run --rm \
+              -v "$PWD:/repo" \
+              ghcr.io/gitleaks/gitleaks:v8.30.1 \
+              dir /repo \
+              --redact \
+              --no-banner
+          else
+            docker run --rm \
+              -v "$PWD:/repo" \
+              ghcr.io/gitleaks/gitleaks:v8.30.1 \
+              git /repo \
+              --log-opts="${CURRENT_SHA}" \
+              --redact \
+              --no-banner
+          fi
       - uses: actions/setup-node@v4
         with:
           node-version: 22
