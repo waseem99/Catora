@@ -46,6 +46,12 @@ def test_public_installation_view_exposes_bounded_catalog_status() -> None:
             "last_successful_sync_at": "2026-07-24T12:00:00+00:00",
             "last_sync_job_id": str(uuid.uuid4()),
             "last_audit_run_id": str(uuid.uuid4()),
+            "last_sync_full_reconciliation": True,
+            "last_completed_full_reconciliation": True,
+            "last_bulk_operation_status": "completed",
+            "last_bulk_operation_completed_at": "2026-07-24T11:59:00Z",
+            "last_bulk_webhook_received_at": "2026-07-24T11:59:01Z",
+            "last_bulk_operation_error_code": None,
             "encrypted_access_token": "must-not-appear",
             "encrypted_refresh_token": "must-not-appear",
         },
@@ -63,6 +69,11 @@ def test_public_installation_view_exposes_bounded_catalog_status() -> None:
     assert view.assigned_category_count == 100
     assert view.ambiguous_category_count == 12
     assert view.unclassified_category_count == 8
+    assert view.last_sync_full_reconciliation is True
+    assert view.last_completed_full_reconciliation is True
+    assert view.last_bulk_operation_status == "completed"
+    assert view.last_bulk_operation_completed_at is not None
+    assert view.last_bulk_webhook_received_at is not None
     assert view.reauthorization_required is False
     serialized = view.model_dump_json()
     assert "encrypted_access_token" not in serialized
