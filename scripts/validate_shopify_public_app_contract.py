@@ -16,6 +16,15 @@ EXPECTED_TOPICS = {
     "products/update",
     "products/delete",
 }
+PUBLIC_ENV_KEYS = {
+    "CATORA_SHOPIFY_PUBLIC_ENABLED",
+    "CATORA_SHOPIFY_PUBLIC_CLIENT_ID",
+    "CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET",
+    "CATORA_SHOPIFY_PUBLIC_APP_URL",
+    "CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES",
+    "CATORA_SHOPIFY_PUBLIC_HTTP_TIMEOUT_SECONDS",
+    "CATORA_SHOPIFY_PUBLIC_SESSION_CLOCK_SKEW_SECONDS",
+}
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -24,6 +33,36 @@ def _load(path: Path) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError(f"{path} must contain a TOML table")
     return payload
+
+
+def _read_env(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _validate_environment(path: Path) -> list[str]:
+    values = _read_env(path)
+    errors: list[str] = []
+    missing = sorted(PUBLIC_ENV_KEYS - values.keys())
+    if missing:
+        errors.append(f"{path}: missing public Shopify variables: {', '.join(missing)}")
+    for key in (
+        "CATORA_SHOPIFY_PUBLIC_CLIENT_ID",
+        "CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET",
+    ):
+        if values.get(key, "__missing__") != "":
+            errors.append(f"{path}: {key} example must remain blank")
+    if values.get("CATORA_SHOPIFY_PUBLIC_ENABLED") != "false":
+        errors.append(f"{path}: public Shopify app must be disabled by default")
+    if values.get("CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES") != '["read_products"]':
+        errors.append(f"{path}: public Shopify scope must be exactly read_products")
+    return errors
 
 
 def _validate(path: Path, *, development: bool) -> list[str]:
@@ -98,7 +137,7 @@ def main() -> int:
         (ROOT / "shopify/public/shopify.app.development.toml.example", True),
         (ROOT / "shopify/public/shopify.app.production.toml.example", False),
     )
-    errors: list[str] = []
+    errors = _validate_environment(ROOT / ".env.example")
     for path, development in paths:
         try:
             errors.extend(_validate(path, development=development))
