@@ -1,15 +1,33 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+from types import ModuleType
+from typing import Any, cast
+
 import pytest
 
-from scripts.accept_shopify_public_app import (
-    AcceptanceError,
-    _contains_forbidden_key,
-    _origin,
-    _shop_domain,
-    _validate_installation,
-    _validate_session,
-)
+
+def _load_acceptance_module() -> ModuleType:
+    path = Path(__file__).resolve().parents[3] / "scripts/accept_shopify_public_app.py"
+    spec = importlib.util.spec_from_file_location(
+        "catora_shopify_public_acceptance",
+        path,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Unable to load the Shopify public acceptance harness")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+acceptance = _load_acceptance_module()
+AcceptanceError = cast(type[Exception], acceptance.AcceptanceError)
+_origin = cast(Any, acceptance._origin)
+_shop_domain = cast(Any, acceptance._shop_domain)
+_contains_forbidden_key = cast(Any, acceptance._contains_forbidden_key)
+_validate_session = cast(Any, acceptance._validate_session)
+_validate_installation = cast(Any, acceptance._validate_installation)
 
 
 def test_acceptance_origins_and_shop_domain_are_strict() -> None:
