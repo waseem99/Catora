@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import uuid
 from contextlib import AbstractAsyncContextManager
-from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, cast
 
