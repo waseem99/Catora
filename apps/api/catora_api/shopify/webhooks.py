@@ -22,6 +22,7 @@ from catora_api.worker import celery_app
 
 SHOPIFY_WEBHOOK_DELIVERY_TYPE = "shopify_webhook_delivery"
 SUPPORTED_TOPICS = {
+    "app/scopes_update",
     "app/uninstalled",
     "bulk_operations/finish",
     "collections/create",
@@ -32,6 +33,7 @@ SUPPORTED_TOPICS = {
     "products/delete",
 }
 _BULK_STATUSES = {"canceled", "canceling", "completed", "failed"}
+_MAX_SCOPE_COUNT = 50
 ShopifyAppDistribution = Literal["custom", "public"]
 
 
@@ -97,6 +99,38 @@ def _bulk_metadata(payload: object) -> dict[str, object]:
         "bulk_type": "query",
         "bulk_completed_at": completed_at if isinstance(completed_at, str) else None,
         "bulk_error_code": error_code if isinstance(error_code, str) else None,
+    }
+
+
+def _scope_list(value: object) -> list[str]:
+    if not isinstance(value, list) or len(value) > _MAX_SCOPE_COUNT:
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    scopes: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip() or len(item) > 100:
+            raise ShopifyWebhookError("Shopify scope update payload is invalid")
+        scopes.append(item.strip())
+    return sorted(set(scopes))
+
+
+def _scope_metadata(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    current = _scope_list(payload.get("current"))
+    previous = _scope_list(payload.get("previous"))
+    updated_at = payload.get("updated_at")
+    shop_id = payload.get("shop_id")
+    if updated_at is not None and not isinstance(updated_at, str):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    if shop_id is not None and (
+        not isinstance(shop_id, str) or not shop_id.startswith("gid://shopify/Shop/")
+    ):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    return {
+        "current_scopes": current,
+        "previous_scopes": previous,
+        "scopes_updated_at": updated_at,
+        "shop_gid": shop_id,
     }
 
 
@@ -201,7 +235,9 @@ async def receive_shopify_webhook(
         raise ShopifyWebhookError("Shopify webhook payload is invalid")
 
     bounded_payload: dict[str, object]
-    if topic == "bulk_operations/finish":
+    if topic == "app/scopes_update":
+        bounded_payload = _scope_metadata(payload)
+    elif topic == "bulk_operations/finish":
         bounded_payload = _bulk_metadata(payload)
     elif topic.startswith("products/"):
         bounded_payload = {"product_id": _payload_resource_id(payload)}
