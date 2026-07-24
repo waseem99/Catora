@@ -54,6 +54,7 @@ jobs:
         run: |
           python -m py_compile scripts/smoke_hosted_demo.py
           python -m py_compile apps/api/scripts/seed_enterprise_demo.py
+          python -m py_compile apps/api/scripts/repair_demo_image_urls.py
           python -m py_compile apps/api/scripts/export_sales_demo_shopify_csv.py
           python -m py_compile apps/api/scripts/validate_sales_demo_shopify_csv.py
           python - <<'PY'
@@ -176,6 +177,11 @@ jobs:
             second_seed_status=$?
             if [ "$second_seed_status" -ne 0 ]; then
               exit "$second_seed_status"
+            fi
+            python scripts/repair_demo_image_urls.py
+            image_repair_status=$?
+            if [ "$image_repair_status" -ne 0 ]; then
+              exit "$image_repair_status"
             fi
             python scripts/export_sales_demo_shopify_csv.py \
               --output /tmp/northstar-shopify-products.csv
