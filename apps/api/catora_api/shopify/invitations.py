@@ -49,7 +49,7 @@ class ShopifyInvitationService:
         if invitation is None:
             invitation = ShopifyStoreInvitation(
                 id=uuid.uuid4(),
-                issuer_workspace_id=issuer_workspace_id,
+                workspace_id=issuer_workspace_id,
                 activated_workspace_id=None,
                 created_by_user_id=actor_user_id,
                 shop_domain=shop,
@@ -67,7 +67,7 @@ class ShopifyInvitationService:
                 raise ShopifyInvitationError(
                     "An activated Shopify store invitation cannot be replaced"
                 )
-            invitation.issuer_workspace_id = issuer_workspace_id
+            invitation.workspace_id = issuer_workspace_id
             invitation.created_by_user_id = actor_user_id
             invitation.prospect_name = name
             invitation.feature_tier = feature_tier
@@ -105,7 +105,7 @@ class ShopifyInvitationService:
     ) -> tuple[ShopifyStoreInvitation, ...]:
         invitations = await session.scalars(
             select(ShopifyStoreInvitation)
-            .where(ShopifyStoreInvitation.issuer_workspace_id == issuer_workspace_id)
+            .where(ShopifyStoreInvitation.workspace_id == issuer_workspace_id)
             .order_by(ShopifyStoreInvitation.created_at.desc())
         )
         return tuple(invitations.all())
@@ -168,7 +168,7 @@ class ShopifyInvitationService:
         invitation.revoked_at = None
         session.add(
             AuditEvent(
-                workspace_id=invitation.issuer_workspace_id,
+                workspace_id=invitation.workspace_id,
                 actor_user_id=None,
                 event_type="shopify.public_invitation_activated",
                 entity_type="shopify_store_invitation",
@@ -195,7 +195,7 @@ class ShopifyInvitationService:
         invitation = await session.scalar(
             select(ShopifyStoreInvitation).where(
                 ShopifyStoreInvitation.id == invitation_id,
-                ShopifyStoreInvitation.issuer_workspace_id == issuer_workspace_id,
+                ShopifyStoreInvitation.workspace_id == issuer_workspace_id,
             )
         )
         if invitation is None:
