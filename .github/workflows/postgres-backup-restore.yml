@@ -1,0 +1,276 @@
+name: Postgres backup restore
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 3 * * 0"
+  pull_request:
+    paths:
+      - "apps/api/alembic/**"
+      - "apps/api/catora_api/db/**"
+      - "apps/api/scripts/seed_enterprise_demo.py"
+      - "apps/api/scripts/repair_demo_image_urls.py"
+      - ".github/workflows/postgres-backup-restore.yml"
+
+concurrency:
+  group: postgres-backup-restore-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: catora
+          POSTGRES_USER: catora
+          POSTGRES_PASSWORD: catora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U catora -d catora"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CATORA_DATABASE_URL: postgresql+asyncpg://catora:catora@127.0.0.1:5432/catora
+      CATORA_REDIS_URL: redis://127.0.0.1:6379/0
+      CATORA_S3_ENDPOINT_URL: http://127.0.0.1:9000
+      CATORA_S3_ACCESS_KEY: backup-test
+      CATORA_S3_SECRET_KEY: backup-test-secret
+      CATORA_DEMO_PASSWORD: backup-restore-demo-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install API package
+        run: python -m pip install --quiet -e 'apps/api[dev]'
+
+      - name: Migrate and seed source database
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/api
+          alembic upgrade head
+          python scripts/seed_enterprise_demo.py
+          python scripts/repair_demo_image_urls.py
+
+      - name: Create PostgreSQL 17 backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p backup-evidence
+          docker run --rm --network host \
+            -e PGPASSWORD=catora \
+            -v "$GITHUB_WORKSPACE:/work" \
+            postgres:17-alpine \
+            pg_dump \
+              --host 127.0.0.1 \
+              --username catora \
+              --dbname catora \
+              --format custom \
+              --no-owner \
+              --no-privileges \
+              --file /work/catora-demo.dump
+
+          dump_bytes="$(stat -c '%s' catora-demo.dump)"
+          dump_sha256="$(sha256sum catora-demo.dump | cut -d' ' -f1)"
+          python - <<PY
+          import json
+          from pathlib import Path
+
+          Path("backup-evidence/backup-metadata.json").write_text(
+              json.dumps(
+                  {
+                      "format": "postgres-custom",
+                      "postgres_major": 17,
+                      "size_bytes": int("${dump_bytes}"),
+                      "sha256": "${dump_sha256}",
+                  },
+                  indent=2,
+                  sort_keys=True,
+              )
+              + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Restore into a clean database
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            -e PGPASSWORD=catora \
+            postgres:17-alpine \
+            psql \
+              --host 127.0.0.1 \
+              --username catora \
+              --dbname postgres \
+              --set ON_ERROR_STOP=1 \
+              --command 'CREATE DATABASE catora_restore;'
+
+          docker run --rm --network host \
+            -e PGPASSWORD=catora \
+            -v "$GITHUB_WORKSPACE:/work" \
+            postgres:17-alpine \
+            pg_restore \
+              --host 127.0.0.1 \
+              --username catora \
+              --dbname catora_restore \
+              --exit-on-error \
+              --no-owner \
+              --no-privileges \
+              /work/catora-demo.dump
+
+      - name: Verify restored demo invariants
+        env:
+          RESTORED_DATABASE_URL: postgresql+asyncpg://catora:catora@127.0.0.1:5432/catora_restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' | tee backup-evidence/restore-report.json
+          from __future__ import annotations
+
+          import asyncio
+          import json
+          import os
+
+          from sqlalchemy import text
+          from sqlalchemy.ext.asyncio import create_async_engine
+
+          EXPECTED = {
+              "products": 1_000,
+              "variants": 2_000,
+              "images": 1_000,
+              "buyer_intents": 5,
+          }
+
+
+          async def scalar(connection, statement: str) -> object:
+              return (await connection.execute(text(statement))).scalar_one()
+
+
+          async def main() -> None:
+              engine = create_async_engine(os.environ["RESTORED_DATABASE_URL"])
+              try:
+                  async with engine.connect() as connection:
+                      workspace_count = int(
+                          await scalar(
+                              connection,
+                              "SELECT count(*) FROM workspaces WHERE slug = 'sales-demo'",
+                          )
+                      )
+                      counts = {
+                          "products": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM products "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo') "
+                                  "AND status = 'active'",
+                              )
+                          ),
+                          "variants": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM product_variants "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo') "
+                                  "AND deleted_at IS NULL",
+                              )
+                          ),
+                          "images": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM product_images "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo')",
+                              )
+                          ),
+                          "buyer_intents": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM buyer_intents "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo')",
+                              )
+                          ),
+                          "audit_runs": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM audit_runs "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo')",
+                              )
+                          ),
+                          "recommendations": int(
+                              await scalar(
+                                  connection,
+                                  "SELECT count(*) FROM recommendations "
+                                  "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo')",
+                              )
+                          ),
+                      }
+                      placeholder_images = int(
+                          await scalar(
+                              connection,
+                              "SELECT count(*) FROM product_images "
+                              "WHERE workspace_id = (SELECT id FROM workspaces WHERE slug = 'sales-demo') "
+                              "AND url LIKE '%example.test%'",
+                          )
+                      )
+                      migration_version = str(
+                          await scalar(connection, "SELECT version_num FROM alembic_version")
+                      )
+              finally:
+                  await engine.dispose()
+
+              failures: list[str] = []
+              if workspace_count != 1:
+                  failures.append(f"expected one sales-demo workspace, got {workspace_count}")
+              for key, expected in EXPECTED.items():
+                  if counts[key] != expected:
+                      failures.append(f"expected {expected} {key}, got {counts[key]}")
+              if counts["audit_runs"] < 1:
+                  failures.append("restored database contains no audit run")
+              if counts["recommendations"] < 1:
+                  failures.append("restored database contains no recommendation")
+              if placeholder_images != 0:
+                  failures.append(f"restored database contains {placeholder_images} placeholder images")
+              if not migration_version:
+                  failures.append("restored database has no Alembic version")
+
+              report = {
+                  "status": "passed" if not failures else "failed",
+                  "workspace_count": workspace_count,
+                  "counts": counts,
+                  "placeholder_images": placeholder_images,
+                  "alembic_version": migration_version,
+              }
+              if failures:
+                  report["failures"] = failures
+              print(json.dumps(report, indent=2, sort_keys=True))
+              if failures:
+                  raise SystemExit(1)
+
+
+          asyncio.run(main())
+          PY
+
+      - name: Remove database dump
+        if: always()
+        shell: bash
+        run: rm -f catora-demo.dump
+
+      - name: Upload bounded backup and restore evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-backup-restore-evidence
+          path: backup-evidence
+          if-no-files-found: error
+          retention-days: 7
