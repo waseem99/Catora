@@ -72,6 +72,9 @@ def _settings(**overrides: object) -> Settings:
         "shopify_public_client_secret": CLIENT_SECRET,
         "shopify_public_app_url": "http://localhost:3001",
         "shopify_public_required_scopes": ["read_products"],
+        "shopify_public_credential_encryption_key": base64.urlsafe_b64encode(
+            b"u" * 32
+        ).decode(),
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)
@@ -248,11 +251,14 @@ async def test_token_exchange_rejects_scope_expansion() -> None:
             )
 
 
-def test_public_session_route_is_registered_without_secret_fields() -> None:
+def test_public_session_routes_are_registered_without_secret_fields() -> None:
     schema = app.openapi()
-    route = "/api/v1/shopify/public/session"
-    assert route in schema["paths"]
-    serialized = str(schema["paths"][route]).casefold()
-    assert "access_token" not in serialized
-    assert "refresh_token" not in serialized
-    assert "client_secret" not in serialized
+    for route in (
+        "/api/v1/shopify/public/session",
+        "/api/v1/shopify/public/activate",
+    ):
+        assert route in schema["paths"]
+        serialized = str(schema["paths"][route]).casefold()
+        assert "access_token" not in serialized
+        assert "refresh_token" not in serialized
+        assert "client_secret" not in serialized
