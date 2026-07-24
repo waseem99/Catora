@@ -20,7 +20,7 @@ def upgrade() -> None:
     op.create_table(
         "shopify_store_invitations",
         sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("issuer_workspace_id", sa.Uuid(), nullable=False),
+        sa.Column("workspace_id", sa.Uuid(), nullable=False),
         sa.Column("activated_workspace_id", sa.Uuid(), nullable=True),
         sa.Column("created_by_user_id", sa.Uuid(), nullable=True),
         sa.Column("shop_domain", sa.String(length=255), nullable=False),
@@ -65,9 +65,9 @@ def upgrade() -> None:
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
-            ["issuer_workspace_id"],
+            ["workspace_id"],
             ["workspaces.id"],
-            name=op.f("fk_shopify_store_invitations_issuer_workspace_id_workspaces"),
+            name=op.f("fk_shopify_store_invitations_workspace_id_workspaces"),
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_shopify_store_invitations")),
@@ -77,9 +77,9 @@ def upgrade() -> None:
         ),
     )
     op.create_index(
-        op.f("ix_shopify_store_invitations_issuer_workspace_id"),
+        op.f("ix_shopify_store_invitations_workspace_id"),
         "shopify_store_invitations",
-        ["issuer_workspace_id"],
+        ["workspace_id"],
         unique=False,
     )
     op.create_index(
@@ -116,7 +116,7 @@ def downgrade() -> None:
         table_name="shopify_store_invitations",
     )
     op.drop_index(
-        op.f("ix_shopify_store_invitations_issuer_workspace_id"),
+        op.f("ix_shopify_store_invitations_workspace_id"),
         table_name="shopify_store_invitations",
     )
     op.drop_table("shopify_store_invitations")
