@@ -1,0 +1,62 @@
+name: Shopify public app contract
+
+on:
+  pull_request:
+    paths:
+      - "shopify/public/**"
+      - "scripts/validate_shopify_public_app_contract.py"
+      - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/api/shopify_public.py"
+      - "apps/api/catora_api/db/models/shopify.py"
+      - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/invitations.py"
+      - "apps/api/tests/test_shopify_public_invitations.py"
+      - ".github/workflows/shopify-public-app-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "shopify/public/**"
+      - "scripts/validate_shopify_public_app_contract.py"
+      - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/api/shopify_public.py"
+      - "apps/api/catora_api/db/models/shopify.py"
+      - "apps/api/catora_api/schemas/shopify_public.py"
+      - "apps/api/catora_api/shopify/invitations.py"
+      - "apps/api/tests/test_shopify_public_invitations.py"
+      - ".github/workflows/shopify-public-app-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate public app source contract
+        run: python scripts/validate_shopify_public_app_contract.py
+      - name: Install API validation dependencies
+        run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Run focused invitation tests
+        run: pytest -q apps/api/tests/test_shopify_public_invitations.py
+      - name: Run Ruff on new public app foundation
+        run: |
+          ruff check \
+            apps/api/catora_api/api/shopify_public.py \
+            apps/api/catora_api/db/models/shopify.py \
+            apps/api/catora_api/schemas/shopify_public.py \
+            apps/api/catora_api/shopify/invitations.py \
+            apps/api/tests/test_shopify_public_invitations.py \
+            scripts/validate_shopify_public_app_contract.py
+      - name: Run strict MyPy on new public app foundation
+        working-directory: apps/api
+        run: |
+          mypy \
+            catora_api/api/shopify_public.py \
+            catora_api/db/models/shopify.py \
+            catora_api/schemas/shopify_public.py \
+            catora_api/shopify/invitations.py
