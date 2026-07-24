@@ -12,6 +12,7 @@ WEBHOOK_URL = "https://api.catora.codistan.org/api/v1/shopify/webhooks"
 COMPLIANCE_URL = "https://api.catora.codistan.org/api/v1/shopify/compliance"
 API_VERSION = "2026-07"
 EXPECTED_TOPICS = {
+    "app/scopes_update",
     "app/uninstalled",
     "bulk_operations/finish",
     "collections/create",
