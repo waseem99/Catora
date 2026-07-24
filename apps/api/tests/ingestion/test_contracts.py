@@ -6,6 +6,7 @@ from pydantic import ValidationError
 
 from catora_api.connectors.public_catalog import PublicCatalogConnector
 from catora_api.connectors.shopify import ShopifyCatalogConnector
+from catora_api.connectors.shopify_bulk import ShopifyBulkCatalogConnector
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.schemas.ingestion import (
@@ -202,12 +203,44 @@ async def test_factory_builds_shopify_connector_from_secret_reference() -> None:
     )
 
     assert isinstance(connector, ShopifyCatalogConnector)
+    assert not isinstance(connector, ShopifyBulkCatalogConnector)
     assert connector.config.updated_after is not None
     assert resolver.references == [
         "env:CATORA_CONNECTOR_SECRET_SHOPIFY_DEMO"
     ]
     assert "resolved-token" not in repr(connector.config)
     assert "access_token" not in source.config
+
+
+@pytest.mark.asyncio
+async def test_factory_uses_bulk_only_for_public_initial_sync() -> None:
+    resolver = FakeSecretResolver()
+    source = CatalogSource(
+        id=uuid.uuid4(),
+        workspace_id=uuid.uuid4(),
+        name="Public Shopify",
+        source_type="shopify",
+        status="ready",
+        credential_ref="env:CATORA_CONNECTOR_SECRET_SHOPIFY_PUBLIC",
+        config={
+            "shop_domain": "prospect-store.myshopify.com",
+            "api_version": "2026-07",
+            "updated_after": None,
+            "distribution": "public",
+        },
+    )
+
+    connector = await connector_for_source(
+        source,
+        FakeStorage(),  # type: ignore[arg-type]
+        secret_resolver=resolver,
+    )
+
+    assert isinstance(connector, ShopifyBulkCatalogConnector)
+    assert connector.config.updated_after is None
+    assert resolver.references == [
+        "env:CATORA_CONNECTOR_SECRET_SHOPIFY_PUBLIC"
+    ]
 
 
 @pytest.mark.asyncio
