@@ -10,7 +10,8 @@
   },
   "deploy": {
     "preDeployCommand": [
-      "alembic upgrade head"
+      "alembic upgrade head",
+      "python scripts/repair_demo_image_urls.py"
     ],
     "healthcheckPath": "/health/ready",
     "healthcheckTimeout": 300,
