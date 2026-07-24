@@ -8,7 +8,13 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from catora_api.db.models import AuditEvent, CatalogSource, IngestionJob, ReportJob
+from catora_api.db.models import (
+    AuditEvent,
+    CatalogSource,
+    IngestionJob,
+    ReportJob,
+    ShopifyStoreInvitation,
+)
 from catora_api.worker import celery_app
 
 ACTIVE_JOB_STATUSES = ("queued", "validating", "running")
@@ -52,7 +58,7 @@ async def _installation_actor(
     persisted = _uuid_value(snapshot, "installed_by_user_id")
     if persisted is not None:
         return persisted
-    return await session.scalar(
+    audited = await session.scalar(
         select(AuditEvent.actor_user_id)
         .where(
             AuditEvent.entity_id == installation.id,
@@ -60,6 +66,22 @@ async def _installation_actor(
             AuditEvent.actor_user_id.is_not(None),
         )
         .order_by(AuditEvent.occurred_at.desc())
+        .limit(1)
+    )
+    if audited is not None:
+        return audited
+    if snapshot.get("distribution") != "public":
+        return None
+    shop_domain = _text_value(snapshot, "shop_domain")
+    if shop_domain is None:
+        return None
+    return await session.scalar(
+        select(ShopifyStoreInvitation.created_by_user_id)
+        .where(
+            ShopifyStoreInvitation.activated_workspace_id == installation.workspace_id,
+            ShopifyStoreInvitation.shop_domain == shop_domain,
+            ShopifyStoreInvitation.status == "activated",
+        )
         .limit(1)
     )
 
