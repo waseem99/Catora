@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Literal, cast
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from catora_api.auth.dependencies import (
     AuthContextDependency,
@@ -15,8 +15,14 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
-from catora_api.db.models import ReportJob, ShopifyStoreInvitation
+from catora_api.db.models import AuditEvent, ReportJob, ShopifyStoreInvitation
+from catora_api.diagnostics.reporting import (
+    build_backlog_csv,
+    build_report_pptx,
+    load_report,
+)
 from catora_api.schemas.shopify_public import (
+    ShopifyAnalysisStatus,
     ShopifyBulkOperationStatus,
     ShopifyPublicActivationView,
     ShopifyPublicInstallationStatus,
@@ -26,6 +32,7 @@ from catora_api.schemas.shopify_public import (
     ShopifyStoreInvitationCreateRequest,
     ShopifyStoreInvitationView,
 )
+from catora_api.shopify.analysis import verified_shopify_analysis_report
 from catora_api.shopify.invitations import (
     ShopifyInvitationError,
     ShopifyInvitationService,
@@ -188,6 +195,14 @@ def _installation_view(
         bulk_value = None
     bulk_status = cast(ShopifyBulkOperationStatus | None, bulk_value)
 
+    analysis_value = _snapshot_text(snapshot, "analysis_status") or "not_started"
+    if analysis_value not in {"not_started", "running", "completed", "failed"}:
+        analysis_value = "failed"
+    analysis_status = cast(ShopifyAnalysisStatus, analysis_value)
+    report_ready = (
+        _snapshot_uuid(snapshot, "last_verified_analysis_report_job_id") is not None
+    )
+
     feature_tier = cast(
         Literal["demo", "plus_demo"],
         invitation.feature_tier,
@@ -237,8 +252,43 @@ def _installation_view(
             snapshot,
             "last_bulk_operation_error_code",
         ),
+        analysis_status=analysis_status,
+        analysis_stale=_snapshot_bool(snapshot, "analysis_stale"),
+        analysis_completed_at=_snapshot_datetime(snapshot, "analysis_completed_at"),
+        analysis_error_type=_snapshot_text(snapshot, "analysis_error_type"),
+        finding_count=_snapshot_int(snapshot, "analysis_finding_count"),
+        intent_run_count=_snapshot_int(snapshot, "analysis_intent_run_count"),
+        intent_match_count=_snapshot_int(snapshot, "analysis_intent_match_count"),
+        confident_match_count=_snapshot_int(
+            snapshot,
+            "analysis_confident_match_count",
+        ),
+        possible_match_missing_data_count=_snapshot_int(
+            snapshot,
+            "analysis_possible_match_missing_data_count",
+        ),
+        report_ready=report_ready,
+        report_path=("/api/v1/shopify/public/report.pptx" if report_ready else None),
+        backlog_path=("/api/v1/shopify/public/backlog.csv" if report_ready else None),
         reauthorization_required=installation_status == "refresh_required",
     )
+
+
+async def _verified_report_for_request(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> tuple[ShopifyPublicSession, ReportJob, ReportJob]:
+    _, shopify_session = _authenticated_shopify_session(request, settings)
+    invitation = await _invitation_for_session(session, shopify_session)
+    installation = await _installation_for_invitation(session, settings, invitation)
+    report = await verified_shopify_analysis_report(session, installation)
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="The Shopify catalog assessment is not ready",
+        )
+    return shopify_session, installation, report
 
 
 @router.get(
@@ -379,6 +429,88 @@ async def sync_shopify_public_installation(
         )
     await session.refresh(installation)
     return _installation_view(installation, invitation)
+
+
+@router.get("/shopify/public/backlog.csv")
+async def download_shopify_public_backlog(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> Response:
+    shopify_session, installation, report_job = await _verified_report_for_request(
+        request,
+        session,
+        settings,
+    )
+    report = await load_report(session, report_job)
+    payload = build_backlog_csv(report)
+    session.add(
+        AuditEvent(
+            workspace_id=installation.workspace_id,
+            actor_user_id=None,
+            event_type="shopify.analysis_backlog_downloaded",
+            entity_type="report_job",
+            entity_id=report_job.id,
+            payload={
+                "shopify_user_id": shopify_session.user_id,
+                "row_count": len(report.findings),
+            },
+        )
+    )
+    await session.commit()
+    return Response(
+        content=payload,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="catora-shopify-remediation-backlog.csv"'
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+@router.get("/shopify/public/report.pptx")
+async def download_shopify_public_report(
+    request: Request,
+    session: SessionDependency,
+    settings: SettingsDependency,
+) -> Response:
+    shopify_session, installation, report_job = await _verified_report_for_request(
+        request,
+        session,
+        settings,
+    )
+    report = await load_report(session, report_job)
+    payload = build_report_pptx(report)
+    session.add(
+        AuditEvent(
+            workspace_id=installation.workspace_id,
+            actor_user_id=None,
+            event_type="shopify.analysis_report_downloaded",
+            entity_type="report_job",
+            entity_id=report_job.id,
+            payload={
+                "shopify_user_id": shopify_session.user_id,
+                "format": "pptx",
+                "size_bytes": len(payload),
+            },
+        )
+    )
+    await session.commit()
+    return Response(
+        content=payload,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument."
+            "presentationml.presentation"
+        ),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="catora-shopify-catalog-assessment.pptx"'
+            ),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @router.post(
