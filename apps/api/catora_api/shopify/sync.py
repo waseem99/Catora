@@ -76,7 +76,7 @@ def _runtime_environment(
         get_settings().environment,
     ):
         if value in _RUNTIME_ENVIRONMENTS:
-            return cast(str, value)
+            return value
     return "development"
 
 
@@ -92,7 +92,7 @@ def _registration_identity(
         _text_value(source_config, "registration_identity"),
     ):
         if value in _REGISTRATION_IDENTITIES:
-            return cast(str, value)
+            return value
     distribution = _text_value(snapshot, "distribution") or _text_value(
         source_config,
         "distribution",
