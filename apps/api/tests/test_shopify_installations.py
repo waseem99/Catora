@@ -4,19 +4,54 @@ import base64
 import hashlib
 import hmac
 import uuid
+from typing import Any, cast
 from urllib.parse import urlencode
 
 import pytest
 
 from catora_api.config import Settings
+from catora_api.db.models import AuditEvent, CatalogSource, ReportJob
 from catora_api.main import app
 from catora_api.shopify.crypto import CredentialCipher, CredentialEncryptionError
 from catora_api.shopify.installations import (
+    SHOPIFY_CUSTOM_REGISTRATION_IDENTITY,
     ShopifyInstallationService,
     normalize_shop_domain,
     parse_credential_reference,
     verify_shopify_query_hmac,
 )
+
+
+class EmptyScalars:
+    def all(self) -> list[ReportJob]:
+        return []
+
+
+class PersistSession:
+    def __init__(self) -> None:
+        self.added: list[object] = []
+        self.commit_count = 0
+        self.refresh_count = 0
+
+    async def scalars(self, _statement: object) -> EmptyScalars:
+        return EmptyScalars()
+
+    async def get(self, _model: object, _identifier: object) -> None:
+        return None
+
+    def add(self, value: object) -> None:
+        self.added.append(value)
+
+    async def flush(self) -> None:
+        for value in self.added:
+            if isinstance(value, (CatalogSource, ReportJob)) and value.id is None:
+                value.id = uuid.uuid4()
+
+    async def commit(self) -> None:
+        self.commit_count += 1
+
+    async def refresh(self, _value: object) -> None:
+        self.refresh_count += 1
 
 
 def _key() -> str:
@@ -119,6 +154,47 @@ def test_authorization_url_requests_offline_minimum_scope() -> None:
     assert "state=nonce-value" in url
     assert "grant_options" not in url
     assert "write_products" not in url
+
+
+@pytest.mark.asyncio
+async def test_custom_installation_persists_registration_provenance() -> None:
+    workspace_id = uuid.uuid4()
+    actor_user_id = uuid.uuid4()
+    state_record = ReportJob(
+        id=uuid.uuid4(),
+        workspace_id=workspace_id,
+        report_type="shopify_oauth_state",
+        status="exchanging",
+        input_snapshot={"actor_user_id": str(actor_user_id)},
+        template_version="shopify-oauth-v1",
+    )
+    session = PersistSession()
+
+    installation = await ShopifyInstallationService(_settings())._persist_installation(
+        cast(Any, session),
+        state_record=state_record,
+        shop="northstar.myshopify.com",
+        token={
+            "access_token": "a" * 32,
+            "refresh_token": "r" * 32,
+            "expires_in": 3600,
+            "refresh_token_expires_in": 7_776_000,
+            "scope": "read_products",
+        },
+    )
+
+    assert installation.input_snapshot["registration_identity"] == (
+        SHOPIFY_CUSTOM_REGISTRATION_IDENTITY
+    )
+    assert installation.input_snapshot["runtime_environment"] == "development"
+    source = next(item for item in session.added if isinstance(item, CatalogSource))
+    assert source.config["registration_identity"] == SHOPIFY_CUSTOM_REGISTRATION_IDENTITY
+    assert source.config["runtime_environment"] == "development"
+    audit = next(item for item in session.added if isinstance(item, AuditEvent))
+    assert audit.payload["registration_identity"] == SHOPIFY_CUSTOM_REGISTRATION_IDENTITY
+    assert audit.payload["runtime_environment"] == "development"
+    assert session.commit_count == 1
+    assert session.refresh_count == 1
 
 
 def test_credential_reference_is_strict() -> None:
