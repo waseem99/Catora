@@ -109,6 +109,23 @@ def _registration_identity(
     return "northstar_custom"
 
 
+def _job_checkpoint_with_provenance(
+    checkpoint: dict[str, object],
+    provenance: dict[str, str],
+) -> dict[str, object]:
+    shopify_value = checkpoint.get("shopify")
+    shopify_checkpoint = (
+        dict(shopify_value) if isinstance(shopify_value, dict) else {}
+    )
+    return {
+        **checkpoint,
+        "shopify": {
+            **shopify_checkpoint,
+            **provenance,
+        },
+    }
+
+
 async def _installation_actor(
     session: AsyncSession,
     *,
@@ -208,6 +225,10 @@ async def queue_shopify_sync(
     bounded_ids = [value for value in product_ids if value][:100]
     if active_job is not None:
         pending = _string_list(snapshot, "pending_product_ids")
+        active_job.checkpoint = _job_checkpoint_with_provenance(
+            dict(active_job.checkpoint),
+            provenance,
+        )
         installation.input_snapshot = {
             **snapshot,
             "sync_status": "coalesced",
