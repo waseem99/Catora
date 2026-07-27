@@ -1,0 +1,55 @@
+name: Shopify scale and isolation contract
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "apps/api/catora_api/connectors/shopify.py"
+      - "apps/api/catora_api/connectors/shopify_bulk.py"
+      - "apps/api/catora_api/normalization/adapters.py"
+      - "apps/api/catora_api/normalization/reconciliation.py"
+      - "apps/api/tests/connectors/test_shopify_bulk_scale.py"
+      - ".github/workflows/shopify-scale-contract.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/catora_api/connectors/shopify.py"
+      - "apps/api/catora_api/connectors/shopify_bulk.py"
+      - "apps/api/catora_api/normalization/adapters.py"
+      - "apps/api/catora_api/normalization/reconciliation.py"
+      - "apps/api/tests/connectors/test_shopify_bulk_scale.py"
+      - ".github/workflows/shopify-scale-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  scale-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install API validation dependencies
+        run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Run 10k SKU streaming and isolation contract
+        shell: bash
+        run: |
+          set +e
+          pytest -q \
+            apps/api/tests/connectors/test_shopify_bulk_scale.py \
+            --durations=5 \
+            > shopify-scale-contract-report.txt 2>&1
+          status=$?
+          cat shopify-scale-contract-report.txt
+          exit "$status"
+      - name: Upload sanitized scale evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-scale-contract-report
+          path: shopify-scale-contract-report.txt
+          if-no-files-found: error
+          retention-days: 7
