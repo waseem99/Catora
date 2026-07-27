@@ -31,6 +31,10 @@ from catora_api.shopify.installations import SHOPIFY_INSTALLATION_TYPE, normaliz
 from catora_api.shopify.public_session import ShopifyPublicSession, ShopifyPublicTokenBundle
 
 SHOPIFY_PUBLIC_CREDENTIAL_SCHEME = "shopify-public-installation"
+SHOPIFY_PUBLIC_ACTIVATIONS_PAUSED_MESSAGE = (
+    "New Shopify activations are temporarily paused. Existing Catora installations "
+    "remain available."
+)
 _SLUG_PATTERN = re.compile(r"[^a-z0-9]+")
 
 
@@ -136,6 +140,10 @@ class ShopifyPublicInstallationService:
 
         workspace_id = locked.activated_workspace_id
         created = workspace_id is None
+        if created and not self.settings.shopify_public_new_activations_enabled:
+            raise ShopifyPublicInstallationError(
+                SHOPIFY_PUBLIC_ACTIVATIONS_PAUSED_MESSAGE
+            )
         storefront: Storefront | None = None
         if workspace_id is None:
             organization = Organization(
@@ -222,6 +230,10 @@ class ShopifyPublicInstallationService:
                 source = await session.get(CatalogSource, uuid.UUID(source_id_text))
             except ValueError:
                 source = None
+        provenance = {
+            "registration_identity": self.settings.shopify_public_registration_identity,
+            "runtime_environment": self.settings.environment,
+        }
         if source is None:
             source = CatalogSource(
                 workspace_id=workspace_id,
@@ -236,6 +248,7 @@ class ShopifyPublicInstallationService:
                     "updated_after": None,
                     "normalization_aliases": {},
                     "distribution": "public",
+                    **provenance,
                 },
             )
             session.add(source)
@@ -249,6 +262,7 @@ class ShopifyPublicInstallationService:
                 "shop_domain": shop,
                 "api_version": "2026-07",
                 "distribution": "public",
+                **provenance,
             }
 
         now = _now()
@@ -263,6 +277,7 @@ class ShopifyPublicInstallationService:
             "shopify_user_id": shopify_session.user_id,
             "feature_tier": locked.feature_tier,
             "granted_scopes": list(token_bundle.granted_scopes),
+            **provenance,
             "token_mode": "expiring_offline",
             "encrypted_access_token": cipher.encrypt(
                 token_bundle.access_token,
@@ -308,6 +323,7 @@ class ShopifyPublicInstallationService:
                     "invitation_id": str(locked.id),
                     "feature_tier": locked.feature_tier,
                     "granted_scopes": list(token_bundle.granted_scopes),
+                    **provenance,
                 },
             )
         )
@@ -462,6 +478,16 @@ class ShopifyPublicInstallationService:
                     payload={
                         "shop_domain": shop,
                         "granted_scopes": list(bundle.granted_scopes),
+                        "registration_identity": _text(
+                            snapshot,
+                            "registration_identity",
+                        )
+                        or self.settings.shopify_public_registration_identity,
+                        "runtime_environment": _text(
+                            snapshot,
+                            "runtime_environment",
+                        )
+                        or self.settings.environment,
                     },
                 )
             )
