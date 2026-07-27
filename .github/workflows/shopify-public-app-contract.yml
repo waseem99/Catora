@@ -8,6 +8,7 @@ on:
       - "apps/worker/Dockerfile"
       - ".env.example"
       - "docs/shopify-public-acceptance.md"
+      - "docs/shopify-public-operational-controls.md"
       - "scripts/accept_shopify_public_app.py"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
@@ -41,6 +42,7 @@ on:
       - "apps/api/tests/ingestion/test_contracts.py"
       - "apps/api/tests/ingestion/test_service.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_activation_controls.py"
       - "apps/api/tests/test_shopify_analysis.py"
       - "apps/api/tests/test_shopify_collection_webhooks.py"
       - "apps/api/tests/test_shopify_compliance.py"
@@ -67,6 +69,7 @@ on:
       - "apps/worker/Dockerfile"
       - ".env.example"
       - "docs/shopify-public-acceptance.md"
+      - "docs/shopify-public-operational-controls.md"
       - "scripts/accept_shopify_public_app.py"
       - "scripts/validate_shopify_public_app_contract.py"
       - "apps/api/alembic/versions/**"
@@ -100,6 +103,7 @@ on:
       - "apps/api/tests/ingestion/test_contracts.py"
       - "apps/api/tests/ingestion/test_service.py"
       - "apps/api/tests/test_config.py"
+      - "apps/api/tests/test_shopify_activation_controls.py"
       - "apps/api/tests/test_shopify_analysis.py"
       - "apps/api/tests/test_shopify_collection_webhooks.py"
       - "apps/api/tests/test_shopify_compliance.py"
@@ -151,6 +155,7 @@ jobs:
             apps/api/tests/ingestion/test_contracts.py \
             apps/api/tests/ingestion/test_service.py \
             apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_activation_controls.py \
             apps/api/tests/test_shopify_analysis.py \
             apps/api/tests/test_shopify_collection_webhooks.py \
             apps/api/tests/test_shopify_compliance.py \
@@ -213,6 +218,7 @@ jobs:
             apps/api/tests/ingestion/test_contracts.py \
             apps/api/tests/ingestion/test_service.py \
             apps/api/tests/test_config.py \
+            apps/api/tests/test_shopify_activation_controls.py \
             apps/api/tests/test_shopify_analysis.py \
             apps/api/tests/test_shopify_collection_webhooks.py \
             apps/api/tests/test_shopify_compliance.py \
