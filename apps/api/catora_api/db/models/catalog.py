@@ -78,6 +78,11 @@ class SourceRecord(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, Ba
     ingestion_job_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("ingestion_jobs.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    last_seen_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("ingestion_jobs.id", ondelete="SET NULL"),
+        index=True,
+    )
     external_id: Mapped[str] = mapped_column(String(500), nullable=False)
     record_type: Mapped[str] = mapped_column(String(80), nullable=False)
     payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
