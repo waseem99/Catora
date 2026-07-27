@@ -23,6 +23,7 @@ from catora_api.shopify.crypto import CredentialCipher, CredentialEncryptionErro
 SHOPIFY_INSTALLATION_TYPE = "shopify_installation"
 SHOPIFY_OAUTH_STATE_TYPE = "shopify_oauth_state"
 SHOPIFY_CREDENTIAL_SCHEME = "shopify-installation"
+SHOPIFY_CUSTOM_REGISTRATION_IDENTITY = "northstar_custom"
 _SHOP_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*\.myshopify\.com$")
 
 
@@ -176,6 +177,8 @@ class ShopifyInstallationService:
                     "shop_domain": shop,
                     "required_scopes": list(self.settings.shopify_required_scopes),
                     "expires_at": expires_at.isoformat(),
+                    "registration_identity": SHOPIFY_CUSTOM_REGISTRATION_IDENTITY,
+                    "runtime_environment": self.settings.environment,
                 },
             )
         )
@@ -433,6 +436,10 @@ class ShopifyInstallationService:
         snapshot = dict(installation.input_snapshot)
         source_id = _uuid(snapshot, "catalog_source_id")
         source = await session.get(CatalogSource, source_id) if source_id else None
+        provenance = {
+            "registration_identity": SHOPIFY_CUSTOM_REGISTRATION_IDENTITY,
+            "runtime_environment": self.settings.environment,
+        }
         if source is None:
             source = CatalogSource(
                 workspace_id=workspace_id,
@@ -445,6 +452,7 @@ class ShopifyInstallationService:
                     "api_version": "2026-07",
                     "updated_after": None,
                     "normalization_aliases": {},
+                    **provenance,
                 },
             )
             session.add(source)
@@ -452,6 +460,10 @@ class ShopifyInstallationService:
         else:
             source.status = "ready"
             source.credential_ref = credential_reference(installation.id)
+            source.config = {
+                **dict(source.config),
+                **provenance,
+            }
 
         installation.status = "active"
         installation.input_snapshot = {
@@ -459,6 +471,7 @@ class ShopifyInstallationService:
             "workspace_id": str(workspace_id),
             "catalog_source_id": str(source.id),
             "granted_scopes": scopes,
+            **provenance,
             "token_mode": (
                 "expiring_offline"
                 if self.settings.shopify_expiring_offline_tokens
@@ -490,6 +503,7 @@ class ShopifyInstallationService:
                     "catalog_source_id": str(source.id),
                     "granted_scopes": scopes,
                     "token_mode": installation.input_snapshot["token_mode"],
+                    **provenance,
                 },
             )
         )
@@ -561,6 +575,13 @@ class ShopifyInstallationService:
                 payload={
                     "shop_domain": _text(snapshot, "shop_domain"),
                     "catalog_source_id": str(source_id) if source_id else None,
+                    "registration_identity": _text(
+                        snapshot,
+                        "registration_identity",
+                    )
+                    or SHOPIFY_CUSTOM_REGISTRATION_IDENTITY,
+                    "runtime_environment": _text(snapshot, "runtime_environment")
+                    or self.settings.environment,
                 },
             )
         )
@@ -687,6 +708,16 @@ class ShopifyInstallationService:
                     payload={
                         "shop_domain": shop,
                         "granted_scopes": scopes,
+                        "registration_identity": _text(
+                            snapshot,
+                            "registration_identity",
+                        )
+                        or SHOPIFY_CUSTOM_REGISTRATION_IDENTITY,
+                        "runtime_environment": _text(
+                            snapshot,
+                            "runtime_environment",
+                        )
+                        or self.settings.environment,
                     },
                 )
             )
