@@ -15,9 +15,12 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
+from catora_api.config import Settings, get_settings
 from catora_api.db.models import IngestionJob, ReportJob, ShopifyStoreInvitation
 from catora_api.schemas.shopify_public import (
     ShopifyPublicOperatorInstallationView,
+    ShopifyRegistrationIdentity,
+    ShopifyRuntimeEnvironment,
 )
 from catora_api.shopify.installations import SHOPIFY_INSTALLATION_TYPE
 from catora_api.shopify.invitations import ShopifyInvitationService
@@ -27,6 +30,12 @@ from catora_api.shopify.sync import ACTIVE_JOB_STATUSES, queue_shopify_sync
 from catora_api.shopify.webhooks import SHOPIFY_WEBHOOK_DELIVERY_TYPE
 
 router = APIRouter(tags=["shopify public app operations"])
+_REGISTRATION_IDENTITIES = {
+    "northstar_custom",
+    "public_development",
+    "public_production",
+}
+_RUNTIME_ENVIRONMENTS = {"development", "test", "production"}
 
 
 def _require_source_management(role: str) -> None:
@@ -70,6 +79,31 @@ def _datetime(snapshot: dict[str, object], key: str) -> datetime | None:
         return None
 
 
+def _runtime_environment(
+    snapshot: dict[str, object],
+    settings: Settings,
+) -> ShopifyRuntimeEnvironment:
+    value = _text(snapshot, "runtime_environment")
+    if value not in _RUNTIME_ENVIRONMENTS:
+        value = settings.environment
+    return cast(ShopifyRuntimeEnvironment, value)
+
+
+def _registration_identity(
+    snapshot: dict[str, object],
+    *,
+    runtime_environment: ShopifyRuntimeEnvironment,
+) -> ShopifyRegistrationIdentity:
+    value = _text(snapshot, "registration_identity")
+    if value not in _REGISTRATION_IDENTITIES:
+        value = (
+            "public_production"
+            if runtime_environment == "production"
+            else "public_development"
+        )
+    return cast(ShopifyRegistrationIdentity, value)
+
+
 async def _latest_webhook(
     session: SessionDependency,
     *,
@@ -104,7 +138,9 @@ def _operator_view(
     invitation: ShopifyStoreInvitation,
     installation: ReportJob,
     latest_webhook: ReportJob | None,
+    settings: Settings | None = None,
 ) -> ShopifyPublicOperatorInstallationView:
+    settings = settings or get_settings()
     snapshot = dict(installation.input_snapshot)
     delivery_snapshot = (
         dict(latest_webhook.input_snapshot) if latest_webhook is not None else {}
@@ -142,6 +178,12 @@ def _operator_view(
         invitation.feature_tier,
     )
     report_ready = _uuid(snapshot, "last_verified_analysis_report_job_id") is not None
+    runtime_environment = _runtime_environment(snapshot, settings)
+    registration_identity = _registration_identity(
+        snapshot,
+        runtime_environment=runtime_environment,
+    )
+    existing_installation = invitation.activated_workspace_id is not None
     return ShopifyPublicOperatorInstallationView(
         invitation_id=invitation.id,
         invitation_status=invitation_status,
@@ -230,6 +272,17 @@ def _operator_view(
         report_path="/api/v1/shopify/public/report.pptx" if report_ready else None,
         backlog_path="/api/v1/shopify/public/backlog.csv" if report_ready else None,
         reauthorization_required=installation.status == "refresh_required",
+        registration_identity=registration_identity,
+        runtime_environment=runtime_environment,
+        new_activations_paused=(
+            not settings.shopify_public_new_activations_enabled
+        ),
+        existing_installation=existing_installation,
+        reauthorization_available=(
+            settings.shopify_public_enabled
+            and existing_installation
+            and invitation.status == "activated"
+        ),
     )
 
 
