@@ -267,6 +267,10 @@ async def test_full_reconciliation_is_preserved_when_job_is_active() -> None:
     assert app_installation.input_snapshot["registration_identity"] == (
         "public_development"
     )
+    assert active_job.checkpoint["shopify"]["registration_identity"] == (
+        "public_development"
+    )
+    assert active_job.checkpoint["shopify"]["runtime_environment"] == "development"
     assert session.added == []
 
 
