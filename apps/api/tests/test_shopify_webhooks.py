@@ -33,6 +33,7 @@ def test_shopify_webhook_hmac_uses_raw_body() -> None:
 
 def test_shopify_webhook_topics_are_read_only_catalog_lifecycle() -> None:
     assert {
+        "app/scopes_update",
         "app/uninstalled",
         "bulk_operations/finish",
         "collections/create",
