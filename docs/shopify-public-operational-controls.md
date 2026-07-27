@@ -11,7 +11,7 @@ Set these values explicitly in each API and worker environment:
 | Development and test | `CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY=public_development` |
 | Production | `CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY=public_production` |
 
-`CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED` controls only first-time public-app activation.
+`CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED` controls only first-time public-app activation. The API service owns enforcement; keep the same documented value on the worker so environment configuration remains auditable.
 
 - `true`: invited stores may create their isolated Catora workspace and begin the first sync.
 - `false`: first-time activation returns a temporary-unavailability response before Shopify offline-token exchange.
@@ -33,7 +33,7 @@ Legacy installations receive inferred provenance the next time a synchronization
 
 To stop new public-beta activations:
 
-1. Set `CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED=false` on the API service.
+1. Set `CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED=false` on the API service and mirror the value on the worker configuration.
 2. Redeploy or restart the API according to the hosting platform procedure.
 3. Confirm a pending invited store receives the temporary pause message.
 4. Confirm an existing store can still open App Home, synchronize, download reports, reauthorize, uninstall, and invoke compliance handling.
