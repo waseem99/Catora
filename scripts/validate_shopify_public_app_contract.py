@@ -29,6 +29,8 @@ EXPECTED_COMPLIANCE_TOPICS = {
 }
 PUBLIC_ENV_KEYS = {
     "CATORA_SHOPIFY_PUBLIC_ENABLED",
+    "CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY",
+    "CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED",
     "CATORA_SHOPIFY_PUBLIC_CLIENT_ID",
     "CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET",
     "CATORA_SHOPIFY_PUBLIC_APP_URL",
@@ -73,6 +75,17 @@ def _validate_environment(path: Path) -> list[str]:
             errors.append(f"{path}: {key} example must remain blank")
     if values.get("CATORA_SHOPIFY_PUBLIC_ENABLED") != "false":
         errors.append(f"{path}: public Shopify app must be disabled by default")
+    if (
+        values.get("CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY")
+        != "public_development"
+    ):
+        errors.append(
+            f"{path}: public Shopify example must identify the development registration"
+        )
+    if values.get("CATORA_SHOPIFY_PUBLIC_NEW_ACTIVATIONS_ENABLED") != "true":
+        errors.append(
+            f"{path}: new public Shopify activations must be enabled by default"
+        )
     if values.get("CATORA_SHOPIFY_PUBLIC_REQUIRED_SCOPES") != '["read_products"]':
         errors.append(f"{path}: public Shopify scope must be exactly read_products")
     return errors
