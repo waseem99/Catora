@@ -28,6 +28,7 @@ def production_settings(**overrides: object) -> Settings:
             b"k" * 32
         ).decode(),
         "shopify_public_enabled": True,
+        "shopify_public_registration_identity": "public_production",
         "shopify_public_client_id": "public-client-id-123456",
         "shopify_public_client_secret": "q" * 32,
         "shopify_public_app_url": "https://shopify.catora.codistan.org",
@@ -69,6 +70,10 @@ def test_valid_production_settings_pass() -> None:
         ),
         ({"shopify_expiring_offline_tokens": False}, "expiring offline tokens"),
         (
+            {"shopify_public_registration_identity": "public_development"},
+            "must match the runtime environment",
+        ),
+        (
             {"shopify_public_app_url": "http://shopify.catora.codistan.org"},
             "HTTPS origin",
         ),
@@ -91,6 +96,15 @@ def test_invalid_production_settings_fail(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         production_settings(**overrides).validate_production()
+
+
+def test_development_public_registration_is_explicit() -> None:
+    settings = production_settings(
+        environment="development",
+        shopify_public_registration_identity="public_development",
+        shopify_public_app_url="http://localhost:3001",
+    )
+    settings.validate_shopify_public()
 
 
 def test_disabled_shopify_does_not_require_shopify_secrets() -> None:
