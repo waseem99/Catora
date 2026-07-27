@@ -20,6 +20,10 @@ from catora_api.normalization.adapters import (
     canonical_product_key,
     normalize_source_records,
 )
+from catora_api.normalization.reconciliation import (
+    is_shopify_full_reconciliation,
+    retire_missing_shopify_products,
+)
 from catora_api.normalization.service import (
     CatalogNormalizationService,
     NormalizationSummary,
@@ -55,7 +59,7 @@ class CatalogNormalizationPipeline(CatalogNormalizationService):
                 .where(
                     SourceRecord.workspace_id == workspace_id,
                     SourceRecord.catalog_source_id == source.id,
-                    SourceRecord.ingestion_job_id == job.id,
+                    SourceRecord.last_seen_job_id == job.id,
                 )
                 .order_by(SourceRecord.snapshot_at, SourceRecord.id)
             )
@@ -76,6 +80,42 @@ class CatalogNormalizationPipeline(CatalogNormalizationService):
                 candidate=candidate,
                 counters=counters,
             )
+
+        can_retire_missing = (
+            is_shopify_full_reconciliation(job)
+            and job.rejection_count == 0
+            and not batch.rejected_record_ids
+        )
+        if can_retire_missing:
+            retirement = await retire_missing_shopify_products(
+                session,
+                source=source,
+                job=job,
+                desired_product_keys={
+                    product.canonical_key for product in batch.products
+                },
+            )
+            counters.products_updated += retirement.products_retired
+            counters.variants_updated += retirement.variants_retired
+            job.checkpoint = {
+                **dict(job.checkpoint),
+                "snapshot_retirement": {
+                    "status": "completed",
+                    "products_retired": retirement.products_retired,
+                    "variants_retired": retirement.variants_retired,
+                },
+            }
+        elif is_shopify_full_reconciliation(job):
+            job.warning_count += 1
+            job.checkpoint = {
+                **dict(job.checkpoint),
+                "snapshot_retirement": {
+                    "status": "skipped",
+                    "reason": "snapshot_contains_rejections",
+                    "connector_rejection_count": job.rejection_count,
+                    "normalization_rejection_count": len(batch.rejected_record_ids),
+                },
+            }
         await session.commit()
         return counters.summary(rejected_records=len(batch.rejected_record_ids))
 

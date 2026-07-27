@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import AsyncIterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -26,9 +27,25 @@ class FakeResult:
         return self._rows
 
 
+@dataclass
+class FakeStoredRecord:
+    external_id: str
+    content_hash: str
+    last_seen_job_id: uuid.UUID | None = None
+
+
+class FakeScalarResult:
+    def __init__(self, rows: list[FakeStoredRecord]) -> None:
+        self._rows = rows
+
+    def all(self) -> list[FakeStoredRecord]:
+        return self._rows
+
+
 class FakeSession:
     def __init__(self) -> None:
         self.existing: set[tuple[str, str]] = set()
+        self.stored: dict[tuple[str, str], FakeStoredRecord] = {}
         self.added: list[SourceRecord] = []
         self.commits = 0
         self.rollbacks = 0
@@ -37,9 +54,21 @@ class FakeSession:
     async def execute(self, _statement: object) -> FakeResult:
         return FakeResult(list(self.existing))
 
+    async def scalars(self, _statement: object) -> FakeScalarResult:
+        for key in self.existing:
+            self.stored.setdefault(key, FakeStoredRecord(*key))
+        return FakeScalarResult(list(self.stored.values()))
+
     def add_all(self, records: list[SourceRecord]) -> None:
         self.added.extend(records)
-        self.existing.update((record.external_id, record.content_hash) for record in records)
+        for record in records:
+            key = (record.external_id, record.content_hash)
+            self.existing.add(key)
+            self.stored[key] = FakeStoredRecord(
+                record.external_id,
+                record.content_hash,
+                record.last_seen_job_id,
+            )
 
     async def flush(self) -> None:
         return None
@@ -179,6 +208,7 @@ async def test_run_persists_records_and_partial_rejections() -> None:
     assert summary.success_count == 2
     assert summary.rejection_count == 1
     assert len(session.added) == 2
+    assert all(record.last_seen_job_id == job.id for record in session.added)
     assert source.status == "active"
     assert job.checkpoint["duplicate_count"] == 0
 
@@ -201,6 +231,7 @@ async def test_rerun_is_idempotent_and_counts_duplicates() -> None:
 
     assert len(session.added) == 1
     assert session.added[0].external_id == "p2"
+    assert session.stored[("p1", "h1")].last_seen_job_id == job.id
     assert summary.duplicate_count == 1
     assert summary.success_count == 2
 
@@ -252,22 +283,22 @@ async def test_cancellation_stops_before_persisting_page() -> None:
 
 
 @pytest.mark.asyncio
-async def test_scope_mismatch_is_rejected() -> None:
+async def test_scope_mismatch_fails_before_validation() -> None:
     source, job = source_and_job()
     job.workspace_id = uuid.uuid4()
-    session = FakeSession()
+    connector = StubConnector([])
 
-    with pytest.raises(IngestionScopeError):
+    with pytest.raises(IngestionScopeError, match="different workspaces"):
         await IngestionService().run(
-            session,  # type: ignore[arg-type]
+            FakeSession(),  # type: ignore[arg-type]
             source=source,
             job=job,
-            connector=StubConnector([]),
+            connector=connector,
         )
 
 
 @pytest.mark.asyncio
-async def test_connector_failure_is_recorded_after_rollback() -> None:
+async def test_connector_failure_persists_bounded_error() -> None:
     source, job = source_and_job()
     session = FakeSession()
     session.job = job
@@ -283,10 +314,11 @@ async def test_connector_failure_is_recorded_after_rollback() -> None:
     assert session.rollbacks == 1
     assert job.status == "failed"
     assert job.checkpoint["error_type"] == "RuntimeError"
+    assert job.checkpoint["error_message"] == "connector failure"
 
 
 @pytest.mark.asyncio
-async def test_validation_exception_is_recorded_after_rollback() -> None:
+async def test_validation_exception_persists_failure() -> None:
     source, job = source_and_job()
     session = FakeSession()
     session.job = job
