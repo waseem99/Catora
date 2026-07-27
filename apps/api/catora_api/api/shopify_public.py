@@ -38,6 +38,7 @@ from catora_api.shopify.invitations import (
     ShopifyInvitationService,
 )
 from catora_api.shopify.public_installations import (
+    SHOPIFY_PUBLIC_ACTIVATIONS_PAUSED_MESSAGE,
     ShopifyPublicInstallationError,
     ShopifyPublicInstallationService,
 )
@@ -333,6 +334,14 @@ async def activate_shopify_public_installation(
 ) -> ShopifyPublicActivationView:
     session_token, shopify_session = _authenticated_shopify_session(request, settings)
     invitation = await _invitation_for_session(session, shopify_session)
+    if (
+        invitation.activated_workspace_id is None
+        and not settings.shopify_public_new_activations_enabled
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=SHOPIFY_PUBLIC_ACTIVATIONS_PAUSED_MESSAGE,
+        )
     try:
         token_bundle = await ShopifyPublicTokenExchange(settings).exchange(
             session_token=session_token,
@@ -352,7 +361,12 @@ async def activate_shopify_public_installation(
             token_bundle=token_bundle,
         )
     except ShopifyPublicInstallationError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        response_status = (
+            status.HTTP_503_SERVICE_UNAVAILABLE
+            if str(exc) == SHOPIFY_PUBLIC_ACTIVATIONS_PAUSED_MESSAGE
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=response_status, detail=str(exc)) from exc
 
     snapshot = dict(activation.installation.input_snapshot)
     ingestion_job = None
