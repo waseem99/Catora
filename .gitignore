@@ -19,6 +19,7 @@ __pycache__/
 !.env.example
 .DS_Store
 *.log
+shopify/public/review-submission.json
 
 # Generated artifacts
 artifacts/
