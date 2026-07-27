@@ -37,6 +37,10 @@ def _retry_delay(retries_already_used: int) -> int:
     return SHOPIFY_SYNC_RETRY_DELAYS_SECONDS[index]
 
 
+def _has_recovery_value(value: object) -> bool:
+    return value is not None and value is not False and value != 0
+
+
 async def record_shopify_sync_failure(
     session: AsyncSession,
     *,
@@ -123,7 +127,7 @@ async def mark_shopify_sync_recovered(
 ) -> bool:
     snapshot = dict(installation.input_snapshot)
     had_recovery_state = any(
-        snapshot.get(key) not in {None, 0, False}
+        _has_recovery_value(snapshot.get(key))
         for key in (
             "sync_retry_count",
             "sync_retry_scheduled_at",
