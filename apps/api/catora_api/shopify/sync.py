@@ -8,6 +8,7 @@ from typing import cast
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from catora_api.config import get_settings
 from catora_api.db.models import (
     AuditEvent,
     CatalogSource,
@@ -23,6 +24,12 @@ _COLLECTION_RECONCILIATION_REASONS = {
     "collections/update",
     "collections/delete",
 }
+_REGISTRATION_IDENTITIES = {
+    "northstar_custom",
+    "public_development",
+    "public_production",
+}
+_RUNTIME_ENVIRONMENTS = {"development", "test", "production"}
 
 
 def _now() -> datetime:
@@ -57,6 +64,49 @@ def _analysis_stale(snapshot: dict[str, object]) -> bool:
 
 def _requires_full_reconciliation(reason: str) -> bool:
     return reason in _COLLECTION_RECONCILIATION_REASONS
+
+
+def _runtime_environment(
+    snapshot: dict[str, object],
+    source_config: dict[str, object],
+) -> str:
+    for value in (
+        _text_value(snapshot, "runtime_environment"),
+        _text_value(source_config, "runtime_environment"),
+        get_settings().environment,
+    ):
+        if value in _RUNTIME_ENVIRONMENTS:
+            return cast(str, value)
+    return "development"
+
+
+def _registration_identity(
+    snapshot: dict[str, object],
+    source: CatalogSource,
+    source_config: dict[str, object],
+    *,
+    runtime_environment: str,
+) -> str:
+    for value in (
+        _text_value(snapshot, "registration_identity"),
+        _text_value(source_config, "registration_identity"),
+    ):
+        if value in _REGISTRATION_IDENTITIES:
+            return cast(str, value)
+    distribution = _text_value(snapshot, "distribution") or _text_value(
+        source_config,
+        "distribution",
+    )
+    is_public = distribution == "public" or (
+        source.credential_ref or ""
+    ).startswith("shopify-public-installation:")
+    if is_public:
+        return (
+            "public_production"
+            if runtime_environment == "production"
+            else "public_development"
+        )
+    return "northstar_custom"
 
 
 async def _installation_actor(
@@ -133,6 +183,21 @@ async def queue_shopify_sync(
     ):
         return None
 
+    source_config = dict(source.config)
+    runtime_environment = _runtime_environment(snapshot, source_config)
+    registration_identity = _registration_identity(
+        snapshot,
+        source,
+        source_config,
+        runtime_environment=runtime_environment,
+    )
+    provenance = {
+        "registration_identity": registration_identity,
+        "runtime_environment": runtime_environment,
+    }
+    snapshot = {**snapshot, **provenance}
+    source.config = {**source_config, **provenance}
+
     active_job = await session.scalar(
         select(IngestionJob).where(
             IngestionJob.workspace_id == workspace_id,
@@ -169,6 +234,7 @@ async def queue_shopify_sync(
     source.config = {
         **dict(source.config),
         "updated_after": updated_after,
+        **provenance,
     }
     job = IngestionJob(
         workspace_id=workspace_id,
@@ -180,6 +246,7 @@ async def queue_shopify_sync(
                 "product_ids": bounded_ids,
                 "full_reconciliation": full_reconciliation,
                 "queued_at": _now().isoformat(),
+                **provenance,
             }
         },
     )
@@ -208,6 +275,7 @@ async def queue_shopify_sync(
                 "reason": reason,
                 "product_id_count": len(bounded_ids),
                 "full_reconciliation": full_reconciliation,
+                **provenance,
             },
         )
     )
