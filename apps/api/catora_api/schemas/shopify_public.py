@@ -101,6 +101,15 @@ class ShopifyPublicInstallationView(BaseModel):
     last_sync_error_type: str | None = None
     last_sync_full_reconciliation: bool = False
     last_completed_full_reconciliation: bool = False
+    sync_attempt_count: int = Field(default=0, ge=0)
+    sync_retry_count: int = Field(default=0, ge=0)
+    sync_next_retry_at: datetime | None = None
+    sync_last_failure_at: datetime | None = None
+    sync_last_failure_type: str | None = None
+    sync_dead_lettered_at: datetime | None = None
+    sync_recovery_required: bool = False
+    last_webhook_topic: str | None = None
+    last_webhook_received_at: datetime | None = None
     last_bulk_operation_status: ShopifyBulkOperationStatus | None = None
     last_bulk_operation_completed_at: datetime | None = None
     last_bulk_webhook_received_at: datetime | None = None
@@ -118,3 +127,11 @@ class ShopifyPublicInstallationView(BaseModel):
     report_path: str | None = None
     backlog_path: str | None = None
     reauthorization_required: bool = False
+
+
+class ShopifyPublicOperatorInstallationView(ShopifyPublicInstallationView):
+    invitation_id: uuid.UUID
+    invitation_status: Literal["activated", "revoked"]
+    prospect_name: str
+    invitation_expires_at: datetime
+    activated_at: datetime | None = None

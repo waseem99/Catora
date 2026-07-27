@@ -4,7 +4,7 @@ import asyncio
 import uuid
 from typing import cast
 
-from celery import shared_task
+from celery import Task, shared_task
 from sqlalchemy import select
 
 from catora_api.database import SessionFactory
@@ -13,6 +13,12 @@ from catora_api.shopify.analysis import (
     mark_shopify_analysis_failed,
     run_shopify_analysis,
     should_run_shopify_analysis,
+)
+from catora_api.shopify.recovery import (
+    MAX_SHOPIFY_SYNC_RETRIES,
+    ShopifySyncRetryDecision,
+    mark_shopify_sync_recovered,
+    record_shopify_sync_failure,
 )
 from catora_api.shopify.tasks import _run_shopify_sync
 
@@ -61,15 +67,110 @@ async def _ensure_operator_membership(
             await session.commit()
 
 
+async def _sync_stage_is_complete(
+    job_id: uuid.UUID,
+    installation_id: uuid.UUID,
+) -> bool:
+    async with SessionFactory() as session:
+        installation = await session.get(ReportJob, installation_id)
+        ingestion_job = await session.get(IngestionJob, job_id)
+        if installation is None or ingestion_job is None:
+            return False
+        snapshot = dict(installation.input_snapshot)
+        return (
+            installation.status == "active"
+            and ingestion_job.status in {"completed", "partially_completed"}
+            and snapshot.get("last_sync_job_id") == str(job_id)
+            and snapshot.get("sync_status") == "completed"
+        )
+
+
+async def _record_task_failure(
+    *,
+    job_id: uuid.UUID,
+    installation_id: uuid.UUID,
+    retries_already_used: int,
+    error: BaseException,
+) -> ShopifySyncRetryDecision | None:
+    async with SessionFactory() as session:
+        installation = await session.get(ReportJob, installation_id)
+        ingestion_job = await session.get(IngestionJob, job_id)
+        if installation is None or ingestion_job is None:
+            return None
+        return await record_shopify_sync_failure(
+            session,
+            installation=installation,
+            ingestion_job=ingestion_job,
+            retries_already_used=retries_already_used,
+            error=error,
+        )
+
+
+async def _mark_task_recovered(
+    *,
+    job_id: uuid.UUID,
+    installation_id: uuid.UUID,
+) -> None:
+    async with SessionFactory() as session:
+        installation = await session.get(ReportJob, installation_id)
+        ingestion_job = await session.get(IngestionJob, job_id)
+        if installation is None or ingestion_job is None:
+            return
+        snapshot = dict(installation.input_snapshot)
+        if (
+            installation.status != "active"
+            or ingestion_job.status not in {"completed", "partially_completed"}
+            or snapshot.get("sync_status") != "completed"
+            or snapshot.get("analysis_status") == "failed"
+        ):
+            return
+        await mark_shopify_sync_recovered(
+            session,
+            installation=installation,
+            ingestion_job=ingestion_job,
+        )
+
+
 @shared_task(
+    bind=True,
     name="catora.shopify.sync_and_analyze",
     ignore_result=True,
+    max_retries=MAX_SHOPIFY_SYNC_RETRIES,
 )  # type: ignore[misc]
-def run_shopify_sync_and_analysis(job_id: str, installation_id: str) -> None:
+def run_shopify_sync_and_analysis(
+    task: Task,
+    job_id: str,
+    installation_id: str,
+) -> None:
+    parsed_job_id = uuid.UUID(job_id)
+    parsed_installation_id = uuid.UUID(installation_id)
+    try:
+        asyncio.run(
+            _run_shopify_sync_and_analysis(
+                parsed_job_id,
+                parsed_installation_id,
+            )
+        )
+    except Exception as exc:
+        retries_already_used = int(getattr(task.request, "retries", 0) or 0)
+        decision = asyncio.run(
+            _record_task_failure(
+                job_id=parsed_job_id,
+                installation_id=parsed_installation_id,
+                retries_already_used=retries_already_used,
+                error=exc,
+            )
+        )
+        if decision is not None and decision.retry:
+            raise task.retry(
+                exc=exc,
+                countdown=decision.countdown_seconds,
+            ) from exc
+        raise
     asyncio.run(
-        _run_shopify_sync_and_analysis(
-            uuid.UUID(job_id),
-            uuid.UUID(installation_id),
+        _mark_task_recovered(
+            job_id=parsed_job_id,
+            installation_id=parsed_installation_id,
         )
     )
 
@@ -78,7 +179,8 @@ async def _run_shopify_sync_and_analysis(
     job_id: uuid.UUID,
     installation_id: uuid.UUID,
 ) -> None:
-    await _run_shopify_sync(job_id, installation_id)
+    if not await _sync_stage_is_complete(job_id, installation_id):
+        await _run_shopify_sync(job_id, installation_id)
 
     async with SessionFactory() as session:
         installation = await session.get(ReportJob, installation_id)
@@ -111,7 +213,7 @@ async def _run_shopify_sync_and_analysis(
                 installation=installation,
                 error=error,
             )
-            return
+            raise error
         workspace_id = cast(uuid.UUID, installation.workspace_id)
 
     await _ensure_operator_membership(
@@ -154,3 +256,4 @@ async def _run_shopify_sync_and_analysis(
                     installation=installation,
                     error=exc,
                 )
+            raise
