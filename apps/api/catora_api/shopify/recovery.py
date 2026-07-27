@@ -134,6 +134,7 @@ async def mark_shopify_sync_recovered(
             "sync_next_retry_at",
             "sync_dead_lettered_at",
             "sync_recovery_required",
+            "sync_recovery_requested_at",
         )
     )
     if not had_recovery_state:
@@ -150,6 +151,8 @@ async def mark_shopify_sync_recovered(
         "sync_last_failure_type": None,
         "sync_dead_lettered_at": None,
         "sync_recovery_required": False,
+        "sync_recovery_requested_at": None,
+        "sync_recovery_requested_by_user_id": None,
         "sync_recovered_at": timestamp.isoformat(),
     }
     session.add(
@@ -182,12 +185,6 @@ async def prepare_shopify_operator_recovery(
     timestamp = now or _now()
     installation.input_snapshot = {
         **snapshot,
-        "sync_attempt_count": 0,
-        "sync_retry_count": 0,
-        "sync_retry_scheduled_at": None,
-        "sync_next_retry_at": None,
-        "sync_dead_lettered_at": None,
-        "sync_recovery_required": False,
         "sync_recovery_requested_at": timestamp.isoformat(),
         "sync_recovery_requested_by_user_id": str(actor_user_id),
     }
