@@ -194,7 +194,7 @@ async def test_full_snapshot_retires_only_products_missing_from_shopify() -> Non
     assert previously_deleted.deleted_at == datetime(2026, 7, 26, tzinfo=UTC)
 
 
-def test_incremental_job_never_uses_missing-product_retirement() -> None:
+def test_incremental_job_never_uses_missing_product_retirement() -> None:
     workspace_id = uuid.uuid4()
     source = _source(workspace_id)
     job = _job(workspace_id, source.id, full=False)
