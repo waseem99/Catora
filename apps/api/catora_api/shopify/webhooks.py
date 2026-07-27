@@ -136,6 +136,13 @@ def _scope_metadata(payload: object) -> dict[str, object]:
     }
 
 
+def _scope_set(snapshot: dict[str, object], key: str) -> set[str]:
+    value = snapshot.get(key)
+    if not isinstance(value, list):
+        return set()
+    return {item for item in value if isinstance(item, str)}
+
+
 def _installation_distribution(installation: ReportJob) -> ShopifyAppDistribution:
     value = installation.input_snapshot.get("distribution")
     return "public" if value == "public" else "custom"
@@ -183,11 +190,7 @@ async def _apply_scope_update(
     delivery: ReportJob,
 ) -> None:
     delivery_snapshot = dict(delivery.input_snapshot)
-    current_scopes = set(
-        item
-        for item in delivery_snapshot.get("current_scopes", [])
-        if isinstance(item, str)
-    )
+    current_scopes = _scope_set(delivery_snapshot, "current_scopes")
     compliant = current_scopes == _REQUIRED_SCOPES
     now = datetime.now(UTC)
     installation_snapshot = dict(installation.input_snapshot)
