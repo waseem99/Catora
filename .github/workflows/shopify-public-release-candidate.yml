@@ -1,0 +1,54 @@
+name: Shopify public release candidate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "docs/shopify-public-release.md"
+      - "shopify/public/review-submission.example.json"
+      - "shopify/public/api-version-policy.json"
+      - "shopify/public/shopify.app.production.toml.example"
+      - "scripts/validate_shopify_public_release.py"
+      - "apps/api/tests/test_shopify_public_release_script.py"
+      - ".github/workflows/shopify-public-release-candidate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "docs/shopify-public-release.md"
+      - "shopify/public/review-submission.example.json"
+      - "shopify/public/api-version-policy.json"
+      - "shopify/public/shopify.app.production.toml.example"
+      - "scripts/validate_shopify_public_release.py"
+      - "apps/api/tests/test_shopify_public_release_script.py"
+      - ".github/workflows/shopify-public-release-candidate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  repository-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate release script syntax
+        run: python -m py_compile scripts/validate_shopify_public_release.py
+      - name: Validate repository release contract
+        run: >-
+          python scripts/validate_shopify_public_release.py
+          --report artifacts/shopify-public-release-readiness.json
+      - name: Install focused test dependencies
+        run: python -m pip install --quiet pytest
+      - name: Test release validator
+        run: pytest -q apps/api/tests/test_shopify_public_release_script.py
+      - name: Upload sanitized readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopify-public-release-readiness
+          path: artifacts/shopify-public-release-readiness.json
+          if-no-files-found: error
+          retention-days: 7

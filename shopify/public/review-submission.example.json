@@ -1,0 +1,14 @@
+{
+  "app_name": "Catora Catalog Intelligence",
+  "app_card_subtitle": "Audit catalog quality and buyer-intent readiness",
+  "support_email": "",
+  "support_url": "",
+  "privacy_policy_url": "",
+  "terms_url": "",
+  "review_shop_domain": "",
+  "review_contact_email": "",
+  "direct_listing_url": "",
+  "visibility": "limited",
+  "registration": "production",
+  "api_version": "2026-07"
+}

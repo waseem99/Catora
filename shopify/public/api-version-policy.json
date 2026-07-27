@@ -1,0 +1,9 @@
+{
+  "admin_api_version": "2026-07",
+  "released_on": "2026-07-01",
+  "support_window_months": 12,
+  "compatibility_review_due": "2027-01-15",
+  "upgrade_target": "2027-04",
+  "upgrade_complete_by": "2027-04-30",
+  "support_end_guardrail": "2027-07-01"
+}
