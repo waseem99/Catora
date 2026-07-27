@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "workspaces": [
     "apps/web",
@@ -26,12 +26,11 @@
     "shopify:accept": "python scripts/accept_shopify_public_app.py"
   },
   "devDependencies": {
-    "eslint": "9.39.2",
+    "eslint": "10.8.0",
     "typescript-eslint": "8.65.0",
     "typescript": "5.9.3"
   },
   "overrides": {
-    "brace-expansion": "5.0.8",
     "postcss": "8.5.20",
     "sharp": "0.35.3"
   }
