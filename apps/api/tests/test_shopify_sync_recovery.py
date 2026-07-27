@@ -182,7 +182,7 @@ async def test_success_clears_retry_and_dead_letter_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_operator_recovery_clears_dead_letter_and_records_actor() -> None:
+async def test_operator_request_preserves_dead_letter_until_recovery_succeeds() -> None:
     session = RecoverySession()
     actor = uuid.uuid4()
     installation = _installation(
@@ -202,9 +202,10 @@ async def test_operator_recovery_clears_dead_letter_and_records_actor() -> None:
     )
 
     snapshot = dict(installation.input_snapshot)
-    assert snapshot["sync_retry_count"] == 0
-    assert snapshot["sync_dead_lettered_at"] is None
-    assert snapshot["sync_recovery_required"] is False
+    assert snapshot["sync_retry_count"] == 3
+    assert snapshot["sync_dead_lettered_at"] == "2026-07-27T05:20:00+00:00"
+    assert snapshot["sync_recovery_required"] is True
+    assert snapshot["sync_recovery_requested_at"] == "2026-07-27T07:00:00+00:00"
     assert snapshot["sync_recovery_requested_by_user_id"] == str(actor)
     audit = next(item for item in session.added if isinstance(item, AuditEvent))
     assert audit.event_type == "shopify.sync_recovery_requested"
