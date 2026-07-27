@@ -44,7 +44,7 @@ class PersistSession:
 
     async def flush(self) -> None:
         for value in self.added:
-            if isinstance(value, (CatalogSource, ReportJob)) and value.id is None:
+            if isinstance(value, CatalogSource | ReportJob) and value.id is None:
                 value.id = uuid.uuid4()
 
     async def commit(self) -> None:
