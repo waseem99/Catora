@@ -181,20 +181,31 @@ class IngestionService:
         if not page.records:
             return 0
         keys = [(record.external_id, record.content_hash) for record in page.records]
-        existing_rows = (
-            await session.execute(
-                select(SourceRecord.external_id, SourceRecord.content_hash).where(
-                    SourceRecord.catalog_source_id == source.id,
-                    tuple_(SourceRecord.external_id, SourceRecord.content_hash).in_(keys),
+        existing_records = list(
+            (
+                await session.scalars(
+                    select(SourceRecord).where(
+                        SourceRecord.catalog_source_id == source.id,
+                        tuple_(
+                            SourceRecord.external_id,
+                            SourceRecord.content_hash,
+                        ).in_(keys),
+                    )
                 )
-            )
-        ).all()
-        existing = {(external_id, content_hash) for external_id, content_hash in existing_rows}
+            ).all()
+        )
+        existing = {
+            (record.external_id, record.content_hash): record
+            for record in existing_records
+        }
+        for record in existing_records:
+            record.last_seen_job_id = job.id
         new_records = [
             SourceRecord(
                 workspace_id=source.workspace_id,
                 catalog_source_id=source.id,
                 ingestion_job_id=job.id,
+                last_seen_job_id=job.id,
                 external_id=record.external_id,
                 record_type=record.record_type,
                 payload=dict(record.payload),
