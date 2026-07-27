@@ -9,11 +9,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.config import Settings
-from catora_api.db.models import ReportJob
+from catora_api.db.models import AuditEvent, IngestionJob, ReportJob
 from catora_api.shopify.installations import (
     SHOPIFY_INSTALLATION_TYPE,
     normalize_shop_domain,
@@ -22,6 +22,7 @@ from catora_api.worker import celery_app
 
 SHOPIFY_WEBHOOK_DELIVERY_TYPE = "shopify_webhook_delivery"
 SUPPORTED_TOPICS = {
+    "app/scopes_update",
     "app/uninstalled",
     "bulk_operations/finish",
     "collections/create",
@@ -32,6 +33,9 @@ SUPPORTED_TOPICS = {
     "products/delete",
 }
 _BULK_STATUSES = {"canceled", "canceling", "completed", "failed"}
+_ACTIVE_JOB_STATUSES = ("queued", "validating", "running")
+_REQUIRED_SCOPES = {"read_products"}
+_MAX_SCOPE_COUNT = 50
 ShopifyAppDistribution = Literal["custom", "public"]
 
 
@@ -100,6 +104,45 @@ def _bulk_metadata(payload: object) -> dict[str, object]:
     }
 
 
+def _scope_list(value: object) -> list[str]:
+    if not isinstance(value, list) or len(value) > _MAX_SCOPE_COUNT:
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    scopes: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip() or len(item) > 100:
+            raise ShopifyWebhookError("Shopify scope update payload is invalid")
+        scopes.append(item.strip())
+    return sorted(set(scopes))
+
+
+def _scope_metadata(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    current = _scope_list(payload.get("current"))
+    previous = _scope_list(payload.get("previous"))
+    updated_at = payload.get("updated_at")
+    shop_id = payload.get("shop_id")
+    if updated_at is not None and not isinstance(updated_at, str):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    if shop_id is not None and (
+        not isinstance(shop_id, str) or not shop_id.startswith("gid://shopify/Shop/")
+    ):
+        raise ShopifyWebhookError("Shopify scope update payload is invalid")
+    return {
+        "current_scopes": current,
+        "previous_scopes": previous,
+        "scopes_updated_at": updated_at,
+        "shop_gid": shop_id,
+    }
+
+
+def _scope_set(snapshot: dict[str, object], key: str) -> set[str]:
+    value = snapshot.get(key)
+    if not isinstance(value, list):
+        return set()
+    return {item for item in value if isinstance(item, str)}
+
+
 def _installation_distribution(installation: ReportJob) -> ShopifyAppDistribution:
     value = installation.input_snapshot.get("distribution")
     return "public" if value == "public" else "custom"
@@ -129,6 +172,102 @@ def _verified_distribution(
     if len(verified) != 1:
         raise ShopifyWebhookError("Shopify webhook signature is ambiguous")
     return verified[0]
+
+
+def _uuid_text(value: object) -> uuid.UUID | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return uuid.UUID(value)
+    except ValueError:
+        return None
+
+
+async def _apply_scope_update(
+    session: AsyncSession,
+    *,
+    installation: ReportJob,
+    delivery: ReportJob,
+) -> None:
+    delivery_snapshot = dict(delivery.input_snapshot)
+    current_scopes = _scope_set(delivery_snapshot, "current_scopes")
+    compliant = current_scopes == _REQUIRED_SCOPES
+    now = datetime.now(UTC)
+    installation_snapshot = dict(installation.input_snapshot)
+    prior_scope_block = installation_snapshot.get("scope_reauthorization_required") is True
+    cancelled_jobs = 0
+
+    if compliant:
+        if installation.status == "refresh_required" and prior_scope_block:
+            installation.status = "active"
+        sync_status = installation_snapshot.get("sync_status")
+        if sync_status == "reauthorization_required" and prior_scope_block:
+            sync_status = "not_started"
+        installation.input_snapshot = {
+            **installation_snapshot,
+            "granted_scopes": sorted(current_scopes),
+            "previous_granted_scopes": delivery_snapshot.get("previous_scopes", []),
+            "scope_reauthorization_required": False,
+            "last_scope_update_at": delivery_snapshot.get("scopes_updated_at")
+            or now.isoformat(),
+            "last_scope_webhook_received_at": now.isoformat(),
+            "sync_status": sync_status,
+            "last_sync_error_type": (
+                None
+                if installation_snapshot.get("last_sync_error_type")
+                == "ShopifyScopeMismatch"
+                else installation_snapshot.get("last_sync_error_type")
+            ),
+        }
+    else:
+        installation.status = "refresh_required"
+        source_id = _uuid_text(installation_snapshot.get("catalog_source_id"))
+        if source_id is not None:
+            result = await session.execute(
+                update(IngestionJob)
+                .where(
+                    IngestionJob.catalog_source_id == source_id,
+                    IngestionJob.status.in_(_ACTIVE_JOB_STATUSES),
+                )
+                .values(status="cancelled")
+            )
+            cancelled_jobs = int(getattr(result, "rowcount", 0) or 0)
+        installation.input_snapshot = {
+            **installation_snapshot,
+            "granted_scopes": sorted(current_scopes),
+            "previous_granted_scopes": delivery_snapshot.get("previous_scopes", []),
+            "scope_reauthorization_required": True,
+            "last_scope_update_at": delivery_snapshot.get("scopes_updated_at")
+            or now.isoformat(),
+            "last_scope_webhook_received_at": now.isoformat(),
+            "sync_status": "reauthorization_required",
+            "last_sync_error_type": "ShopifyScopeMismatch",
+            "pending_product_ids": [],
+            "pending_full_reconciliation": False,
+        }
+
+    session.add(
+        AuditEvent(
+            workspace_id=cast(uuid.UUID, installation.workspace_id),
+            actor_user_id=None,
+            event_type="shopify.scopes_updated",
+            entity_type="report_job",
+            entity_id=installation.id,
+            payload={
+                "distribution": _installation_distribution(installation),
+                "current_scopes": sorted(current_scopes),
+                "scope_compliant": compliant,
+                "cancelled_job_count": cancelled_jobs,
+            },
+        )
+    )
+    delivery.status = "completed"
+    delivery.input_snapshot = {
+        **delivery_snapshot,
+        "processed_at": now.isoformat(),
+        "scope_compliant": compliant,
+        "cancelled_job_count": cancelled_jobs,
+    }
 
 
 async def receive_shopify_webhook(
@@ -201,7 +340,9 @@ async def receive_shopify_webhook(
         raise ShopifyWebhookError("Shopify webhook payload is invalid")
 
     bounded_payload: dict[str, object]
-    if topic == "bulk_operations/finish":
+    if topic == "app/scopes_update":
+        bounded_payload = _scope_metadata(payload)
+    elif topic == "bulk_operations/finish":
         bounded_payload = _bulk_metadata(payload)
     elif topic.startswith("products/"):
         bounded_payload = {"product_id": _payload_resource_id(payload)}
@@ -229,6 +370,19 @@ async def receive_shopify_webhook(
         template_version="shopify-webhook-v3",
     )
     session.add(delivery)
+    if topic == "app/scopes_update":
+        await _apply_scope_update(
+            session,
+            installation=installation,
+            delivery=delivery,
+        )
+        await session.commit()
+        return ShopifyWebhookReceipt(
+            delivery_id=delivery.id,
+            duplicate=False,
+            distribution=distribution,
+        )
+
     await session.commit()
     try:
         celery_app.send_task("catora.shopify.webhook", args=[str(delivery.id)])

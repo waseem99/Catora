@@ -43,6 +43,7 @@ on:
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
       - "apps/api/tests/test_shopify_reconciliation.py"
+      - "apps/api/tests/test_shopify_scope_updates.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
       - "apps/api/tests/test_shopify_webhooks.py"
@@ -91,6 +92,7 @@ on:
       - "apps/api/tests/test_shopify_public_invitations.py"
       - "apps/api/tests/test_shopify_public_session.py"
       - "apps/api/tests/test_shopify_reconciliation.py"
+      - "apps/api/tests/test_shopify_scope_updates.py"
       - "apps/api/tests/test_shopify_sync_actor.py"
       - "apps/api/tests/test_shopify_webhook_routing.py"
       - "apps/api/tests/test_shopify_webhooks.py"
@@ -137,6 +139,7 @@ jobs:
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
             apps/api/tests/test_shopify_reconciliation.py \
+            apps/api/tests/test_shopify_scope_updates.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
             apps/api/tests/test_shopify_webhooks.py \
@@ -188,6 +191,7 @@ jobs:
             apps/api/tests/test_shopify_public_invitations.py \
             apps/api/tests/test_shopify_public_session.py \
             apps/api/tests/test_shopify_reconciliation.py \
+            apps/api/tests/test_shopify_scope_updates.py \
             apps/api/tests/test_shopify_sync_actor.py \
             apps/api/tests/test_shopify_webhook_routing.py \
             apps/api/tests/test_shopify_webhooks.py \
