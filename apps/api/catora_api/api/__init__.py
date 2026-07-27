@@ -19,6 +19,7 @@ from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.shopify import router as shopify_router
 from catora_api.api.shopify_activity import router as _shopify_activity_router
 from catora_api.api.shopify_compliance import router as _shopify_compliance_router
+from catora_api.api.shopify_operations import router as _shopify_operations_router
 from catora_api.api.shopify_public import router as _shopify_public_router
 from catora_api.api.taxonomy import router as taxonomy_router
 
@@ -27,6 +28,7 @@ _intent_suites_router.include_router(_intent_coverage_router)
 intent_runs_router.include_router(_intent_suites_router)
 shopify_router.include_router(_shopify_activity_router)
 shopify_router.include_router(_shopify_public_router)
+shopify_router.include_router(_shopify_operations_router)
 shopify_router.include_router(_shopify_compliance_router)
 
 __all__ = [
