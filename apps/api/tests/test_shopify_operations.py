@@ -5,6 +5,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from catora_api.api.shopify_operations import _operator_view
+from catora_api.config import Settings
 from catora_api.db.models import ReportJob, ShopifyStoreInvitation
 from catora_api.main import app
 
@@ -36,6 +37,8 @@ def _installation(workspace_id: uuid.UUID) -> ReportJob:
             "distribution": "public",
             "shop_domain": "prospect-store.myshopify.com",
             "catalog_source_id": str(uuid.uuid4()),
+            "registration_identity": "public_development",
+            "runtime_environment": "development",
             "sync_status": "failed",
             "product_count": 1000,
             "variant_count": 2000,
@@ -77,10 +80,17 @@ def test_operator_view_exposes_recovery_state_without_credentials() -> None:
     workspace_id = uuid.uuid4()
     invitation = _invitation(workspace_id)
     installation = _installation(workspace_id)
+    settings = Settings(
+        _env_file=None,
+        shopify_public_enabled=True,
+        shopify_public_registration_identity="public_development",
+        shopify_public_new_activations_enabled=False,
+    )
     view = _operator_view(
         invitation,
         installation,
         _delivery(workspace_id, installation.id),
+        settings,
     )
 
     assert view.prospect_name == "Prospect Store"
@@ -105,12 +115,41 @@ def test_operator_view_exposes_recovery_state_without_credentials() -> None:
         19,
         tzinfo=UTC,
     )
+    assert view.registration_identity == "public_development"
+    assert view.runtime_environment == "development"
+    assert view.new_activations_paused is True
+    assert view.existing_installation is True
+    assert view.reauthorization_available is True
     serialized = json.dumps(view.model_dump(mode="json"))
     assert "encrypted_access_token" not in serialized
     assert "encrypted_refresh_token" not in serialized
     assert "must-never-enter-view" not in serialized
     assert "payload_sha256" not in serialized
     assert "webhook_id" not in serialized
+
+
+def test_operator_view_infers_legacy_production_registration() -> None:
+    workspace_id = uuid.uuid4()
+    invitation = _invitation(workspace_id)
+    installation = _installation(workspace_id)
+    installation.input_snapshot = {
+        **dict(installation.input_snapshot),
+        "registration_identity": None,
+        "runtime_environment": None,
+    }
+    settings = Settings(
+        _env_file=None,
+        environment="production",
+        shopify_public_enabled=True,
+        shopify_public_registration_identity="public_production",
+        shopify_public_new_activations_enabled=True,
+    )
+
+    view = _operator_view(invitation, installation, None, settings)
+
+    assert view.registration_identity == "public_production"
+    assert view.runtime_environment == "production"
+    assert view.new_activations_paused is False
 
 
 def test_operator_list_and_recovery_routes_are_exposed() -> None:

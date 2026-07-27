@@ -99,6 +99,11 @@ class Settings(BaseSettings):
 
     # Embedded public-distribution app used for invite-only prospect demos.
     shopify_public_enabled: bool = False
+    shopify_public_registration_identity: Literal[
+        "public_development",
+        "public_production",
+    ] = "public_development"
+    shopify_public_new_activations_enabled: bool = True
     shopify_public_client_id: str = ""
     shopify_public_client_secret: str = Field(default="", repr=False)
     shopify_public_app_url: str = "http://localhost:3001"
@@ -158,6 +163,16 @@ class Settings(BaseSettings):
     def validate_shopify_public(self) -> None:
         if not self.shopify_public_enabled:
             return
+        expected_registration = (
+            "public_production"
+            if self.environment == "production"
+            else "public_development"
+        )
+        if self.shopify_public_registration_identity != expected_registration:
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY must match the runtime "
+                f"environment ({expected_registration})"
+            )
         if len(self.shopify_public_client_id.strip()) < 8:
             raise ValueError("CATORA_SHOPIFY_PUBLIC_CLIENT_ID is required")
         if len(self.shopify_public_client_secret) < 16:

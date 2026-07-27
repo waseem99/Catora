@@ -32,6 +32,12 @@ ShopifyAnalysisStatus = Literal[
     "completed",
     "failed",
 ]
+ShopifyRegistrationIdentity = Literal[
+    "northstar_custom",
+    "public_development",
+    "public_production",
+]
+ShopifyRuntimeEnvironment = Literal["development", "test", "production"]
 
 
 class ShopifyStoreInvitationCreateRequest(BaseModel):
@@ -135,3 +141,8 @@ class ShopifyPublicOperatorInstallationView(ShopifyPublicInstallationView):
     prospect_name: str
     invitation_expires_at: datetime
     activated_at: datetime | None = None
+    registration_identity: ShopifyRegistrationIdentity
+    runtime_environment: ShopifyRuntimeEnvironment
+    new_activations_paused: bool
+    existing_installation: bool
+    reauthorization_available: bool

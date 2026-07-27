@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import uuid
 from contextlib import AbstractAsyncContextManager
-from types import TracebackType
+from types import SimpleNamespace, TracebackType
 from typing import Any, cast
 
 import pytest
 
-from catora_api.db.models import CatalogSource, IngestionJob, ReportJob
+from catora_api.db.models import AuditEvent, CatalogSource, IngestionJob, ReportJob
 from catora_api.shopify import sync, tasks
 from catora_api.shopify.sync import queue_shopify_sync
 from catora_api.shopify.webhooks import SHOPIFY_WEBHOOK_DELIVERY_TYPE
@@ -89,6 +89,8 @@ def installation(source: CatalogSource) -> ReportJob:
             "catalog_source_id": str(source.id),
             "shop_domain": "prospect-store.myshopify.com",
             "distribution": "public",
+            "registration_identity": "public_development",
+            "runtime_environment": "development",
             "last_successful_sync_at": "2026-07-24T10:00:00+00:00",
         },
         template_version="shopify-public-installation-v1",
@@ -106,6 +108,8 @@ def source(*, status: str = "active") -> CatalogSource:
         config={
             "shop_domain": "prospect-store.myshopify.com",
             "distribution": "public",
+            "registration_identity": "public_development",
+            "runtime_environment": "development",
             "updated_after": "2026-07-24T10:00:00+00:00",
         },
     )
@@ -134,12 +138,57 @@ async def test_active_source_can_queue_incremental_reconciliation(
 
     assert job is not None
     assert job.checkpoint["shopify"]["full_reconciliation"] is False
+    assert job.checkpoint["shopify"]["registration_identity"] == "public_development"
+    assert job.checkpoint["shopify"]["runtime_environment"] == "development"
     assert catalog_source.config["updated_after"] == "2026-07-24T09:55:00+00:00"
+    assert catalog_source.config["registration_identity"] == "public_development"
     assert app_installation.input_snapshot["sync_status"] == "queued"
     assert app_installation.input_snapshot["analysis_stale"] is False
+    assert app_installation.input_snapshot["registration_identity"] == (
+        "public_development"
+    )
+    audit = next(item for item in session.added if isinstance(item, AuditEvent))
+    assert audit.payload["registration_identity"] == "public_development"
+    assert audit.payload["runtime_environment"] == "development"
     assert queued == [
         ("catora.shopify.sync_and_analyze", [str(job.id), str(app_installation.id)])
     ]
+
+
+@pytest.mark.asyncio
+async def test_legacy_public_installation_infers_production_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog_source = source(status="active")
+    catalog_source.config = {
+        "shop_domain": "prospect-store.myshopify.com",
+        "distribution": "public",
+    }
+    app_installation = installation(catalog_source)
+    app_installation.input_snapshot = {
+        "catalog_source_id": str(catalog_source.id),
+        "shop_domain": "prospect-store.myshopify.com",
+        "distribution": "public",
+    }
+    session = SyncSession(catalog_source)
+    monkeypatch.setattr(sync, "get_settings", lambda: SimpleNamespace(environment="production"))
+    monkeypatch.setattr(sync.celery_app, "send_task", lambda *_args, **_kwargs: None)
+
+    job = await queue_shopify_sync(
+        cast(Any, session),
+        installation=app_installation,
+        reason="operator_recovery",
+        actor_user_id=uuid.uuid4(),
+        full_reconciliation=True,
+    )
+
+    assert job is not None
+    assert job.checkpoint["shopify"]["registration_identity"] == "public_production"
+    assert job.checkpoint["shopify"]["runtime_environment"] == "production"
+    assert app_installation.input_snapshot["registration_identity"] == (
+        "public_production"
+    )
+    assert catalog_source.config["runtime_environment"] == "production"
 
 
 @pytest.mark.asyncio
@@ -215,6 +264,13 @@ async def test_full_reconciliation_is_preserved_when_job_is_active() -> None:
     assert returned is active_job
     assert app_installation.input_snapshot["sync_status"] == "coalesced"
     assert app_installation.input_snapshot["pending_full_reconciliation"] is True
+    assert app_installation.input_snapshot["registration_identity"] == (
+        "public_development"
+    )
+    assert active_job.checkpoint["shopify"]["registration_identity"] == (
+        "public_development"
+    )
+    assert active_job.checkpoint["shopify"]["runtime_environment"] == "development"
     assert session.added == []
 
 
