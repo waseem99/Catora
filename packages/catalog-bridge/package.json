@@ -1,0 +1,40 @@
+{
+  "name": "@catora/catalog-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mongo": {
+      "types": "./dist/mongo.d.ts",
+      "import": "./dist/mongo.js"
+    }
+  },
+  "bin": {
+    "catora-bridge": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src tests --max-warnings=0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@catora/contracts": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
