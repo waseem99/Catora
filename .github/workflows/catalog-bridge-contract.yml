@@ -1,9 +1,9 @@
 name: Catalog bridge contract
 
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - agent/node-mongo-catalog-bridge
+    branches: [main]
     paths:
       - "package.json"
       - "package-lock.json"
@@ -16,6 +16,8 @@ on:
       - "apps/api/catora_api/normalization/catalog_bridge.py"
       - "apps/api/catora_api/schemas/catalog_bridge.py"
       - "apps/api/tests/test_catalog_bridge.py"
+      - ".env.example"
+      - "scripts/validate_deployment_contract.py"
       - ".github/workflows/catalog-bridge-contract.yml"
   pull_request:
     paths:
@@ -30,6 +32,8 @@ on:
       - "apps/api/catora_api/normalization/catalog_bridge.py"
       - "apps/api/catora_api/schemas/catalog_bridge.py"
       - "apps/api/tests/test_catalog_bridge.py"
+      - ".env.example"
+      - "scripts/validate_deployment_contract.py"
       - ".github/workflows/catalog-bridge-contract.yml"
 
 permissions:
@@ -61,7 +65,7 @@ jobs:
         with:
           name: catalog-bridge-lint-report
           path: catalog-bridge-lint.txt
-          retention-days: 3
+          retention-days: 7
       - name: Type-check bridge packages
         shell: bash
         run: |
@@ -77,7 +81,7 @@ jobs:
         with:
           name: catalog-bridge-typecheck-report
           path: catalog-bridge-typecheck.txt
-          retention-days: 3
+          retention-days: 7
       - name: Test bridge packages
         run: npm run test --workspace @catora/contracts && npm run test --workspace @catora/catalog-bridge
       - name: Build bridge packages
@@ -102,7 +106,7 @@ jobs:
         with:
           name: catora-catalog-bridge-0.1.0
           path: artifacts/catalog-bridge/*.tgz
-          retention-days: 14
+          retention-days: 90
       - name: Verify root workspace build
         shell: bash
         run: |
@@ -117,7 +121,7 @@ jobs:
         with:
           name: catalog-bridge-root-build-report
           path: catalog-bridge-root-build.txt
-          retention-days: 3
+          retention-days: 7
 
   api-contract:
     runs-on: ubuntu-latest
@@ -148,6 +152,8 @@ jobs:
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
       - run: cd apps/api && alembic upgrade head
+      - name: Validate deployment contract
+        run: python scripts/validate_deployment_contract.py
       - name: Run focused Ruff
         shell: bash
         run: |
@@ -169,7 +175,7 @@ jobs:
         with:
           name: catalog-bridge-ruff-report
           path: catalog-bridge-ruff.txt
-          retention-days: 3
+          retention-days: 7
       - name: Run focused strict MyPy
         shell: bash
         run: |
@@ -190,5 +196,5 @@ jobs:
         with:
           name: catalog-bridge-mypy-report
           path: catalog-bridge-mypy.txt
-          retention-days: 3
+          retention-days: 7
       - run: python -m pytest -q apps/api/tests/test_catalog_bridge.py
