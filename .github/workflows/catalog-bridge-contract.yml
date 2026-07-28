@@ -103,6 +103,21 @@ jobs:
           name: catora-catalog-bridge-0.1.0
           path: artifacts/catalog-bridge/*.tgz
           retention-days: 14
+      - name: Verify root workspace build
+        shell: bash
+        run: |
+          set +e
+          npm run build > catalog-bridge-root-build.txt 2>&1
+          status=$?
+          cat catalog-bridge-root-build.txt
+          exit "$status"
+      - name: Upload root workspace build report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-bridge-root-build-report
+          path: catalog-bridge-root-build.txt
+          retention-days: 3
 
   api-contract:
     runs-on: ubuntu-latest
