@@ -1,0 +1,41 @@
+name: Catalog bridge release audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".env.example"
+      - "packages/catalog-bridge/package.json"
+      - "packages/catalog-bridge/README.md"
+      - "apps/api/alembic/versions/0018_catalog_bridge_source.py"
+      - "apps/api/catora_api/api/catalog_bridge.py"
+      - "scripts/validate_catalog_bridge_release.py"
+      - ".github/workflows/catalog-bridge-contract.yml"
+      - ".github/workflows/catalog-bridge-release-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".env.example"
+      - "packages/catalog-bridge/package.json"
+      - "packages/catalog-bridge/README.md"
+      - "apps/api/alembic/versions/0018_catalog_bridge_source.py"
+      - "apps/api/catora_api/api/catalog_bridge.py"
+      - "scripts/validate_catalog_bridge_release.py"
+      - ".github/workflows/catalog-bridge-contract.yml"
+      - ".github/workflows/catalog-bridge-release-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate audit script syntax
+        run: python -m py_compile scripts/validate_catalog_bridge_release.py
+      - name: Validate catalog bridge release controls
+        run: python scripts/validate_catalog_bridge_release.py
