@@ -11,8 +11,7 @@
     "rootDir": "src",
     "skipLibCheck": true,
     "types": ["node"],
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true
+    "noUncheckedIndexedAccess": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["dist", "tests"]
