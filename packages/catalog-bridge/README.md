@@ -6,7 +6,15 @@ The bridge reads products through the project's existing Mongoose model, maps on
 
 ## Five-minute setup
 
-### 1. Receive the source credentials
+### 1. Receive the bridge package and source credentials
+
+Install the single versioned tarball supplied from the validated Catora release workflow:
+
+```bash
+npm install ./catora-catalog-bridge-0.1.0.tgz
+```
+
+The tarball bundles the matching catalog contract, so the commerce project does not need another Catora package.
 
 A Catora operator creates a **Catalog Bridge** source and provides these values through an approved secret channel:
 
@@ -126,7 +134,7 @@ The bridge:
 - does not serialize entire MongoDB documents;
 - signs every request with HMAC-SHA256;
 - checks body hashes, timestamps and replay-resistant idempotency keys;
-- stores batches encrypted at rest through Catora object storage;
+- stores batches in Catora's workspace-scoped configured object storage;
 - uses one revocable credential per Catora source.
 
 Do not import this package into a Next.js client component or expose its token through `NEXT_PUBLIC_*` variables.
