@@ -127,9 +127,9 @@ def _product_attributes(
                     key=key,
                     value=value,
                     value_type=value_type,
-                    field_path=key if key not in {"product_url", "canonical_url"} else (
-                        "url" if key == "product_url" else "canonicalUrl"
-                    ),
+                    field_path=key
+                    if key not in {"product_url", "canonical_url"}
+                    else ("url" if key == "product_url" else "canonicalUrl"),
                 )
             )
     for key in ("categories", "collections", "tags"):

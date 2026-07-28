@@ -41,9 +41,7 @@ def _request(
     timestamp_text = str(timestamp or int(datetime.now(UTC).timestamp()))
     content_hash = hashlib.sha256(body).hexdigest()
     idempotency_key = "snapshot:batch:00000000"
-    canonical = "\n".join(
-        (method, path, timestamp_text, content_hash, idempotency_key)
-    )
+    canonical = "\n".join((method, path, timestamp_text, content_hash, idempotency_key))
     signature = hmac.new(token.encode(), canonical.encode(), hashlib.sha256).digest()
     signature_text = base64.urlsafe_b64encode(signature).decode().rstrip("=")
     headers = [

@@ -106,7 +106,9 @@ class CatalogBridgeProduct(CatalogBridgeModel):
         if len(set(variant_ids)) != len(variant_ids):
             raise ValueError("Variant IDs must be unique inside a product")
         known_variants = set(variant_ids)
-        if any(image.variant_id and image.variant_id not in known_variants for image in self.images):
+        if any(
+            image.variant_id and image.variant_id not in known_variants for image in self.images
+        ):
             raise ValueError("Image variantId must reference a variant in the same product")
         return self
 

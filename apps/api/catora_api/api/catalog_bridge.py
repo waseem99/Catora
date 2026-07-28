@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from typing import Annotated, Any, cast
 
@@ -290,7 +289,9 @@ async def begin_catalog_bridge_snapshot(
             current.get("declared_product_count") != manifest.declared_product_count
             or current.get("declared_variant_count") != manifest.declared_variant_count
         ):
-            raise ConflictError("Catalog bridge snapshot manifest does not match the existing snapshot")
+            raise ConflictError(
+                "Catalog bridge snapshot manifest does not match the existing snapshot"
+            )
         return await _status_view(session, source=source, snapshot=current)
     current_job_id = _job_id(current)
     current_job = await session.get(IngestionJob, current_job_id) if current_job_id else None

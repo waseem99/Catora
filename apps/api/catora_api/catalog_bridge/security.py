@@ -4,9 +4,9 @@ import hashlib
 import hmac
 import secrets
 import uuid
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Mapping
 
 from fastapi import HTTPException, Request, status
 
