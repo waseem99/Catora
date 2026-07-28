@@ -3,12 +3,12 @@ import {
   type CatalogBridgeImage,
   type CatalogBridgeJsonValue,
   type CatalogBridgeProduct,
+  type CatalogBridgeSnapshotStatus,
   type CatalogBridgeVariant,
 } from "@catora/contracts";
 import {
   CatalogBridgeClient,
   type CatalogBridgeClientOptions,
-  type CatalogBridgeSnapshotStatus,
 } from "./client.js";
 
 export type FieldSelector<T> =
