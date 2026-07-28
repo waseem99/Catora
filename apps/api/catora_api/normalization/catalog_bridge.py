@@ -307,7 +307,7 @@ def _json_value(value: object) -> tuple[JsonValue, str]:
     if isinstance(value, list | tuple):
         scalars = [_scalar(item) for item in value]
         if all(item is not None for item in scalars):
-            return cast(list[JsonScalar], scalars), "list"
+            return scalars, "list"
     if isinstance(value, dict):
         mapped = {key: _scalar(item) for key, item in value.items()}
         if all(item is not None for item in mapped.values()):

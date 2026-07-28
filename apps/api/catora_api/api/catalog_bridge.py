@@ -5,7 +5,7 @@ import uuid
 from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import ValidationError
+from pydantic import HttpUrl, ValidationError
 from sqlalchemy import select
 
 from catora_api.auth.dependencies import (
@@ -207,7 +207,7 @@ async def create_catalog_bridge_source(
     endpoint = str(request.base_url).rstrip("/")
     return CatalogBridgeSourceProvisionResponse(
         sourceId=source.id,
-        endpoint=endpoint,
+        endpoint=HttpUrl(endpoint),
         token=credential.token,
         tokenFingerprint=credential.fingerprint,
         protocolVersion=CATALOG_BRIDGE_PROTOCOL_VERSION,
@@ -262,7 +262,7 @@ async def rotate_catalog_bridge_source(
     await session.commit()
     return CatalogBridgeSourceProvisionResponse(
         sourceId=source.id,
-        endpoint=str(request.base_url).rstrip("/"),
+        endpoint=HttpUrl(str(request.base_url).rstrip("/")),
         token=credential.token,
         tokenFingerprint=credential.fingerprint,
         protocolVersion=CATALOG_BRIDGE_PROTOCOL_VERSION,

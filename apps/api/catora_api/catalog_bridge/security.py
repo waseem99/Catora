@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import NoReturn
 
 from fastapi import HTTPException, Request, status
 
@@ -152,7 +153,7 @@ class CatalogBridgeAuthenticator:
         return value
 
     @staticmethod
-    def _reject(detail: str) -> None:
+    def _reject(detail: str) -> NoReturn:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=detail,
