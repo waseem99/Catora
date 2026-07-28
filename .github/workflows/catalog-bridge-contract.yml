@@ -1,0 +1,101 @@
+name: Catalog bridge contract
+
+on:
+  push:
+    branches:
+      - agent/node-mongo-catalog-bridge
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "packages/contracts/**"
+      - "packages/catalog-bridge/**"
+      - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/api/catalog_bridge.py"
+      - "apps/api/catora_api/catalog_bridge/**"
+      - "apps/api/catora_api/connectors/catalog_bridge.py"
+      - "apps/api/catora_api/normalization/catalog_bridge.py"
+      - "apps/api/catora_api/schemas/catalog_bridge.py"
+      - "apps/api/tests/test_catalog_bridge.py"
+      - ".github/workflows/catalog-bridge-contract.yml"
+  pull_request:
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "packages/contracts/**"
+      - "packages/catalog-bridge/**"
+      - "apps/api/alembic/versions/**"
+      - "apps/api/catora_api/api/catalog_bridge.py"
+      - "apps/api/catora_api/catalog_bridge/**"
+      - "apps/api/catora_api/connectors/catalog_bridge.py"
+      - "apps/api/catora_api/normalization/catalog_bridge.py"
+      - "apps/api/catora_api/schemas/catalog_bridge.py"
+      - "apps/api/tests/test_catalog_bridge.py"
+      - ".github/workflows/catalog-bridge-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.13.0
+          cache: npm
+      - name: Generate synchronized lockfile
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-bridge-package-lock
+          path: package-lock.json
+          retention-days: 3
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint bridge packages
+        run: npm run lint --workspace @catora/contracts && npm run lint --workspace @catora/catalog-bridge
+      - name: Type-check bridge packages
+        run: npm run typecheck --workspace @catora/contracts && npm run typecheck --workspace @catora/catalog-bridge
+      - name: Test bridge packages
+        run: npm run test --workspace @catora/contracts && npm run test --workspace @catora/catalog-bridge
+      - name: Build bridge packages
+        run: npm run build --workspace @catora/contracts && npm run build --workspace @catora/catalog-bridge
+
+  api-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: catora
+          POSTGRES_PASSWORD: catora
+          POSTGRES_DB: catora_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U catora -d catora_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: apps/api
+    env:
+      CATORA_ENVIRONMENT: test
+      CATORA_DATABASE_URL: postgresql+asyncpg://catora:catora@localhost:5432/catora_test
+      CATORA_CATALOG_BRIDGE_ENABLED: "true"
+      CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/api/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: alembic upgrade head
+      - run: python -m ruff check catora_api/api/catalog_bridge.py catora_api/catalog_bridge catora_api/connectors/catalog_bridge.py catora_api/normalization/catalog_bridge.py catora_api/schemas/catalog_bridge.py tests/test_catalog_bridge.py
+      - run: python -m mypy --strict catora_api/api/catalog_bridge.py catora_api/catalog_bridge catora_api/connectors/catalog_bridge.py catora_api/normalization/catalog_bridge.py catora_api/schemas/catalog_bridge.py
+      - run: python -m pytest -q tests/test_catalog_bridge.py
