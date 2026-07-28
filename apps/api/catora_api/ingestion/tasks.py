@@ -10,6 +10,7 @@ from catora_api.database import SessionFactory
 from catora_api.db.models.catalog import CatalogSource, IngestionJob
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.ingestion.service import IngestionService
+from catora_api.normalization.catalog_bridge import CatalogBridgeNormalizationPipeline
 from catora_api.normalization.pipeline import CatalogNormalizationPipeline
 from catora_api.storage import ObjectStorage
 
@@ -62,8 +63,13 @@ async def _run_ingestion_job(job_id: uuid.UUID) -> None:
         if job.status not in {"completed", "partially_completed"}:
             return
 
+        normalization = (
+            CatalogBridgeNormalizationPipeline()
+            if source.source_type == "bridge"
+            else CatalogNormalizationPipeline()
+        )
         try:
-            summary = await CatalogNormalizationPipeline().normalize_job(
+            summary = await normalization.normalize_job(
                 session,
                 source=source,
                 job=job,
