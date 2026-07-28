@@ -21,19 +21,16 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rm -rf dist && tsc -p tsconfig.json --emitDeclarationOnly && esbuild src/index.ts src/mongo.ts src/cli.ts --bundle --platform=node --format=esm --target=node22 --outdir=dist --sourcemap",
     "lint": "eslint src tests --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@catora/contracts": "0.1.0"
-  },
-  "bundleDependencies": [
-    "@catora/contracts"
-  ],
+  "dependencies": {},
   "devDependencies": {
+    "@catora/contracts": "0.1.0",
     "@types/node": "^24.10.0",
+    "esbuild": "^0.25.0",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
   },
