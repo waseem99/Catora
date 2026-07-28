@@ -17,6 +17,7 @@ from catora_api.api import (
     audit_rules_router,
     audits_router,
     auth_router,
+    catalog_bridge_router,
     catalog_identity_router,
     catalog_router,
     demo_router,
@@ -74,6 +75,7 @@ app = FastAPI(
 )
 app.include_router(auth_router)
 app.include_router(ingestion_router)
+app.include_router(catalog_bridge_router)
 app.include_router(shopify_router)
 app.include_router(public_catalog_router)
 app.include_router(catalog_router)
