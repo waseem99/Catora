@@ -85,7 +85,21 @@ jobs:
           path: catalog-bridge-lint.txt
           retention-days: 3
       - name: Type-check bridge packages
-        run: npm run typecheck --workspace @catora/contracts && npm run typecheck --workspace @catora/catalog-bridge
+        shell: bash
+        run: |
+          set +e
+          npm run typecheck --workspace @catora/contracts > catalog-bridge-typecheck.txt 2>&1
+          status=$?
+          npm run typecheck --workspace @catora/catalog-bridge >> catalog-bridge-typecheck.txt 2>&1 || status=$?
+          cat catalog-bridge-typecheck.txt
+          exit "$status"
+      - name: Upload bridge typecheck report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalog-bridge-typecheck-report
+          path: catalog-bridge-typecheck.txt
+          retention-days: 3
       - name: Test bridge packages
         run: npm run test --workspace @catora/contracts && npm run test --workspace @catora/catalog-bridge
       - name: Build bridge packages
