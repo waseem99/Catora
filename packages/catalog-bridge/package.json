@@ -29,6 +29,9 @@
   "dependencies": {
     "@catora/contracts": "0.1.0"
   },
+  "bundleDependencies": [
+    "@catora/contracts"
+  ],
   "devDependencies": {
     "@types/node": "^24.10.0",
     "typescript": "5.9.3",
