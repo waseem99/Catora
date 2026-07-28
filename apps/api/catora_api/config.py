@@ -86,6 +86,16 @@ class Settings(BaseSettings):
     enrichment_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     enrichment_http_max_request_cost_microunits: int = Field(default=100_000, ge=0)
 
+    # Push-only bridge used by approved custom Node.js commerce backends.
+    catalog_bridge_enabled: bool = False
+    catalog_bridge_credential_encryption_key: str = Field(default="", repr=False)
+    catalog_bridge_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
+    catalog_bridge_max_batch_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=25 * 1024 * 1024,
+    )
+
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
@@ -112,6 +122,12 @@ class Settings(BaseSettings):
     shopify_public_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     shopify_public_session_clock_skew_seconds: int = Field(default=5, ge=0, le=30)
 
+    def catalog_bridge_encryption_key_bytes(self) -> bytes:
+        return _decode_encryption_key(
+            self.catalog_bridge_credential_encryption_key,
+            variable="CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY",
+        )
+
     def shopify_encryption_key_bytes(self) -> bytes:
         return _decode_encryption_key(
             self.shopify_credential_encryption_key,
@@ -123,6 +139,11 @@ class Settings(BaseSettings):
             self.shopify_public_credential_encryption_key,
             variable="CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
         )
+
+    def validate_catalog_bridge(self) -> None:
+        if not self.catalog_bridge_enabled:
+            return
+        self.catalog_bridge_encryption_key_bytes()
 
     def validate_shopify(self) -> None:
         if not self.shopify_enabled:
@@ -201,6 +222,7 @@ class Settings(BaseSettings):
 
     def validate_production(self) -> None:
         if self.environment != "production":
+            self.validate_catalog_bridge()
             self.validate_shopify()
             self.validate_shopify_public()
             return
@@ -241,6 +263,7 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_CORS_ORIGINS must include CATORA_FRONTEND_URL")
         if not self.trust_proxy_headers:
             raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
+        self.validate_catalog_bridge()
         self.validate_shopify()
         self.validate_shopify_public()
 
