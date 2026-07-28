@@ -128,11 +128,35 @@ jobs:
       CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.head.sha }}
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Apply focused Python fixes
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          files=(
+            apps/api/catora_api/api/catalog_bridge.py
+            apps/api/catora_api/catalog_bridge
+            apps/api/catora_api/connectors/catalog_bridge.py
+            apps/api/catora_api/normalization/catalog_bridge.py
+            apps/api/catora_api/schemas/catalog_bridge.py
+            apps/api/tests/test_catalog_bridge.py
+          )
+          python -m ruff check --fix --exit-zero "${files[@]}"
+          python -m ruff format "${files[@]}"
+          if git diff --quiet -- "${files[@]}"; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "${files[@]}"
+          git commit -m "Format catalog bridge Python"
+          git push origin HEAD:${{ github.ref_name }}
       - run: cd apps/api && alembic upgrade head
       - name: Run focused Ruff
         shell: bash
