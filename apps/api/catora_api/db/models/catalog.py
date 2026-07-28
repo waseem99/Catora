@@ -28,7 +28,8 @@ class CatalogSource(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, B
     __tablename__ = "catalog_sources"
     __table_args__ = (
         CheckConstraint(
-            "source_type IN ('shopify','csv','sitemap','urls')", name="valid_source_type"
+            "source_type IN ('shopify','csv','sitemap','urls','bridge')",
+            name="valid_source_type",
         ),
     )
     storefront_id: Mapped[uuid.UUID | None] = mapped_column(
