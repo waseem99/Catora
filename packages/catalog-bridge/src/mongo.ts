@@ -12,9 +12,7 @@ import {
 } from "./client.js";
 
 export type FieldSelector<T> =
-  | string
-  | readonly string[]
-  | ((document: T) => unknown);
+  string | readonly string[] | ((document: T) => unknown);
 
 export interface MongoCatalogFieldMap<T> {
   id?: FieldSelector<T>;
@@ -69,7 +67,8 @@ export interface MongoCatalogInspection {
 }
 
 export interface RunMongoCatalogBridgeOptions<T>
-  extends MongoCatalogSourceOptions<T>,
+  extends
+    MongoCatalogSourceOptions<T>,
     Omit<CatalogBridgeClientOptions, "onProgress"> {
   dryRun?: boolean;
   sourceLabel?: string;
@@ -83,8 +82,29 @@ export interface RunMongoCatalogBridgeResult {
   status: CatalogBridgeSnapshotStatus | null;
 }
 
-const ForbiddenKeyPattern =
-  /(^|[_\-.])(customer|customers|order|orders|payment|payments|password|passwords|session|sessions|token|tokens|address|addresses)([_\-.]|$)/i;
+const ForbiddenKeyTokens = new Set([
+  "customer",
+  "customers",
+  "order",
+  "orders",
+  "payment",
+  "payments",
+  "password",
+  "passwords",
+  "session",
+  "sessions",
+  "token",
+  "tokens",
+  "address",
+  "addresses",
+]);
+
+function containsForbiddenKeyToken(value: string): boolean {
+  const normalized = value.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
+  return normalized
+    .split(/[_\-.]+/)
+    .some((token) => ForbiddenKeyTokens.has(token));
+}
 
 const DefaultFields = {
   id: ["_id", "id", "productId", "product_id"],
@@ -169,7 +189,11 @@ function timestamp(value: unknown): string | undefined {
 }
 
 function stringList(value: unknown): string[] | undefined {
-  const source = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const source = Array.isArray(value)
+    ? value
+    : value === undefined
+      ? []
+      : [value];
   const result = source
     .map((item) => {
       if (item && typeof item === "object") {
@@ -185,11 +209,18 @@ function stringList(value: unknown): string[] | undefined {
   return result.length > 0 ? [...new Set(result)] : undefined;
 }
 
-function safeJsonValue(value: unknown, depth = 0): CatalogBridgeJsonValue | undefined {
+function safeJsonValue(
+  value: unknown,
+  depth = 0,
+): CatalogBridgeJsonValue | undefined {
   if (depth > 8 || value === undefined) {
     return undefined;
   }
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
     return value;
   }
   if (typeof value === "number") {
@@ -206,7 +237,7 @@ function safeJsonValue(value: unknown, depth = 0): CatalogBridgeJsonValue | unde
   if (typeof value === "object") {
     const output: Record<string, CatalogBridgeJsonValue> = {};
     for (const [key, item] of Object.entries(value)) {
-      if (ForbiddenKeyPattern.test(key) || key.startsWith("__")) {
+      if (containsForbiddenKeyToken(key) || key.startsWith("__")) {
         continue;
       }
       const normalized = safeJsonValue(item, depth + 1);
@@ -219,7 +250,9 @@ function safeJsonValue(value: unknown, depth = 0): CatalogBridgeJsonValue | unde
   return text(value);
 }
 
-function attributeMap(value: unknown): Record<string, CatalogBridgeJsonValue> | undefined {
+function attributeMap(
+  value: unknown,
+): Record<string, CatalogBridgeJsonValue> | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return undefined;
   }
@@ -254,19 +287,28 @@ function mapImage(value: unknown, position: number): CatalogBridgeImage | null {
 }
 
 function mapImages(value: unknown): CatalogBridgeImage[] | undefined {
-  const source = Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const source = Array.isArray(value)
+    ? value
+    : value === undefined
+      ? []
+      : [value];
   const images = source
     .map((item, index) => mapImage(item, index))
     .filter((item): item is CatalogBridgeImage => item !== null);
   return images.length > 0 ? images : undefined;
 }
 
-function mapVariant(value: unknown, index: number): CatalogBridgeVariant | null {
+function mapVariant(
+  value: unknown,
+  index: number,
+): CatalogBridgeVariant | null {
   if (!value || typeof value !== "object") {
     return null;
   }
   const variant = value as Record<string, unknown>;
-  const id = text(variant._id ?? variant.id ?? variant.variantId ?? variant.sku);
+  const id = text(
+    variant._id ?? variant.id ?? variant.variantId ?? variant.sku,
+  );
   if (!id) {
     return null;
   }
@@ -280,13 +322,19 @@ function mapVariant(value: unknown, index: number): CatalogBridgeVariant | null 
     id,
     sku: text(variant.sku ?? variant.code) ?? null,
     title: text(variant.title ?? variant.name) ?? null,
-    price: text(variant.price ?? variant.salePrice ?? variant.sale_price) ?? null,
+    price:
+      text(variant.price ?? variant.salePrice ?? variant.sale_price) ?? null,
     compareAtPrice:
-      text(variant.compareAtPrice ?? variant.compare_at_price ?? variant.regularPrice) ??
-      null,
+      text(
+        variant.compareAtPrice ??
+          variant.compare_at_price ??
+          variant.regularPrice,
+      ) ?? null,
     currency: text(variant.currency)?.toUpperCase() ?? null,
     availability:
-      text(variant.availability ?? variant.stockStatus ?? variant.stock_status) ?? null,
+      text(
+        variant.availability ?? variant.stockStatus ?? variant.stock_status,
+      ) ?? null,
     options,
     attributes,
     images: mapImages(variant.images ?? variant.image),
@@ -315,15 +363,18 @@ export function autoMapMongoProduct<T>(
     id: id ?? "",
     title: title ?? "",
     description:
-      text(select(document, fields.description, DefaultFields.description)) ?? null,
+      text(select(document, fields.description, DefaultFields.description)) ??
+      null,
     slug: text(select(document, fields.slug, DefaultFields.slug)) ?? null,
     url: text(select(document, fields.url, DefaultFields.url)) ?? null,
     canonicalUrl:
-      text(select(document, fields.canonicalUrl, DefaultFields.canonicalUrl)) ?? null,
+      text(select(document, fields.canonicalUrl, DefaultFields.canonicalUrl)) ??
+      null,
     status: text(select(document, fields.status, DefaultFields.status)) ?? null,
     brand: text(select(document, fields.brand, DefaultFields.brand)) ?? null,
     productType:
-      text(select(document, fields.productType, DefaultFields.productType)) ?? null,
+      text(select(document, fields.productType, DefaultFields.productType)) ??
+      null,
     categories: stringList(
       select(document, fields.categories, DefaultFields.categories),
     ),
@@ -343,11 +394,15 @@ export function autoMapMongoProduct<T>(
         ) ?? null,
     },
     images: mapImages(select(document, fields.images, DefaultFields.images)),
-    variants: mapVariants(select(document, fields.variants, DefaultFields.variants)),
+    variants: mapVariants(
+      select(document, fields.variants, DefaultFields.variants),
+    ),
     createdAt:
-      timestamp(select(document, fields.createdAt, DefaultFields.createdAt)) ?? null,
+      timestamp(select(document, fields.createdAt, DefaultFields.createdAt)) ??
+      null,
     updatedAt:
-      timestamp(select(document, fields.updatedAt, DefaultFields.updatedAt)) ?? null,
+      timestamp(select(document, fields.updatedAt, DefaultFields.updatedAt)) ??
+      null,
   } satisfies CatalogBridgeProduct;
   return CatalogBridgeProductSchema.parse(inferred);
 }
@@ -423,7 +478,8 @@ export async function inspectMongoCatalog<T>(
     if (errors.length < maxErrors) {
       errors.push({
         product: `after:${productCount}`,
-        message: error instanceof Error ? error.message : "Invalid catalog product",
+        message:
+          error instanceof Error ? error.message : "Invalid catalog product",
       });
     }
   }

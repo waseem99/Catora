@@ -9,11 +9,29 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator, mod
 
 CATALOG_BRIDGE_PROTOCOL_VERSION = "2026-07-bridge-v1"
 CATALOG_BRIDGE_MAX_BATCH_RECORDS = 250
-_FORBIDDEN_FIELD = re.compile(
-    r"(^|[_\-.])(customer|customers|order|orders|payment|payments|password|passwords|"
-    r"session|sessions|token|tokens|address|addresses)([_\-.]|$)",
-    re.IGNORECASE,
+_FORBIDDEN_FIELD_TOKENS = frozenset(
+    {
+        "customer",
+        "customers",
+        "order",
+        "orders",
+        "payment",
+        "payments",
+        "password",
+        "passwords",
+        "session",
+        "sessions",
+        "token",
+        "tokens",
+        "address",
+        "addresses",
+    }
 )
+
+
+def _contains_forbidden_field_token(value: str) -> bool:
+    normalized = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", value).lower()
+    return any(token in _FORBIDDEN_FIELD_TOKENS for token in re.split(r"[_\-.]+", normalized))
 
 
 class CatalogBridgeModel(BaseModel):
@@ -30,7 +48,7 @@ def _validate_catalog_value(value: JsonValue, *, depth: int = 0) -> JsonValue:
         if len(value) > 500:
             raise ValueError("Catalog attribute objects cannot exceed 500 fields")
         for key, item in value.items():
-            if not key or len(key) > 160 or _FORBIDDEN_FIELD.search(key):
+            if not key or len(key) > 160 or _contains_forbidden_field_token(key):
                 raise ValueError(f"Catalog attribute key '{key}' is not allowed")
             _validate_catalog_value(item, depth=depth + 1)
     elif isinstance(value, list):
