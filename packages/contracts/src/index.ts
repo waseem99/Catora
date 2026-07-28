@@ -1,5 +1,5 @@
-export * from "./catalog";
-export * from "./catalog-bridge";
+export * from "./catalog.js";
+export * from "./catalog-bridge.js";
 
 import { z } from "zod";
 
