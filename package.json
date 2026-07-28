@@ -8,7 +8,8 @@
   "workspaces": [
     "apps/web",
     "packages/contracts",
-    "packages/browser-intelligence"
+    "packages/browser-intelligence",
+    "packages/catalog-bridge"
   ],
   "scripts": {
     "dev": "npm run dev --workspace @catora/web",
