@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Any
 
 from catora_api.connectors.base import CatalogConnector
+from catora_api.connectors.catalog_bridge import CatalogBridgeConnector
 from catora_api.connectors.csv import CsvCatalogConnector, CsvMapping
 from catora_api.connectors.public_catalog import (
     PublicCatalogConnector,
@@ -47,6 +48,8 @@ async def connector_for_source(
         )
     if source.source_type in {"sitemap", "urls"}:
         return _public_catalog_connector(source.source_type, config)
+    if source.source_type == "bridge":
+        return CatalogBridgeConnector(config=config, storage=storage)
     raise ValueError(f"Unsupported source type '{source.source_type}'")
 
 
