@@ -2,6 +2,7 @@ from catora_api.api.audit_rules import router as audit_rules_router
 from catora_api.api.audits import router as audits_router
 from catora_api.api.auth import router as auth_router
 from catora_api.api.catalog import router as catalog_router
+from catora_api.api.catalog_bridge import router as catalog_bridge_router
 from catora_api.api.catalog_identity import router as catalog_identity_router
 from catora_api.api.demo import router as demo_router
 from catora_api.api.diagnostics import router as diagnostics_router
@@ -35,6 +36,7 @@ __all__ = [
     "audit_rules_router",
     "audits_router",
     "auth_router",
+    "catalog_bridge_router",
     "catalog_identity_router",
     "catalog_router",
     "demo_router",
