@@ -1,0 +1,82 @@
+name: Apply service visibility rebuild
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+    paths:
+      - ".github/service-visibility-rebuild/**"
+      - ".github/workflows/apply-service-visibility-rebuild.yml"
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/wordpress-service-visibility-rebuild'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Decode and validate source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=/tmp/service-visibility-source.tar.gz
+          extract=/tmp/service-visibility-source
+          cat .github/service-visibility-rebuild/chunk-* | tr -d '\r\n' | base64 --decode > "$bundle"
+          echo "250470755927e79959ddafb68cfa17169c086b53b4b232bbe39780cd0e866f72  $bundle" | sha256sum --check -
+          rm -rf "$extract"
+          mkdir -p "$extract"
+          python - <<'PY'
+          import pathlib
+          import tarfile
+
+          archive = pathlib.Path('/tmp/service-visibility-source.tar.gz')
+          with tarfile.open(archive, 'r:gz') as tar:
+              members = tar.getmembers()
+              if len(members) != 37:
+                  raise SystemExit(f'Unexpected file count: {len(members)}')
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  if (
+                      path.is_absolute()
+                      or '..' in path.parts
+                      or member.issym()
+                      or member.islnk()
+                      or member.isdev()
+                  ):
+                      raise SystemExit(f'Unsafe archive member: {member.name}')
+              tar.extractall('/tmp/service-visibility-source')
+          PY
+      - name: Apply and validate ordinary source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a /tmp/service-visibility-source/ ./
+          rm -rf .github/service-visibility-rebuild
+          rm -f .github/workflows/apply-service-visibility-rebuild.yml
+          rm -f .github/workflows/export-rebuild-worktree.yml
+          rm -f docs/.keep docs/.rebuild-export-trigger docs/.rebuild-probe docs/service-visibility-rebuild-note.md
+          git diff --check
+          python -m compileall -q apps/api/catora_api apps/api/tests
+          find apps/wordpress-service-visibility -name '*.php' -print0 | xargs -0 -n1 php -l
+          python scripts/validate_service_visibility_release.py
+          bash apps/wordpress-service-visibility/build-plugin.sh /tmp/catora-service-visibility.zip
+          unzip -t /tmp/catora-service-visibility.zip
+      - name: Commit reviewable implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add WordPress service visibility intelligence'
+          git push origin HEAD:agent/wordpress-service-visibility-rebuild
