@@ -1,0 +1,137 @@
+name: WordPress PHP 7.4 compatibility
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "apps/wordpress-service-visibility/**"
+      - ".github/workflows/wordpress-php74-compatibility.yml"
+      - "scripts/validate_repository_governance.py"
+  pull_request:
+    paths:
+      - "apps/wordpress-service-visibility/**"
+      - ".github/workflows/wordpress-php74-compatibility.yml"
+      - "scripts/validate_repository_governance.py"
+
+permissions:
+  contents: read
+
+jobs:
+  legacy-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build installable plugin
+        run: bash apps/wordpress-service-visibility/build-plugin.sh artifacts/service-visibility/catora-service-visibility.zip
+      - name: Verify legacy compatibility metadata
+        run: |
+          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/catora-service-visibility.php | grep -F "Requires PHP: 7.4"
+          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/catora-service-visibility.php | grep -F "Version: 0.2.2"
+          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/readme.txt | grep -F "Stable tag: 0.2.2"
+      - name: Validate mock-server syntax
+        run: python -m py_compile apps/wordpress-service-visibility/tests/mock-catora-server.py
+      - name: Start signed Catora runtime mock
+        run: |
+          python apps/wordpress-service-visibility/tests/mock-catora-server.py > /tmp/catora-wordpress-php74-mock.log 2>&1 &
+          echo $! > /tmp/catora-wordpress-php74-mock.pid
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/__state >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/catora-wordpress-php74-mock.log
+          exit 1
+      - name: Install and exercise plugin on WordPress with PHP 7.4
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create catora-wordpress-php74-runtime
+          docker volume create catora-wordpress-php74-data
+          docker run -d --name catora-wordpress-php74-db \
+            --network catora-wordpress-php74-runtime \
+            -e MARIADB_DATABASE=wordpress \
+            -e MARIADB_USER=wordpress \
+            -e MARIADB_PASSWORD=wordpress \
+            -e MARIADB_ROOT_PASSWORD=root \
+            mariadb:11
+          for attempt in $(seq 1 60); do
+            docker exec catora-wordpress-php74-db mariadb-admin ping -uroot -proot --silent && break
+            sleep 1
+          done
+          docker run -d --name catora-wordpress-php74 \
+            --network catora-wordpress-php74-runtime \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8080:80 \
+            -e WORDPRESS_DB_HOST=catora-wordpress-php74-db \
+            -e WORDPRESS_DB_USER=wordpress \
+            -e WORDPRESS_DB_PASSWORD=wordpress \
+            -e WORDPRESS_DB_NAME=wordpress \
+            -v catora-wordpress-php74-data:/var/www/html \
+            -v "$PWD/apps/wordpress-service-visibility/tests:/runtime-tests:ro" \
+            wordpress:6.8-php7.4-apache
+          for attempt in $(seq 1 90); do
+            curl -sS http://127.0.0.1:8080 >/dev/null && break
+            sleep 1
+          done
+          wp_cli() {
+            docker run --rm \
+              --network catora-wordpress-php74-runtime \
+              --add-host=host.docker.internal:host-gateway \
+              --volumes-from catora-wordpress-php74 \
+              -e WORDPRESS_DB_HOST=catora-wordpress-php74-db \
+              -e WORDPRESS_DB_USER=wordpress \
+              -e WORDPRESS_DB_PASSWORD=wordpress \
+              -e WORDPRESS_DB_NAME=wordpress \
+              --user 33:33 \
+              wordpress:cli wp "$@"
+          }
+          wp_cli core install \
+            --url=https://wp.example.test \
+            --title='Catora PHP 7.4 Runtime' \
+            --admin_user=admin \
+            --admin_password='runtime-password' \
+            --admin_email=runtime@example.test \
+            --skip-email
+          wp_cli config set WP_ENVIRONMENT_TYPE local
+          rm -rf /tmp/catora-service-visibility-php74
+          mkdir -p /tmp/catora-service-visibility-php74
+          unzip -q artifacts/service-visibility/catora-service-visibility.zip -d /tmp/catora-service-visibility-php74
+          docker cp /tmp/catora-service-visibility-php74/catora-service-visibility catora-wordpress-php74:/var/www/html/wp-content/plugins/
+          docker exec catora-wordpress-php74 php -r 'if ( PHP_VERSION_ID < 70400 || PHP_VERSION_ID >= 80000 ) { fwrite( STDERR, PHP_VERSION . PHP_EOL ); exit( 1 ); } echo PHP_VERSION . PHP_EOL;'
+          docker exec catora-wordpress-php74 sh -lc 'find /var/www/html/wp-content/plugins/catora-service-visibility -name "*.php" -exec php -l {} \;'
+          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; $plugin = "catora-service-visibility/catora-service-visibility.php"; $result = activate_plugin( $plugin ); if ( is_wp_error( $result ) || ! is_plugin_active( $plugin ) ) { fwrite( STDERR, is_wp_error( $result ) ? $result->get_error_message() : "Plugin did not activate." ); exit( 1 ); }'
+          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-seed.php";'
+          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-smoke.php";'
+          curl -fsS http://127.0.0.1:8787/__state > /tmp/catora-wordpress-php74-runtime-state.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          state = json.loads(Path('/tmp/catora-wordpress-php74-runtime-state.json').read_text())
+          assert state['completed'] is True
+          assert state['failed_sequence_one'] is True
+          assert state['accepted_batches'] == [0, 1]
+          assert state['accepted_pages'] == 55
+          assert state['declared_pages'] == 55
+          assert state['verified_requests'] >= 6
+          first = state['records'][0]
+          assert first['canonical_url'] == 'https://wp.example.test/canonical/runtime-service'
+          assert first['robots'] == 'noindex'
+          assert first['json_ld'][0]['@type'] == 'Service'
+          assert first['wordpress']['author']['name'] == 'admin'
+          PY
+          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; deactivate_plugins( "catora-service-visibility/catora-service-visibility.php" ); if ( ! defined( "WP_UNINSTALL_PLUGIN" ) ) { define( "WP_UNINSTALL_PLUGIN", true ); } require WP_PLUGIN_DIR . "/catora-service-visibility/uninstall.php"; if ( false !== get_option( "catora_service_visibility_settings", false ) || false !== get_option( "catora_service_visibility_checkpoint", false ) || false !== wp_next_scheduled( "catora_service_visibility_sync" ) ) { exit( 1 ); }'
+      - name: Upload PHP 7.4 runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catora-service-visibility-wordpress-runtime-php74
+          path: |
+            /tmp/catora-wordpress-php74-runtime-state.json
+            /tmp/catora-wordpress-php74-mock.log
+          if-no-files-found: warn
+          retention-days: 7
