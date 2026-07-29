@@ -53,7 +53,10 @@ def main() -> int:
     )
 
     representatives = authority.get("authorized_repository_representatives")
-    require(isinstance(representatives, list) and len(representatives) == 1, "one owner representative is required")
+    require(
+        isinstance(representatives, list) and len(representatives) == 1,
+        "one owner representative is required",
+    )
     representative = representatives[0]
     require(isinstance(representative, dict), "owner representative must be an object")
     require(representative.get("github_login") == EXPECTED_OWNER, "representative login mismatch")
@@ -66,13 +69,25 @@ def main() -> int:
 
     security = read("SECURITY.md")
     support = read("SUPPORT.md")
+    license_notice = read("LICENSE")
     ownership = read("docs/governance/repository-ownership.md")
+    authorization_template = read(".github/ISSUE_TEMPLATE/external-owner-authorization.yml")
     readme = read("README.md")
-    for name, content in (("SECURITY.md", security), ("SUPPORT.md", support), ("ownership record", ownership)):
+    for name, content in (
+        ("SECURITY.md", security),
+        ("SUPPORT.md", support),
+        ("ownership record", ownership),
+    ):
         require("@waseem99" in content, f"{name} does not identify the owner representative")
     require("SECURITY.md" in readme, "README does not link the security policy")
     require("SUPPORT.md" in readme, "README does not link the support policy")
+    require("LICENSE" in readme, "README does not link the proprietary notice")
     require("repository-ownership.md" in readme, "README does not link the authority record")
+    require("No copyright" in license_notice, "proprietary notice is incomplete")
+    require(
+        "confidential evidence is not included" in authorization_template,
+        "external authorization template must prohibit confidential evidence",
+    )
 
     package = json.loads(read("package.json"))
     require(isinstance(package, dict), "package.json must be an object")
@@ -83,12 +98,23 @@ def main() -> int:
         "package repository metadata is not canonical",
     )
     require(package.get("homepage") == f"{EXPECTED_REPOSITORY_URL}#readme", "package homepage is not canonical")
+    require(package.get("license") == "UNLICENSED", "private root package must remain unlicensed")
 
     shopify_package = json.loads(read("apps/shopify/package.json"))
     require(
         isinstance(shopify_package.get("repository"), dict)
         and shopify_package["repository"].get("url") == f"git+{EXPECTED_REPOSITORY_URL}.git",
         "Shopify package repository metadata is not canonical",
+    )
+    require(
+        shopify_package.get("license") == "UNLICENSED",
+        "private Shopify package must remain unlicensed",
+    )
+
+    api_project = read("apps/api/pyproject.toml")
+    require(
+        f'Repository = "{EXPECTED_REPOSITORY_URL}"' in api_project,
+        "API project repository URL is not canonical",
     )
 
     plugin = read("apps/wordpress-service-visibility/catora-service-visibility.php")
