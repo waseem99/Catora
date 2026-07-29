@@ -96,6 +96,18 @@ class Settings(BaseSettings):
         le=25 * 1024 * 1024,
     )
 
+    # WordPress-first service website visibility audits.
+    service_visibility_enabled: bool = False
+    service_visibility_credential_encryption_key: str = Field(default="", repr=False)
+    service_visibility_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
+    service_visibility_max_batch_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=25 * 1024 * 1024,
+    )
+    service_visibility_drafts_enabled: bool = False
+    service_visibility_monitoring_enabled: bool = False
+
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
@@ -128,6 +140,12 @@ class Settings(BaseSettings):
             variable="CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY",
         )
 
+    def service_visibility_encryption_key_bytes(self) -> bytes:
+        return _decode_encryption_key(
+            self.service_visibility_credential_encryption_key,
+            variable="CATORA_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY",
+        )
+
     def shopify_encryption_key_bytes(self) -> bytes:
         return _decode_encryption_key(
             self.shopify_credential_encryption_key,
@@ -144,6 +162,16 @@ class Settings(BaseSettings):
         if not self.catalog_bridge_enabled:
             return
         self.catalog_bridge_encryption_key_bytes()
+
+    def validate_service_visibility(self) -> None:
+        if not self.service_visibility_enabled:
+            if self.service_visibility_drafts_enabled or self.service_visibility_monitoring_enabled:
+                raise ValueError(
+                    "Service visibility drafts and monitoring require "
+                    "CATORA_SERVICE_VISIBILITY_ENABLED=true"
+                )
+            return
+        self.service_visibility_encryption_key_bytes()
 
     def validate_shopify(self) -> None:
         if not self.shopify_enabled:
@@ -223,6 +251,7 @@ class Settings(BaseSettings):
     def validate_production(self) -> None:
         if self.environment != "production":
             self.validate_catalog_bridge()
+            self.validate_service_visibility()
             self.validate_shopify()
             self.validate_shopify_public()
             return
@@ -264,6 +293,7 @@ class Settings(BaseSettings):
         if not self.trust_proxy_headers:
             raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         self.validate_catalog_bridge()
+        self.validate_service_visibility()
         self.validate_shopify()
         self.validate_shopify_public()
 

@@ -16,6 +16,7 @@ from catora_api.connectors.shopify import (
     ShopifyConnectorConfig,
 )
 from catora_api.connectors.shopify_bulk import ShopifyBulkCatalogConnector
+from catora_api.connectors.wordpress import WordPressSnapshotConnector
 from catora_api.db.models.catalog import CatalogSource
 from catora_api.secrets import EnvironmentSecretResolver, SecretResolver, SecretValue
 from catora_api.shopify.installations import (
@@ -48,6 +49,10 @@ async def connector_for_source(
         )
     if source.source_type in {"sitemap", "urls"}:
         return _public_catalog_connector(source.source_type, config)
+    if source.source_type == "wordpress":
+        if config.get("connection_mode") == "wordpress_bridge":
+            return WordPressSnapshotConnector(config=config, storage=storage)
+        return _public_catalog_connector("wordpress", config)
     if source.source_type == "bridge":
         return CatalogBridgeConnector(config=config, storage=storage)
     raise ValueError(f"Unsupported source type '{source.source_type}'")

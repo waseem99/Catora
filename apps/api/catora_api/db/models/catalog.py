@@ -28,7 +28,7 @@ class CatalogSource(UUIDPrimaryKeyMixin, WorkspaceScopedMixin, TimestampMixin, B
     __tablename__ = "catalog_sources"
     __table_args__ = (
         CheckConstraint(
-            "source_type IN ('shopify','csv','sitemap','urls','bridge')",
+            "source_type IN ('shopify','csv','sitemap','urls','bridge','wordpress')",
             name="valid_source_type",
         ),
     )

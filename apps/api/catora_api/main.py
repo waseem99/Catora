@@ -30,6 +30,7 @@ from catora_api.api import (
     intents_router,
     public_catalog_router,
     recommendations_router,
+    service_visibility_router,
     shopify_router,
     taxonomy_router,
 )
@@ -70,7 +71,7 @@ settings = get_settings()
 app = FastAPI(
     title="Catora API",
     version=__version__,
-    description="Enterprise ecommerce catalog intelligence API",
+    description="Enterprise catalog and service visibility intelligence API",
     lifespan=lifespan,
 )
 app.include_router(auth_router)
@@ -84,6 +85,7 @@ app.include_router(taxonomy_router)
 app.include_router(audits_router)
 app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
+app.include_router(service_visibility_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)

@@ -22,6 +22,9 @@ export default async function WorkspacePage({ params }: Props) {
         <Link className="secondary" href={`/workspace/${workspaceId}/products`}>
           Browse products
         </Link>
+        <Link className="secondary" href={`/workspace/${workspaceId}/service-visibility`}>
+          Audit a service website
+        </Link>
         <Link className="secondary" href={`/workspace/${workspaceId}/identity-review`}>
           Review identities
         </Link>
