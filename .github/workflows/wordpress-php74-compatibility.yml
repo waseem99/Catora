@@ -72,7 +72,7 @@ jobs:
             -e WORDPRESS_DB_NAME=wordpress \
             -v catora-wordpress-php74-data:/var/www/html \
             -v "$PWD/apps/wordpress-service-visibility/tests:/runtime-tests:ro" \
-            wordpress:6.8-php7.4-apache
+            wordpress:6.8-php8.3-apache
           for attempt in $(seq 1 90); do
             curl -sS http://127.0.0.1:8080 >/dev/null && break
             sleep 1
@@ -97,15 +97,39 @@ jobs:
             --admin_email=runtime@example.test \
             --skip-email
           wp_cli config set WP_ENVIRONMENT_TYPE local
+          cat > /tmp/catora-php74.Dockerfile <<'DOCKERFILE'
+          FROM php:7.4-cli
+          RUN docker-php-ext-install mysqli
+          ENTRYPOINT ["php"]
+          DOCKERFILE
+          docker build --pull -t catora-php74-cli -f /tmp/catora-php74.Dockerfile /tmp
+          php74() {
+            docker run --rm \
+              --network catora-wordpress-php74-runtime \
+              --add-host=host.docker.internal:host-gateway \
+              --volumes-from catora-wordpress-php74 \
+              -e WORDPRESS_DB_HOST=catora-wordpress-php74-db \
+              -e WORDPRESS_DB_USER=wordpress \
+              -e WORDPRESS_DB_PASSWORD=wordpress \
+              -e WORDPRESS_DB_NAME=wordpress \
+              --user 33:33 \
+              catora-php74-cli "$@"
+          }
           rm -rf /tmp/catora-service-visibility-php74
           mkdir -p /tmp/catora-service-visibility-php74
           unzip -q artifacts/service-visibility/catora-service-visibility.zip -d /tmp/catora-service-visibility-php74
           docker cp /tmp/catora-service-visibility-php74/catora-service-visibility catora-wordpress-php74:/var/www/html/wp-content/plugins/
-          docker exec catora-wordpress-php74 php -r 'if ( PHP_VERSION_ID < 70400 || PHP_VERSION_ID >= 80000 ) { fwrite( STDERR, PHP_VERSION . PHP_EOL ); exit( 1 ); } echo PHP_VERSION . PHP_EOL;'
-          docker exec catora-wordpress-php74 sh -lc 'find /var/www/html/wp-content/plugins/catora-service-visibility -name "*.php" -exec php -l {} \;'
-          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; $plugin = "catora-service-visibility/catora-service-visibility.php"; $result = activate_plugin( $plugin ); if ( is_wp_error( $result ) || ! is_plugin_active( $plugin ) ) { fwrite( STDERR, is_wp_error( $result ) ? $result->get_error_message() : "Plugin did not activate." ); exit( 1 ); }'
-          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-seed.php";'
-          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-smoke.php";'
+          php74 -r 'if ( PHP_VERSION_ID < 70400 || PHP_VERSION_ID >= 80000 ) { fwrite( STDERR, PHP_VERSION . PHP_EOL ); exit( 1 ); } echo PHP_VERSION . PHP_EOL;'
+          docker run --rm \
+            --network catora-wordpress-php74-runtime \
+            --volumes-from catora-wordpress-php74 \
+            --user 33:33 \
+            --entrypoint sh \
+            catora-php74-cli \
+            -lc 'find /var/www/html/wp-content/plugins/catora-service-visibility -name "*.php" -exec php -l {} \;'
+          php74 -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; $plugin = "catora-service-visibility/catora-service-visibility.php"; $result = activate_plugin( $plugin ); if ( is_wp_error( $result ) || ! is_plugin_active( $plugin ) ) { fwrite( STDERR, is_wp_error( $result ) ? $result->get_error_message() : "Plugin did not activate." ); exit( 1 ); }'
+          php74 -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-seed.php";'
+          php74 -r 'require "/var/www/html/wp-load.php"; require "/runtime-tests/runtime-smoke.php";'
           curl -fsS http://127.0.0.1:8787/__state > /tmp/catora-wordpress-php74-runtime-state.json
           python - <<'PY'
           import json
@@ -124,7 +148,7 @@ jobs:
           assert first['json_ld'][0]['@type'] == 'Service'
           assert first['wordpress']['author']['name'] == 'admin'
           PY
-          docker exec -u www-data catora-wordpress-php74 php -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; deactivate_plugins( "catora-service-visibility/catora-service-visibility.php" ); if ( ! defined( "WP_UNINSTALL_PLUGIN" ) ) { define( "WP_UNINSTALL_PLUGIN", true ); } require WP_PLUGIN_DIR . "/catora-service-visibility/uninstall.php"; if ( false !== get_option( "catora_service_visibility_settings", false ) || false !== get_option( "catora_service_visibility_checkpoint", false ) || false !== wp_next_scheduled( "catora_service_visibility_sync" ) ) { exit( 1 ); }'
+          php74 -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; deactivate_plugins( "catora-service-visibility/catora-service-visibility.php" ); if ( ! defined( "WP_UNINSTALL_PLUGIN" ) ) { define( "WP_UNINSTALL_PLUGIN", true ); } require WP_PLUGIN_DIR . "/catora-service-visibility/uninstall.php"; if ( false !== get_option( "catora_service_visibility_settings", false ) || false !== get_option( "catora_service_visibility_checkpoint", false ) || false !== wp_next_scheduled( "catora_service_visibility_sync" ) ) { exit( 1 ); }'
       - name: Upload PHP 7.4 runtime evidence
         if: always()
         uses: actions/upload-artifact@v4
