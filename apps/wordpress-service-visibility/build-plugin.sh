@@ -12,6 +12,7 @@ cp "$root/catora-service-visibility.php" "$plugin_dir/"
 cp "$root/uninstall.php" "$plugin_dir/"
 cp "$root/readme.txt" "$plugin_dir/"
 cp "$root/README.md" "$plugin_dir/"
+cp "$root/includes/php-compatibility.php" "$plugin_dir/includes/"
 cp "$root/includes/class-catora-service-visibility.php" "$plugin_dir/includes/"
 rm -f "$out"
 (
