@@ -21,12 +21,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Recover and apply the reviewed patch
         shell: bash
         run: |
           set -euo pipefail
-          git show HEAD^:.github/workflows/apply-service-visibility-plugin-boundaries.yml > /tmp/plugin-boundary-workflow.yml
+          git fetch --no-tags origin 7eedbc0ecfa2435390cb2a725e5c1a37c53dc919
+          git show 7eedbc0ecfa2435390cb2a725e5c1a37c53dc919:.github/workflows/apply-service-visibility-plugin-boundaries.yml > /tmp/plugin-boundary-workflow.yml
           sed -n "/python - <<'PY'/,/^          PY$/p" /tmp/plugin-boundary-workflow.yml \
             | sed '1d;$d;s/^          //' > /tmp/apply-plugin-boundaries.py
           test -s /tmp/apply-plugin-boundaries.py
