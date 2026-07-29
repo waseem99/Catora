@@ -45,8 +45,19 @@ export function ServiceVisibilityConsole({ workspaceId }: Props) {
   }, [workspaceId]);
 
   useEffect(() => {
-    void refresh().catch(() => undefined);
-  }, [refresh]);
+    let cancelled = false;
+    void Promise.all([
+      listServiceVisibilitySources(workspaceId),
+      listServiceVisibilityRuns(workspaceId),
+    ]).then(([nextSources, nextRuns]) => {
+      if (cancelled) return;
+      setSources(nextSources);
+      setRuns(nextRuns);
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!runs.some((run) => ["queued", "running"].includes(run.status))) return;
