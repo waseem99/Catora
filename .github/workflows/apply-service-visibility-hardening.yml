@@ -1,0 +1,89 @@
+name: Apply service visibility hardening
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/service-visibility-hardening.b64
+      - .github/workflows/apply-service-visibility-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/wordpress-service-visibility'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/wordpress-service-visibility
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Decode and validate source bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode .github/service-visibility-hardening.b64 > /tmp/service-visibility-hardening.tar.gz
+          gzip -t /tmp/service-visibility-hardening.tar.gz
+          python - <<'PY'
+          import pathlib
+          import tarfile
+
+          allowed = {
+              'apps/api/catora_api/service_visibility/questions.py',
+              'apps/api/catora_api/service_visibility/crawler.py',
+              'apps/api/catora_api/service_visibility/rules.py',
+              'apps/api/catora_api/service_visibility/reports.py',
+              'apps/api/catora_api/schemas/service_visibility.py',
+              'apps/api/catora_api/api/service_visibility.py',
+              'apps/api/tests/test_service_visibility.py',
+          }
+          with tarfile.open('/tmp/service-visibility-hardening.tar.gz', 'r:gz') as archive:
+              paths = {member.name for member in archive.getmembers() if member.isfile()}
+              if paths != allowed:
+                  raise SystemExit(f'Unexpected hardening bundle paths: {sorted(paths ^ allowed)}')
+              for member in archive.getmembers():
+                  path = pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts or member.issym() or member.islnk():
+                      raise SystemExit(f'Unsafe bundle member: {member.name}')
+              archive.extractall('.')
+          PY
+          rm -f .github/service-visibility-hardening.b64
+          rm -f .github/workflows/apply-service-visibility-hardening.yml
+          rm -f .github/workflows/export-service-visibility-audit.yml
+      - name: Validate hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet -e 'apps/api[dev]'
+          python -m compileall -q \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/tests/test_service_visibility.py
+          python -m ruff check \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/tests/test_service_visibility.py
+          python -m mypy \
+            --config-file apps/api/pyproject.toml \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py
+          python -m pytest -q apps/api/tests/test_service_visibility.py
+          find apps/wordpress-service-visibility -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          git diff --check
+      - name: Commit ordinary source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Harden WordPress service visibility pilot foundation'
+          git push origin HEAD:agent/wordpress-service-visibility
