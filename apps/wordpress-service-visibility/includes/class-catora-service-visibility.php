@@ -18,9 +18,7 @@ final class Catora_Service_Visibility {
 	}
 
 	public static function activate(): void {
-		if ( ! wp_next_scheduled( self::CRON_HOOK ) ) {
-			wp_schedule_event( time() + 300, 'daily', self::CRON_HOOK );
-		}
+		wp_clear_scheduled_hook( self::CRON_HOOK );
 	}
 
 	public static function deactivate(): void {
@@ -30,8 +28,9 @@ final class Catora_Service_Visibility {
 	private function __construct() {
 		add_action( 'admin_menu', array( $this, 'admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_init', array( $this, 'reconcile_schedule' ), 20 );
 		add_action( 'admin_post_catora_service_visibility_sync', array( $this, 'manual_sync' ) );
-		add_action( self::CRON_HOOK, array( $this, 'sync' ) );
+		add_action( self::CRON_HOOK, array( $this, 'scheduled_sync' ) );
 	}
 
 	public function register_settings(): void {
@@ -56,10 +55,11 @@ final class Catora_Service_Visibility {
 		$source_id = isset( $input['source_id'] ) ? sanitize_text_field( (string) $input['source_id'] ) : '';
 		$token = isset( $input['token'] ) ? sanitize_text_field( (string) $input['token'] ) : '';
 		return array(
-			'endpoint'      => untrailingslashit( $endpoint ),
-			'source_id'     => $source_id,
-			'token'         => $token,
-			'enable_drafts' => ! empty( $input['enable_drafts'] ),
+			'endpoint'              => untrailingslashit( $endpoint ),
+			'source_id'             => $source_id,
+			'token'                 => $token,
+			'enable_scheduled_sync' => ! empty( $input['enable_scheduled_sync'] ),
+			'enable_drafts'         => ! empty( $input['enable_drafts'] ),
 		);
 	}
 
@@ -89,6 +89,7 @@ final class Catora_Service_Visibility {
 					<tr><th scope="row"><label for="catora-endpoint">Catora endpoint</label></th><td><input class="regular-text" id="catora-endpoint" name="<?php echo esc_attr( self::OPTION ); ?>[endpoint]" type="url" required value="<?php echo esc_attr( (string) ( $settings['endpoint'] ?? '' ) ); ?>"></td></tr>
 					<tr><th scope="row"><label for="catora-source">Source ID</label></th><td><input class="regular-text" id="catora-source" name="<?php echo esc_attr( self::OPTION ); ?>[source_id]" required value="<?php echo esc_attr( (string) ( $settings['source_id'] ?? '' ) ); ?>"></td></tr>
 					<tr><th scope="row"><label for="catora-token">Site token</label></th><td><input class="regular-text" id="catora-token" name="<?php echo esc_attr( self::OPTION ); ?>[token]" type="password" autocomplete="new-password" required value="<?php echo esc_attr( (string) ( $settings['token'] ?? '' ) ); ?>"><p class="description">Use the one-time token provided by the Catora workspace operator. Rotate it from Catora if exposed.</p></td></tr>
+					<tr><th scope="row">Scheduled snapshots</th><td><label><input name="<?php echo esc_attr( self::OPTION ); ?>[enable_scheduled_sync]" type="checkbox" value="1" <?php checked( ! empty( $settings['enable_scheduled_sync'] ) ); ?>> Run one read-only snapshot daily</label><p class="description">Disabled by default. Enable only after the site owner and Catora operator approve recurring monitoring.</p></td></tr>
 					<tr><th scope="row">Approved drafts</th><td><label><input name="<?php echo esc_attr( self::OPTION ); ?>[enable_drafts]" type="checkbox" value="1" <?php checked( ! empty( $settings['enable_drafts'] ) ); ?>> Create unpublished draft copies for proposals explicitly approved in Catora</label></td></tr>
 				</table>
 				<?php submit_button( 'Save connection' ); ?>
@@ -116,6 +117,24 @@ final class Catora_Service_Visibility {
 		$this->sync();
 		wp_safe_redirect( admin_url( 'options-general.php?page=catora-service-visibility' ) );
 		exit;
+	}
+
+	public function reconcile_schedule(): void {
+		$enabled = ! empty( $this->settings()['enable_scheduled_sync'] );
+		$scheduled = wp_next_scheduled( self::CRON_HOOK );
+		if ( $enabled && false === $scheduled ) {
+			wp_schedule_event( time() + 300, 'daily', self::CRON_HOOK );
+		} elseif ( ! $enabled && false !== $scheduled ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+		}
+	}
+
+	public function scheduled_sync(): void {
+		if ( empty( $this->settings()['enable_scheduled_sync'] ) ) {
+			wp_clear_scheduled_hook( self::CRON_HOOK );
+			return;
+		}
+		$this->sync();
 	}
 
 	public function sync(): void {
@@ -249,6 +268,27 @@ final class Catora_Service_Visibility {
 	 * @param array<string, mixed> $draft Draft payload.
 	 */
 	private function apply_draft( array $draft ): void {
+		$proposal_id = sanitize_text_field( (string) $draft['id'] );
+		$existing = get_posts(
+			array(
+				'post_type'      => 'any',
+				'post_status'    => 'draft',
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+				'meta_key'       => '_catora_proposal_id',
+				'meta_value'     => $proposal_id,
+			)
+		);
+		if ( ! empty( $existing ) ) {
+			$this->request(
+				'POST',
+				$this->path( '/drafts/' . rawurlencode( $proposal_id ) . '/result' ),
+				array( 'status' => 'applied', 'remote_draft_id' => (int) $existing[0] ),
+				'draft-result:' . $proposal_id
+			);
+			return;
+		}
+
 		$post = get_post( (int) $draft['wordpress_post_id'] );
 		$result = array( 'status' => 'failed', 'error' => 'Original post is unavailable.' );
 		if ( $post instanceof WP_Post ) {
@@ -273,7 +313,7 @@ final class Catora_Service_Visibility {
 					$result = array( 'status' => 'failed', 'error' => $draft_id->get_error_message() );
 				} else {
 					update_post_meta( $draft_id, '_catora_source_post_id', $post->ID );
-					update_post_meta( $draft_id, '_catora_proposal_id', sanitize_text_field( (string) $draft['id'] ) );
+					update_post_meta( $draft_id, '_catora_proposal_id', $proposal_id );
 					update_post_meta( $draft_id, '_catora_proposed_meta_title', sanitize_text_field( (string) ( $proposal['meta_title'] ?? '' ) ) );
 					update_post_meta( $draft_id, '_catora_proposed_meta_description', sanitize_textarea_field( (string) ( $proposal['meta_description'] ?? '' ) ) );
 					update_post_meta( $draft_id, '_catora_proposed_structured_data', wp_json_encode( $proposal['structured_data'] ?? null ) );
@@ -285,7 +325,7 @@ final class Catora_Service_Visibility {
 				}
 			}
 		}
-		$this->request( 'POST', $this->path( '/drafts/' . rawurlencode( (string) $draft['id'] ) . '/result' ), $result, 'draft-result:' . (string) $draft['id'] );
+		$this->request( 'POST', $this->path( '/drafts/' . rawurlencode( $proposal_id ) . '/result' ), $result, 'draft-result:' . $proposal_id );
 	}
 
 	private function path( string $suffix ): string {
