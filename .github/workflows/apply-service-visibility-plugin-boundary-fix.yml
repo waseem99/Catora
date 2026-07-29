@@ -1,26 +1,22 @@
 name: Apply service visibility plugin boundary fix
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-    types:
-      - synchronize
     paths:
-      - .github/workflows/apply-service-visibility-plugin-boundaries.yml
+      - .github/service-visibility-plugin-boundary-trigger
 
 permissions:
   contents: write
-  pull-requests: read
 
 jobs:
   apply:
-    if: github.event.pull_request.head.ref == 'agent/wordpress-service-visibility-rebuild'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: agent/wordpress-service-visibility-rebuild
           fetch-depth: 0
       - name: Recover and apply the reviewed patch
         shell: bash
