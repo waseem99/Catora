@@ -8,14 +8,25 @@ import uuid
 
 import pptx
 import pytest
+from pydantic import ValidationError
 
-from catora_api.schemas.service_visibility import ServicePageSnapshot
+from catora_api.schemas.service_visibility import (
+    SERVICE_VISIBILITY_PROTOCOL_VERSION,
+    ServiceVisibilityBridgeBatch,
+    ServiceVisibilitySourceCreateRequest,
+)
 from catora_api.service_visibility.classification import classify_page
+from catora_api.service_visibility.crawler import _xml_locations
 from catora_api.service_visibility.engine import build_scorecard
 from catora_api.service_visibility.extraction import extract_page
-from catora_api.service_visibility.questions import build_default_questions
+from catora_api.service_visibility.questions import (
+    QuestionDefinition,
+    build_default_questions,
+    evaluate_questions,
+)
 from catora_api.service_visibility.reports import executive_pptx, findings_csv
 from catora_api.service_visibility.security import issue_token, verify_signed_body
+
 
 HTML = """
 <html>
@@ -40,8 +51,8 @@ HTML = """
 """
 
 
-def page() -> ServicePageSnapshot:
-    return extract_page("https://example.com/services/cloud", HTML)
+def page(html: str = HTML, *, url: str = "https://example.com/services/cloud"):
+    return extract_page(url, html)
 
 
 def test_extracts_and_classifies_service_page() -> None:
@@ -49,6 +60,24 @@ def test_extracts_and_classifies_service_page() -> None:
     assert snapshot.h1 == "Cloud Consulting Services"
     assert classify_page(snapshot).page_type == "service"
     assert str(snapshot.internal_links[0]) == "https://example.com/case-studies/acme"
+
+
+def test_source_requires_authorized_https_domain() -> None:
+    with pytest.raises(ValidationError, match="HTTPS"):
+        ServiceVisibilitySourceCreateRequest.model_validate(
+            {
+                "name": "Example",
+                "startUrl": "http://example.com",
+                "connectionMode": "zero_install",
+                "authorizedDomainConfirmed": True,
+            }
+        )
+
+
+def test_sitemap_parser_rejects_dtd_and_entities() -> None:
+    malicious = b'<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><urlset></urlset>'
+    with pytest.raises(ValueError, match="declarations"):
+        _xml_locations(malicious)
 
 
 def test_default_suite_has_25_deterministic_questions() -> None:
@@ -71,6 +100,35 @@ def test_default_suite_has_25_deterministic_questions() -> None:
     }
 
 
+def test_question_evaluation_supports_partial_and_conflicting_states() -> None:
+    question = QuestionDefinition(
+        position=1,
+        question="How is support delivered?",
+        question_type="support",
+        entity_key=None,
+        required_terms=(("support",), ("monitoring",)),
+        question_hash="a" * 64,
+    )
+    partial_page = page(
+        HTML.replace(
+            "Our process starts with discovery",
+            "Our support team starts with discovery",
+        )
+    )
+    partial = evaluate_questions([partial_page], [question])[0]
+    assert partial.coverage_state == "partially_supported"
+
+    conflict_page = page(
+        HTML.replace(
+            "Book a consultation to get started.",
+            "Monitoring support is included. Monitoring support is not available after delivery.",
+        )
+    )
+    conflict = evaluate_questions([conflict_page], [question])[0]
+    assert conflict.coverage_state == "conflicting"
+    assert conflict.conflicting_evidence
+
+
 def test_scorecard_has_evidence_backed_findings_and_questions() -> None:
     scorecard = build_scorecard(uuid.uuid4(), uuid.uuid4(), [page()])
     assert scorecard.page_count == 1
@@ -87,6 +145,23 @@ def test_reports_are_valid_editable_pptx_and_csv() -> None:
     presentation = pptx.Presentation(io.BytesIO(executive_pptx(scorecard)))
     assert len(presentation.slides) == 4
     assert "Catora Service Visibility Audit" in presentation.slides[0].shapes[0].text
+
+
+def test_bridge_batch_rejects_duplicate_canonicals() -> None:
+    snapshot = page()
+    with pytest.raises(ValidationError, match="repeat a canonical"):
+        ServiceVisibilityBridgeBatch.model_validate(
+            {
+                "protocolVersion": SERVICE_VISIBILITY_PROTOCOL_VERSION,
+                "snapshotId": str(uuid.uuid4()),
+                "sequence": 0,
+                "complete": True,
+                "pages": [
+                    snapshot.model_dump(mode="json", by_alias=True),
+                    snapshot.model_dump(mode="json", by_alias=True),
+                ],
+            }
+        )
 
 
 def test_signed_bridge_body_accepts_current_signature_and_rejects_changes() -> None:
