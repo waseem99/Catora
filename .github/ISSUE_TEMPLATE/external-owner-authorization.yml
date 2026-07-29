@@ -1,0 +1,80 @@
+name: External owner authorization record
+description: Record a non-sensitive completion reference for an authorized domain, store, deployment, or pilot.
+title: "Owner authorization: "
+labels: ["authorization"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not enter credentials, identity documents, contracts, customer data, private URLs, or other confidential evidence here. Store evidence in the approved private system and include only a non-sensitive reference.
+  - type: dropdown
+    id: system_type
+    attributes:
+      label: System type
+      options:
+        - WordPress site
+        - Shopify store or partner app
+        - Hosted deployment
+        - Customer workspace
+        - Commercial pilot
+        - Other external system
+    validations:
+      required: true
+  - type: input
+    id: system_reference
+    attributes:
+      label: Non-sensitive system reference
+      description: Use a public domain/store name or an approved internal reference.
+    validations:
+      required: true
+  - type: input
+    id: representative_role
+    attributes:
+      label: Representative role
+      description: State the role or authority category; omit private personal details.
+    validations:
+      required: true
+  - type: textarea
+    id: authority_basis
+    attributes:
+      label: Authority basis
+      description: Explain why the representative is authorized to approve this system and scope.
+    validations:
+      required: true
+  - type: textarea
+    id: approved_scope
+    attributes:
+      label: Approved scope
+      description: State permitted read, analysis, installation, draft, write, monitoring, or publication actions.
+    validations:
+      required: true
+  - type: input
+    id: evidence_reference
+    attributes:
+      label: Private evidence reference
+      description: Give only the approved record identifier or private evidence location label.
+    validations:
+      required: true
+  - type: input
+    id: authorization_date
+    attributes:
+      label: Authorization date
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: textarea
+    id: restrictions
+    attributes:
+      label: Restrictions, expiry, and revocation process
+      description: Record limits, expiry, and how authorization can be revoked.
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: I confirm that confidential evidence is not included in this public issue.
+          required: true
+        - label: I confirm that the representative authorized the stated system and scope.
+          required: true
