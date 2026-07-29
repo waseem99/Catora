@@ -4,6 +4,12 @@ foreach ( get_posts( array( 'post_type' => array( 'post', 'page' ), 'post_status
 	wp_delete_post( $existing->ID, true );
 }
 
+$admin = get_user_by( 'login', 'admin' );
+if ( ! $admin instanceof WP_User ) {
+	fwrite( STDERR, 'The runtime administrator is unavailable.' . PHP_EOL );
+	exit( 1 );
+}
+
 for ( $index = 0; $index < 55; $index++ ) {
 	$schema = 0 === $index
 		? '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"Runtime Service"}</script>'
@@ -12,6 +18,7 @@ for ( $index = 0; $index < 55; $index++ ) {
 		array(
 			'post_type'    => 0 === $index % 2 ? 'page' : 'post',
 			'post_status'  => 'publish',
+			'post_author'  => $admin->ID,
 			'post_title'   => 'Runtime Service ' . $index,
 			'post_content' => '<h1>Runtime Service ' . $index . '</h1><h2>Evidence</h2><p>Public service evidence for runtime record ' . $index . '.</p><a href="https://wp.example.test/contact">Contact</a>' . $schema,
 			'post_excerpt' => 'Runtime service description ' . $index,
