@@ -1,0 +1,15 @@
+# Repository and release authority defaults to the verified GitHub owner representative.
+* @waseem99
+
+# Governance and security policy changes require the owner representative.
+/.github/ @waseem99
+/SECURITY.md @waseem99
+/SUPPORT.md @waseem99
+/docs/governance/ @waseem99
+/scripts/validate_repository_governance.py @waseem99
+
+# Release-bearing integration surfaces.
+/apps/wordpress-service-visibility/ @waseem99
+/apps/shopify/ @waseem99
+/apps/api/ @waseem99
+/apps/web/ @waseem99
