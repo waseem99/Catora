@@ -162,6 +162,10 @@ jobs:
               --network catora-wordpress-runtime \
               --add-host=host.docker.internal:host-gateway \
               --volumes-from catora-wordpress \
+              -e WORDPRESS_DB_HOST=catora-wordpress-db \
+              -e WORDPRESS_DB_USER=wordpress \
+              -e WORDPRESS_DB_PASSWORD=wordpress \
+              -e WORDPRESS_DB_NAME=wordpress \
               -v "$PWD/artifacts/service-visibility:/artifacts:ro" \
               -v "$PWD/apps/wordpress-service-visibility/tests:/runtime-tests:ro" \
               --user 33:33 \
