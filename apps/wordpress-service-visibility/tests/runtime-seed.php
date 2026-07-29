@@ -33,6 +33,17 @@ for ( $index = 0; $index < 55; $index++ ) {
 		update_post_meta( $post_id, '_yoast_wpseo_metadesc', 'Runtime Yoast description' );
 		update_post_meta( $post_id, '_yoast_wpseo_canonical', 'https://wp.example.test/canonical/runtime-service' );
 		update_post_meta( $post_id, '_yoast_wpseo_meta-robots-noindex', '1' );
+		update_post_meta(
+			$post_id,
+			'rank_math_schema_catora_runtime',
+			wp_json_encode(
+				array(
+					'@context' => 'https://schema.org',
+					'@type'    => 'Service',
+					'name'     => 'Runtime Service',
+				)
+			)
+		);
 	}
 }
 
