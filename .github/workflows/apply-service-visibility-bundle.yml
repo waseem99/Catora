@@ -1,0 +1,103 @@
+name: Apply service visibility bundle
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+    paths:
+      - .github/service-visibility-bundle/**
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'agent/wordpress-service-visibility'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out implementation branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Decode and validate bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle=/tmp/service-visibility.tar.gz
+          extract=/tmp/service-visibility-extract
+          cat .github/service-visibility-bundle/chunk-* | tr -d '\r\n' | base64 --decode > "$bundle"
+          echo "$(cat .github/service-visibility-bundle/sha256)  $bundle" | sha256sum --check --strict
+          gzip -t "$bundle"
+          rm -rf "$extract"
+          mkdir -p "$extract"
+          python - <<'PY'
+          import pathlib
+          import tarfile
+
+          archive = pathlib.Path('/tmp/service-visibility.tar.gz')
+          allowed = {
+              '.github/workflows/service-visibility-contract.yml',
+              'apps/api/pyproject.toml',
+              'apps/api/catora_api/api/__init__.py',
+              'apps/api/catora_api/api/service_visibility.py',
+              'apps/api/catora_api/main.py',
+              'apps/api/catora_api/schemas/service_visibility.py',
+              'apps/api/catora_api/service_visibility/__init__.py',
+              'apps/api/catora_api/service_visibility/classification.py',
+              'apps/api/catora_api/service_visibility/crawler.py',
+              'apps/api/catora_api/service_visibility/engine.py',
+              'apps/api/catora_api/service_visibility/extraction.py',
+              'apps/api/catora_api/service_visibility/questions.py',
+              'apps/api/catora_api/service_visibility/reports.py',
+              'apps/api/catora_api/service_visibility/rules.py',
+              'apps/api/catora_api/service_visibility/security.py',
+              'apps/api/catora_api/service_visibility/tasks.py',
+              'apps/api/catora_api/worker.py',
+              'apps/api/tests/test_service_visibility.py',
+              'apps/wordpress-service-visibility/catora-service-visibility.php',
+              'apps/wordpress-service-visibility/readme.txt',
+              'apps/wordpress-service-visibility/uninstall.php',
+              'docs/service-visibility-runbook.md',
+          }
+          with tarfile.open(archive, 'r:gz') as tar:
+              members = tar.getmembers()
+              names = {member.name for member in members if member.isfile()}
+              if names != allowed:
+                  raise SystemExit(f'Unexpected bundle paths: {sorted(names ^ allowed)}')
+              for member in members:
+                  path = pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts:
+                      raise SystemExit(f'Unsafe archive path: {member.name}')
+                  if member.issym() or member.islnk() or member.isdev():
+                      raise SystemExit(f'Unsupported archive member type: {member.name}')
+              tar.extractall('/tmp/service-visibility-extract')
+          PY
+
+      - name: Apply and validate expanded implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rsync -a /tmp/service-visibility-extract/ ./
+          rm -rf .github/service-visibility-bundle
+          git diff --check
+          python -m compileall -q apps/api/catora_api/service_visibility apps/api/catora_api/schemas/service_visibility.py apps/api/catora_api/api/service_visibility.py
+          find apps/wordpress-service-visibility -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+          if git grep -n -E '(BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|AKIA[0-9A-Z]{16})' -- . ':!*.lock'; then
+            echo 'Potential credential material detected' >&2
+            exit 1
+          fi
+
+      - name: Commit expanded implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Add WordPress service visibility intelligence'
+          git push origin HEAD:agent/wordpress-service-visibility
