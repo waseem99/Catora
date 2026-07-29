@@ -18,7 +18,7 @@ const source = {
   connection_mode: "wordpress_bridge" as const,
   status: "ready",
   monitoring_enabled: false,
-  token_fingerprint: "abc123def456",
+  token_fingerprint: "test-fingerprint",
   created_at: "2026-07-29T06:00:00Z",
   updated_at: "2026-07-29T06:00:00Z",
 };
