@@ -8,4 +8,4 @@ jobs:
     if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo noop
+      - run: echo retry
