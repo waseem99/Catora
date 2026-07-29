@@ -562,6 +562,7 @@ def _drafts(source: CatalogSource) -> list[dict[str, object]]:
 
 
 def _draft_view(source: CatalogSource, draft: dict[str, object]) -> DraftProposalView:
+    remote_draft_id = draft.get("remote_draft_id")
     return DraftProposalView(
         id=uuid.UUID(str(draft["id"])),
         source_id=source.id,
@@ -572,7 +573,11 @@ def _draft_view(source: CatalogSource, draft: dict[str, object]) -> DraftProposa
         base_revision=str(draft.get("base_revision") or ""),
         proposal=_dict_value(draft.get("proposal")),
         approved_at=datetime.fromisoformat(str(draft["approved_at"])) if draft.get("approved_at") else None,
-        remote_draft_id=int(draft["remote_draft_id"]) if isinstance(draft.get("remote_draft_id"), int) else None,
+        remote_draft_id=(
+    remote_draft_id
+    if isinstance(remote_draft_id, int) and not isinstance(remote_draft_id, bool)
+    else None
+),
         error=str(draft["error"]) if draft.get("error") else None,
     )
 
