@@ -146,6 +146,7 @@ async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePa
     robots_url = urljoin(start_url, "/robots.txt")
     robots.set_url(robots_url)
     robots_text = ""
+    robots_loaded = False
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(20.0),
         follow_redirects=False,
@@ -157,10 +158,9 @@ async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePa
             if response.status_code == 200:
                 robots_text = response.content.decode("utf-8", errors="replace")
                 robots.parse(robots_text.splitlines())
-            else:
-                robots.allow_all = True
+                robots_loaded = True
         except ValueError:
-            robots.allow_all = True
+            pass
         queue.extend(
             await _discover_sitemap_pages(
                 client,
@@ -175,7 +175,7 @@ async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePa
             if url in seen or not _same_host(url, host):
                 continue
             seen.add(url)
-            if not robots.can_fetch(_USER_AGENT, url):
+            if robots_loaded and not robots.can_fetch(_USER_AGENT, url):
                 continue
             try:
                 response = await _fetch_limited(client, url=url, host=host)
