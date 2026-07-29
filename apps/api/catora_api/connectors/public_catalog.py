@@ -222,6 +222,7 @@ class PublicCatalogConnector(CatalogConnector):
                     valid=False,
                     errors=("Discovered URLs are blocked by robots.txt",),
                 )
+            fields: tuple[str, ...]
             if self.source_type == "wordpress":
                 fields = (
                     "url",
@@ -283,7 +284,11 @@ class PublicCatalogConnector(CatalogConnector):
                     rejections.append(
                         ConnectorRejection(
                             index + 1,
-                            "No service-page evidence found" if self.source_type == "wordpress" else "No product evidence found",
+                            (
+                                "No service-page evidence found"
+                                if self.source_type == "wordpress"
+                                else "No product evidence found"
+                            ),
                             {"url": url},
                         )
                     )
@@ -650,7 +655,10 @@ class PublicCatalogConnector(CatalogConnector):
                 candidate = self._normalize_url(urljoin(source_url, href))
             except PublicCatalogConnectorError:
                 continue
-            if urlparse(candidate).hostname == self._allowed_host and candidate not in normalized_links:
+            if (
+                urlparse(candidate).hostname == self._allowed_host
+                and candidate not in normalized_links
+            ):
                 normalized_links.append(candidate)
             if len(normalized_links) >= 2000:
                 break
@@ -663,12 +671,20 @@ class PublicCatalogConnector(CatalogConnector):
                 value.startswith(("page-id-", "postid-", "wp-", "elementor-"))
                 for value in body_classes
             ),
-            "builder": "elementor" if any("elementor" in value for value in body_classes) else "gutenberg",
+            "builder": (
+                "elementor"
+                if any("elementor" in value for value in body_classes)
+                else "gutenberg"
+            ),
             "seo_plugin": (
                 "yoast"
                 if any("yoast" in block.casefold() for block in parser.json_ld_blocks)
                 else "rank_math"
-                if any("rank math" in block.casefold() or "rankmath" in block.casefold() for block in parser.json_ld_blocks)
+                if any(
+                    "rank math" in block.casefold()
+                    or "rankmath" in block.casefold()
+                    for block in parser.json_ld_blocks
+                )
                 else None
             ),
         }
@@ -677,7 +693,11 @@ class PublicCatalogConnector(CatalogConnector):
             "source_url": source_url,
             "canonical_url": canonical,
             "title": title[:500],
-            "meta_description": (parser.meta.get("description") or parser.meta.get("og:description") or "")[:1000],
+            "meta_description": (
+                parser.meta.get("description")
+                or parser.meta.get("og:description")
+                or ""
+            )[:1000],
             "robots": parser.meta.get("robots", "")[:200],
             "headings": parser.headings,
             "links": normalized_links,

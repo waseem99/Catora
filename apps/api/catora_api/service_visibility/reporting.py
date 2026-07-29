@@ -16,7 +16,7 @@ from catora_api.demo.pptx import (
     Slide,
     _slide_xml,
 )
-from catora_api.service_visibility.models import ServiceVisibilityReport
+from catora_api.service_visibility.models import ServiceFinding, ServiceVisibilityReport
 
 
 def build_findings_csv(report: ServiceVisibilityReport) -> str:
@@ -96,7 +96,7 @@ def build_content_brief_markdown(report: ServiceVisibilityReport) -> str:
     lines.extend(f"- {item}" for item in report.executive_summary)
     lines.extend(["", "## Priority page briefs", ""])
     priority = [finding for finding in report.findings if finding.severity in {"critical", "high"}]
-    grouped: dict[str, list[object]] = {}
+    grouped: dict[str, list[ServiceFinding]] = {}
     for finding in priority:
         grouped.setdefault(finding.page_url or "Site-wide", []).append(finding)
     for page_url, findings in list(grouped.items())[:20]:

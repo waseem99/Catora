@@ -14,11 +14,16 @@ import pytest
 from starlette.requests import Request
 
 from catora_api.config import Settings
-from catora_api.connectors.public_catalog import PublicCatalogConnector, PublicCatalogConnectorConfig
+from catora_api.connectors.public_catalog import (
+    PublicCatalogConnector,
+    PublicCatalogConnectorConfig,
+)
 from catora_api.connectors.wordpress import WordPressSnapshotConnector
 from catora_api.db.models.catalog import CatalogSource
-from catora_api.schemas.service_visibility import WordPressSnapshotBatch
-from catora_api.service_visibility.analysis import QUESTION_TEMPLATES, analyze_service_site
+from catora_api.service_visibility.analysis import (
+    QUESTION_TEMPLATES,
+    analyze_service_site,
+)
 from catora_api.service_visibility.security import ServiceVisibilityAuthenticator
 
 PUBLIC_IP = "93.184.216.34"
@@ -65,7 +70,8 @@ async def test_wordpress_public_connector_retains_service_page_evidence() -> Non
             return httpx.Response(
                 200,
                 text=(
-                    '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                    '<?xml version="1.0"?>'
+                    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
                     "<url><loc>https://example.com/services/cloud-migration</loc></url></urlset>"
                 ),
                 headers={"content-type": "application/xml"},

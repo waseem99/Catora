@@ -122,7 +122,13 @@ class ServiceVisibilityReport(ServiceVisibilityModel):
     executive_summary: list[str]
     disclaimers: list[str] = Field(
         default_factory=lambda: [
-            "Catora does not guarantee rankings, traffic, leads, revenue, AI citations, or rich results.",
-            "Generated recommendations are evidence-backed proposals and require human review before publication.",
+            (
+                "Catora does not guarantee rankings, traffic, leads, revenue, "
+                "AI citations, or rich results."
+            ),
+            (
+                "Generated recommendations are evidence-backed proposals and require "
+                "human review before publication."
+            ),
         ]
     )

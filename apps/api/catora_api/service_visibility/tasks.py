@@ -122,7 +122,10 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
         ingestion_job = await session.get(IngestionJob, ingestion_job_id)
         if source is None or ingestion_job is None:
             report_job.status = "failed"
-            report_job.input_snapshot = {**snapshot, "error": "Source or ingestion job is unavailable"}
+            report_job.input_snapshot = {
+                **snapshot,
+                "error": "Source or ingestion job is unavailable",
+            }
             await session.commit()
             return
         report_job.status = "running"
@@ -218,7 +221,10 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
                     report_id=report_job.id,
                     artifact_type="service_visibility_pptx",
                     suffix="service-visibility-assessment.pptx",
-                    content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                    content_type=(
+                        "application/vnd.openxmlformats-officedocument."
+                        "presentationml.presentation"
+                    ),
                     content=build_report_pptx(report),
                 ),
             }
@@ -284,7 +290,10 @@ def monitor_service_visibility() -> None:
 
 async def _monitor_service_visibility() -> None:
     settings = get_settings()
-    if not settings.service_visibility_enabled or not settings.service_visibility_monitoring_enabled:
+    if (
+        not settings.service_visibility_enabled
+        or not settings.service_visibility_monitoring_enabled
+    ):
         return
     async with SessionFactory() as session:
         sources = list(

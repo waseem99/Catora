@@ -43,11 +43,29 @@ from catora_api.schemas.service_visibility import (
     WordPressSnapshotStatus,
 )
 from catora_api.service_visibility.security import ServiceVisibilityAuthenticator
-from catora_api.service_visibility.tasks import REPORT_TYPE, TEMPLATE_VERSION, run_service_visibility
+from catora_api.service_visibility.tasks import (
+    REPORT_TYPE,
+    TEMPLATE_VERSION,
+    run_service_visibility,
+)
 from catora_api.storage import ObjectStorage
 
 router = APIRouter(prefix="/api/v1", tags=["service visibility"])
 _ACTIVE_STATUSES = {"queued", "running"}
+
+
+def _dict_value(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: item for key, item in value.items() if isinstance(key, str)}
+
+
+def _int_value(value: object) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _list_value(value: object) -> list[object]:
+    return [item for item in value] if isinstance(value, list) else []
 
 
 def get_object_storage(settings: SettingsDependency) -> ObjectStorage:
@@ -113,13 +131,13 @@ def _run_view(report: ReportJob) -> ServiceVisibilityRunView:
         status=report.status,
         scorecard={
             key: value
-            for key, value in dict(snapshot.get("scorecard") or {}).items()
-            if isinstance(value, int)
+            for key, value in _dict_value(snapshot.get("scorecard")).items()
+            if isinstance(value, int) and not isinstance(value, bool)
         },
-        page_count=int(snapshot.get("page_count") or 0),
-        finding_count=int(snapshot.get("finding_count") or 0),
-        question_count=int(snapshot.get("question_count") or 0),
-        continuity=dict(snapshot.get("continuity") or {}),
+        page_count=_int_value(snapshot.get("page_count")),
+        finding_count=_int_value(snapshot.get("finding_count")),
+        question_count=_int_value(snapshot.get("question_count")),
+        continuity=_dict_value(snapshot.get("continuity")),
         artifacts=sorted(artifacts.keys()) if isinstance(artifacts, dict) else [],
         error=str(snapshot.get("error")) if snapshot.get("error") else None,
         created_at=report.created_at,
@@ -550,9 +568,9 @@ def _draft_view(source: CatalogSource, draft: dict[str, object]) -> DraftProposa
         report_id=uuid.UUID(str(draft["report_id"])),
         status=str(draft.get("status") or "pending"),
         page_url=str(draft.get("page_url") or ""),
-        wordpress_post_id=int(draft.get("wordpress_post_id") or 0),
+        wordpress_post_id=_int_value(draft.get("wordpress_post_id")),
         base_revision=str(draft.get("base_revision") or ""),
-        proposal=dict(draft.get("proposal") or {}),
+        proposal=_dict_value(draft.get("proposal")),
         approved_at=datetime.fromisoformat(str(draft["approved_at"])) if draft.get("approved_at") else None,
         remote_draft_id=int(draft["remote_draft_id"]) if isinstance(draft.get("remote_draft_id"), int) else None,
         error=str(draft["error"]) if draft.get("error") else None,
@@ -798,7 +816,7 @@ async def complete_wordpress_snapshot(
         actor_user_id=None,
         trigger="wordpress_snapshot",
     )
-    refreshed = dict(source.config.get("service_visibility_snapshot") or {})
+    refreshed = _dict_value(source.config.get("service_visibility_snapshot"))
     refreshed["ingestion_job_id"] = str(report.input_snapshot["ingestion_job_id"])
     refreshed["report_id"] = str(report.id)
     source.config = {**dict(source.config), "service_visibility_snapshot": refreshed}
@@ -811,8 +829,8 @@ def _snapshot_status(source: CatalogSource, snapshot: dict[str, object]) -> Word
         source_id=source.id,
         snapshot_id=uuid.UUID(str(snapshot["snapshot_id"])),
         status=str(snapshot.get("status") or "receiving"),
-        accepted_batches=len(snapshot.get("batches") or []),
-        accepted_pages=int(snapshot.get("accepted_page_count") or 0),
+        accepted_batches=len(_list_value(snapshot.get("batches"))),
+        accepted_pages=_int_value(snapshot.get("accepted_page_count")),
         ingestion_job_id=uuid.UUID(str(snapshot["ingestion_job_id"])) if snapshot.get("ingestion_job_id") else None,
         report_id=uuid.UUID(str(snapshot["report_id"])) if snapshot.get("report_id") else None,
     )
