@@ -1,8 +1,8 @@
 === Catora Service Visibility ===
 Contributors: catora
 Requires at least: 6.4
-Requires PHP: 8.1
-Stable tag: 0.2.1
+Requires PHP: 7.4
+Stable tag: 0.2.2
 License: Proprietary
 
 Exports only published public WordPress content to an authorized Catora workspace for evidence-backed SEO, answer-readiness, and AI-discovery audits.
@@ -17,3 +17,7 @@ The authoritative source and publisher record is https://github.com/waseem99/Cat
 * Scheduled snapshots are disabled by default.
 * Interrupted snapshots resume from the last accepted batch.
 * Disconnect by clearing the settings or uninstalling the plugin.
+
+== Compatibility ==
+* PHP 7.4 is supported for controlled legacy pilots.
+* PHP 8.3 or newer is recommended before general production use.

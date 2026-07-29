@@ -1,6 +1,6 @@
 # Catora Service Visibility WordPress bridge
 
-Current release: **0.2.1**.
+Current release: **0.2.2**.
 
 This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, resumable snapshots, connection health, optional scheduled snapshots, and approved draft delivery.
 
@@ -18,6 +18,10 @@ The authoritative source and repository-side publisher record is [`waseem99/Cato
 The token must be supplied through an approved secret channel. Once saved, it is not rendered back into the settings form. Rotate it in Catora if it is exposed.
 
 Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Interrupted uploads retain private temporary batch checkpoints outside the public WordPress web root and resume from the last batch accepted by Catora.
+
+## PHP compatibility
+
+The bridge supports PHP 7.4 so authorized legacy WordPress pilots can install it. PHP 7.4 is end-of-life, so the plugin displays an administrator warning and PHP 8.3 or newer should be used before general production operation. Release validation exercises installation, activation, signed snapshot delivery, forced interruption, resume, metadata extraction, and uninstall cleanup on PHP 7.4 as well as the primary PHP 8.3 runtime.
 
 ## Data boundary
 

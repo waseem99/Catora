@@ -121,8 +121,13 @@ def main() -> int:
     plugin_readme = read("apps/wordpress-service-visibility/readme.txt")
     require(f"Plugin URI: {EXPECTED_REPOSITORY_URL}" in plugin, "WordPress Plugin URI is not canonical")
     require(f"Author URI: {EXPECTED_REPOSITORY_URL}" in plugin, "WordPress Author URI is not canonical")
-    require("Version: 0.2.1" in plugin, "WordPress plugin version must be 0.2.1")
-    require("Stable tag: 0.2.1" in plugin_readme, "WordPress stable tag must be 0.2.1")
+    require("Version: 0.2.2" in plugin, "WordPress plugin version must be 0.2.2")
+    require("Requires PHP: 7.4" in plugin, "WordPress plugin must declare PHP 7.4 support")
+    require("Stable tag: 0.2.2" in plugin_readme, "WordPress stable tag must be 0.2.2")
+    require(
+        "Requires PHP: 7.4" in plugin_readme,
+        "WordPress readme must declare PHP 7.4 support",
+    )
 
     workflow_repository = os.environ.get("GITHUB_REPOSITORY")
     workflow_owner = os.environ.get("GITHUB_REPOSITORY_OWNER")
