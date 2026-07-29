@@ -57,6 +57,12 @@ class ServicePageSnapshot(ServiceVisibilityModel):
     robots: list[str] = Field(default_factory=list, max_length=50)
     content_hash: str = Field(alias="contentHash", min_length=64, max_length=64)
 
+    @model_validator(mode="after")
+    def require_public_https_urls(self) -> Self:
+        if self.url.scheme != "https" or self.canonical_url.scheme != "https":
+            raise ValueError("Service visibility pages must use HTTPS")
+        return self
+
     @field_validator("robots")
     @classmethod
     def normalize_robots(cls, value: list[str]) -> list[str]:
@@ -94,6 +100,8 @@ class ServiceVisibilitySourceCreateRequest(ServiceVisibilityModel):
     def require_authorization(self) -> Self:
         if not self.authorized_domain_confirmed:
             raise ValueError("Exact-domain authorization must be confirmed")
+        if self.start_url.scheme != "https":
+            raise ValueError("Service visibility sources must use HTTPS")
         return self
 
 
@@ -129,6 +137,13 @@ class ServiceVisibilityBridgeBatch(ServiceVisibilityModel):
             raise ValueError("Unsupported service visibility protocol version")
         return value
 
+    @model_validator(mode="after")
+    def reject_duplicate_pages(self) -> Self:
+        canonicals = [str(page.canonical_url).rstrip("/") for page in self.pages]
+        if len(canonicals) != len(set(canonicals)):
+            raise ValueError("Snapshot batches cannot repeat a canonical page")
+        return self
+
 
 class ServiceVisibilityFindingView(ServiceVisibilityModel):
     rule_id: str = Field(alias="ruleId")
@@ -145,7 +160,12 @@ class ServiceVisibilityQuestionView(ServiceVisibilityModel):
     position: int
     question: str
     question_type: str = Field(alias="questionType")
-    coverage_state: str = Field(alias="coverageState")
+    coverage_state: Literal[
+        "supported",
+        "partially_supported",
+        "unsupported",
+        "conflicting",
+    ] = Field(alias="coverageState")
     score_basis_points: int = Field(alias="scoreBasisPoints")
     evidence: list[dict[str, object]] = Field(default_factory=list)
     explanation: str
