@@ -558,7 +558,9 @@ async def download_service_visibility_artifact(
 
 def _drafts(source: CatalogSource) -> list[dict[str, object]]:
     value = source.config.get("draft_queue")
-    return [dict(item) for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+    return (
+        [dict(item) for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+    )
 
 
 def _draft_view(source: CatalogSource, draft: dict[str, object]) -> DraftProposalView:
@@ -572,12 +574,14 @@ def _draft_view(source: CatalogSource, draft: dict[str, object]) -> DraftProposa
         wordpress_post_id=_int_value(draft.get("wordpress_post_id")),
         base_revision=str(draft.get("base_revision") or ""),
         proposal=_dict_value(draft.get("proposal")),
-        approved_at=datetime.fromisoformat(str(draft["approved_at"])) if draft.get("approved_at") else None,
+        approved_at=datetime.fromisoformat(str(draft["approved_at"]))
+        if draft.get("approved_at")
+        else None,
         remote_draft_id=(
-    remote_draft_id
-    if isinstance(remote_draft_id, int) and not isinstance(remote_draft_id, bool)
-    else None
-),
+            remote_draft_id
+            if isinstance(remote_draft_id, int) and not isinstance(remote_draft_id, bool)
+            else None
+        ),
         error=str(draft["error"]) if draft.get("error") else None,
     )
 
@@ -753,7 +757,11 @@ async def upload_wordpress_snapshot_batch(
     if snapshot.get("status") != "receiving":
         raise ConflictError("WordPress snapshot is not accepting batches")
     batches_value = snapshot.get("batches")
-    batches = [dict(item) for item in batches_value if isinstance(item, dict)] if isinstance(batches_value, list) else []
+    batches = (
+        [dict(item) for item in batches_value if isinstance(item, dict)]
+        if isinstance(batches_value, list)
+        else []
+    )
     checksum = hashlib.sha256(body).hexdigest()
     if sequence < len(batches):
         if batches[sequence].get("checksum") != checksum:
@@ -773,7 +781,9 @@ async def upload_wordpress_snapshot_batch(
         }
     )
     snapshot["batches"] = batches
-    snapshot["accepted_page_count"] = int(snapshot.get("accepted_page_count") or 0) + len(batch.records)
+    snapshot["accepted_page_count"] = int(snapshot.get("accepted_page_count") or 0) + len(
+        batch.records
+    )
     source.config = {**dict(source.config), "service_visibility_snapshot": snapshot}
     await session.commit()
     return _snapshot_status(source, snapshot)
@@ -802,7 +812,11 @@ async def complete_wordpress_snapshot(
     snapshot_value = source.config.get("service_visibility_snapshot")
     snapshot = dict(snapshot_value) if isinstance(snapshot_value, dict) else {}
     batches_value = snapshot.get("batches")
-    batches = [item for item in batches_value if isinstance(item, dict)] if isinstance(batches_value, list) else []
+    batches = (
+        [item for item in batches_value if isinstance(item, dict)]
+        if isinstance(batches_value, list)
+        else []
+    )
     if snapshot.get("snapshot_id") != str(snapshot_id):
         raise HTTPException(status_code=404, detail="WordPress snapshot not found")
     if snapshot.get("status") == "complete" and snapshot.get("report_id"):
@@ -836,7 +850,9 @@ def _snapshot_status(source: CatalogSource, snapshot: dict[str, object]) -> Word
         status=str(snapshot.get("status") or "receiving"),
         accepted_batches=len(_list_value(snapshot.get("batches"))),
         accepted_pages=_int_value(snapshot.get("accepted_page_count")),
-        ingestion_job_id=uuid.UUID(str(snapshot["ingestion_job_id"])) if snapshot.get("ingestion_job_id") else None,
+        ingestion_job_id=uuid.UUID(str(snapshot["ingestion_job_id"]))
+        if snapshot.get("ingestion_job_id")
+        else None,
         report_id=uuid.UUID(str(snapshot["report_id"])) if snapshot.get("report_id") else None,
     )
 
@@ -854,9 +870,7 @@ async def get_approved_wordpress_drafts(
     source = await _bridge_source(source_id, session)
     await _authenticated_body(request, source=source, settings=settings)
     return [
-        _draft_view(source, draft)
-        for draft in _drafts(source)
-        if draft.get("status") == "approved"
+        _draft_view(source, draft) for draft in _drafts(source) if draft.get("status") == "approved"
     ][:50]
 
 
