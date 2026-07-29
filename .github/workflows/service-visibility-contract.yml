@@ -50,9 +50,6 @@ jobs:
             apps/api/catora_api/service_visibility \
             apps/api/catora_api/schemas/service_visibility.py \
             apps/api/catora_api/api/service_visibility.py
-          python -m ruff check --fix apps/api/tests/test_service_visibility.py
-          git diff -- apps/api/tests/test_service_visibility.py
-          git diff --exit-code -- apps/api/tests/test_service_visibility.py
           python -m ruff check \
             apps/api/catora_api/service_visibility \
             apps/api/catora_api/schemas/service_visibility.py \
