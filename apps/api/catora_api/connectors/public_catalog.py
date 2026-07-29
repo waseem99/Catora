@@ -51,12 +51,12 @@ class PublicCatalogConnectorConfig:
     timeout_seconds: float = 20.0
 
     def __post_init__(self) -> None:
-        if self.source_type not in {"sitemap", "urls"}:
-            raise ValueError("source_type must be sitemap or urls")
+        if self.source_type not in {"sitemap", "urls", "wordpress"}:
+            raise ValueError("source_type must be sitemap, urls, or wordpress")
         if not self.authorized_domain_confirmed:
             raise ValueError("Domain authorization confirmation is required")
-        if self.source_type == "sitemap" and not self.start_url:
-            raise ValueError("start_url is required for sitemap sources")
+        if self.source_type in {"sitemap", "wordpress"} and not self.start_url:
+            raise ValueError("start_url is required for sitemap and WordPress sources")
         if self.source_type == "urls" and not self.product_urls:
             raise ValueError("product_urls are required for URL sources")
         if not 1 <= self.max_products <= 1000:
@@ -77,6 +77,11 @@ class _ProductHtmlParser(HTMLParser):
         self.canonical_url: str | None = None
         self.title_parts: list[str] = []
         self.visible_parts: list[str] = []
+        self.headings: list[dict[str, str]] = []
+        self.links: list[str] = []
+        self.body_classes: list[str] = []
+        self._heading_level: str | None = None
+        self._heading_parts: list[str] = []
         self._script_type: str | None = None
         self._script_parts: list[str] = []
         self._in_title = False
@@ -98,6 +103,17 @@ class _ProductHtmlParser(HTMLParser):
             self._ignored_depth += 1
         elif lowered_tag == "title":
             self._in_title = True
+        elif lowered_tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self._heading_level = lowered_tag
+            self._heading_parts = []
+        elif lowered_tag == "a":
+            href = attributes.get("href")
+            if href and len(self.links) < 2000:
+                self.links.append(href.strip())
+        elif lowered_tag == "body":
+            classes = attributes.get("class")
+            if classes:
+                self.body_classes.extend(classes.split()[:100])
         elif lowered_tag == "meta":
             key = attributes.get("property") or attributes.get("name")
             content = attributes.get("content")
@@ -123,6 +139,12 @@ class _ProductHtmlParser(HTMLParser):
             self._ignored_depth = max(0, self._ignored_depth - 1)
         elif lowered_tag == "title":
             self._in_title = False
+        elif lowered_tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            text = " ".join(self._heading_parts).strip()
+            if self._heading_level and text and len(self.headings) < 200:
+                self.headings.append({"level": self._heading_level, "text": text[:500]})
+            self._heading_level = None
+            self._heading_parts = []
 
     def handle_data(self, data: str) -> None:
         if self._script_type is not None:
@@ -133,6 +155,8 @@ class _ProductHtmlParser(HTMLParser):
             return
         if self._in_title:
             self.title_parts.append(text)
+        if self._heading_level is not None:
+            self._heading_parts.append(text)
         if self._ignored_depth == 0 and self._visible_length < 12_000:
             remaining = 12_000 - self._visible_length
             accepted = text[:remaining]
@@ -191,22 +215,34 @@ class PublicCatalogConnector(CatalogConnector):
             if not urls:
                 return ConnectorValidation(
                     valid=False,
-                    errors=("No authorized product URLs were discovered",),
+                    errors=("No authorized page URLs were discovered",),
                 )
             if not await self._can_fetch(urls[0]):
                 return ConnectorValidation(
                     valid=False,
-                    errors=("Product URLs are blocked by robots.txt",),
+                    errors=("Discovered URLs are blocked by robots.txt",),
                 )
-            return ConnectorValidation(
-                valid=True,
-                discovered_fields=(
+            if self.source_type == "wordpress":
+                fields = (
+                    "url",
+                    "canonical_url",
+                    "title",
+                    "meta_description",
+                    "robots",
+                    "headings",
+                    "links",
+                    "visible_text",
+                    "json_ld",
+                    "wordpress",
+                )
+            else:
+                fields = (
                     "url",
                     "canonical_url",
                     "json_ld_product",
                     "html_fallback",
-                ),
-            )
+                )
+            return ConnectorValidation(valid=True, discovered_fields=fields)
         except PublicCatalogConnectorError as exc:
             return ConnectorValidation(valid=False, errors=(str(exc),))
         except httpx.HTTPError:
@@ -247,7 +283,7 @@ class PublicCatalogConnector(CatalogConnector):
                     rejections.append(
                         ConnectorRejection(
                             index + 1,
-                            "No product evidence found",
+                            "No service-page evidence found" if self.source_type == "wordpress" else "No product evidence found",
                             {"url": url},
                         )
                     )
@@ -533,6 +569,8 @@ class PublicCatalogConnector(CatalogConnector):
     ) -> ConnectorRecord | None:
         parser = _ProductHtmlParser()
         parser.feed(response.text)
+        if self.source_type == "wordpress":
+            return self._wordpress_record(source_url, response, parser)
         products: list[Mapping[str, Any]] = []
         warnings: list[str] = []
         for block in parser.json_ld_blocks:
@@ -579,6 +617,80 @@ class PublicCatalogConnector(CatalogConnector):
             content_hash=hashlib.sha256(
                 stable.encode("utf-8")
             ).hexdigest(),
+            source_updated_at=self._last_modified(response),
+            warnings=tuple(dict.fromkeys(warnings)),
+        )
+
+    def _wordpress_record(
+        self,
+        source_url: str,
+        response: httpx.Response,
+        parser: _ProductHtmlParser,
+    ) -> ConnectorRecord | None:
+        title = " ".join(parser.title_parts).strip() or parser.meta.get("og:title", "")
+        visible_text = " ".join(parser.visible_parts)[:50_000]
+        if not title and not visible_text:
+            return None
+        canonical = self._normalize_canonical(source_url, parser.canonical_url)
+        json_ld: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        for block in parser.json_ld_blocks:
+            try:
+                decoded = json.loads(block)
+            except json.JSONDecodeError:
+                warnings.append("invalid_json_ld")
+                continue
+            if isinstance(decoded, dict):
+                json_ld.append(dict(decoded))
+            elif isinstance(decoded, list):
+                json_ld.extend(dict(item) for item in decoded if isinstance(item, dict))
+        normalized_links: list[str] = []
+        for href in parser.links:
+            try:
+                candidate = self._normalize_url(urljoin(source_url, href))
+            except PublicCatalogConnectorError:
+                continue
+            if urlparse(candidate).hostname == self._allowed_host and candidate not in normalized_links:
+                normalized_links.append(candidate)
+            if len(normalized_links) >= 2000:
+                break
+        generator = parser.meta.get("generator", "")
+        body_classes = parser.body_classes
+        wordpress = {
+            "generator": generator,
+            "body_classes": body_classes,
+            "is_wordpress": "wordpress" in generator.casefold() or any(
+                value.startswith(("page-id-", "postid-", "wp-", "elementor-"))
+                for value in body_classes
+            ),
+            "builder": "elementor" if any("elementor" in value for value in body_classes) else "gutenberg",
+            "seo_plugin": (
+                "yoast"
+                if any("yoast" in block.casefold() for block in parser.json_ld_blocks)
+                else "rank_math"
+                if any("rank math" in block.casefold() or "rankmath" in block.casefold() for block in parser.json_ld_blocks)
+                else None
+            ),
+        }
+        payload: dict[str, Any] = {
+            "platform": "wordpress_public",
+            "source_url": source_url,
+            "canonical_url": canonical,
+            "title": title[:500],
+            "meta_description": (parser.meta.get("description") or parser.meta.get("og:description") or "")[:1000],
+            "robots": parser.meta.get("robots", "")[:200],
+            "headings": parser.headings,
+            "links": normalized_links,
+            "visible_text": visible_text,
+            "json_ld": json_ld[:100],
+            "wordpress": wordpress,
+        }
+        stable = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+        return ConnectorRecord(
+            external_id=canonical,
+            record_type="service_page",
+            payload=payload,
+            content_hash=hashlib.sha256(stable.encode("utf-8")).hexdigest(),
             source_updated_at=self._last_modified(response),
             warnings=tuple(dict.fromkeys(warnings)),
         )

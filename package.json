@@ -25,7 +25,9 @@
     "demo:smoke": "python scripts/smoke_hosted_demo.py",
     "demo:verify-shopify-change": "python scripts/verify_shopify_live_change.py",
     "shopify:accept": "python scripts/accept_shopify_public_app.py",
-    "shopify:release-check": "python scripts/validate_shopify_public_release.py"
+    "shopify:release-check": "python scripts/validate_shopify_public_release.py",
+    "service-visibility:plugin": "bash apps/wordpress-service-visibility/build-plugin.sh",
+    "service-visibility:release-check": "python scripts/validate_service_visibility_release.py"
   },
   "devDependencies": {
     "eslint": "10.8.0",

@@ -1,0 +1,27 @@
+.service-visibility-shell { display: grid; gap: 28px; padding-top: 48px; padding-bottom: 80px; }
+.service-visibility-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.service-visibility-header h1 { max-width: 850px; font-size: clamp(38px, 5vw, 62px); }
+.service-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.service-panel { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+.service-panel h2 { margin: 0; }
+.service-form { display: grid; gap: 14px; }
+.service-form label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.service-form input, .service-form select { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--bg); font: inherit; }
+.service-form .service-check { grid-template-columns: 20px 1fr; align-items: start; padding: 10px; border: 1px solid var(--border); border-radius: 9px; }
+.service-form .service-check input { width: 17px; height: 17px; margin-top: 2px; }
+.service-list, .service-runs { display: grid; gap: 12px; }
+.service-source { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
+.service-source div { display: grid; gap: 4px; min-width: 0; }
+.service-source span, .service-source small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
+.service-source button, .service-artifacts a { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: transparent; text-decoration: none; font-weight: 800; }
+.service-secret { display: grid; gap: 8px; padding: 14px; border: 1px solid rgba(92,225,173,.45); border-radius: 11px; }
+.service-secret code { overflow-wrap: anywhere; padding: 8px; background: var(--bg); }
+.service-runs article { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.service-runs header { display: flex; justify-content: space-between; gap: 12px; text-transform: capitalize; }
+.service-runs header span, .service-runs p { color: var(--muted); }
+.service-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.service-metrics span { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
+.service-metrics b { color: var(--text); font-size: 20px; }
+.service-artifacts { display: flex; flex-wrap: wrap; gap: 8px; }
+.service-error { padding: 13px; border: 1px solid #7f1d1d; border-radius: 10px; color: #fecaca; background: #3b1717; }
+@media (max-width: 850px) { .service-grid { grid-template-columns: 1fr; } .service-visibility-header { flex-direction: column; } .service-metrics { grid-template-columns: repeat(2, 1fr); } }
