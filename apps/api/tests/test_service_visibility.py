@@ -6,8 +6,8 @@ import io
 import time
 import uuid
 
+import pptx
 import pytest
-from pptx import Presentation
 
 from catora_api.schemas.service_visibility import ServicePageSnapshot
 from catora_api.service_visibility.classification import classify_page
@@ -16,6 +16,7 @@ from catora_api.service_visibility.extraction import extract_page
 from catora_api.service_visibility.questions import build_default_questions
 from catora_api.service_visibility.reports import executive_pptx, findings_csv
 from catora_api.service_visibility.security import issue_token, verify_signed_body
+
 
 HTML = """
 <html>
@@ -84,7 +85,7 @@ def test_scorecard_has_evidence_backed_findings_and_questions() -> None:
 def test_reports_are_valid_editable_pptx_and_csv() -> None:
     scorecard = build_scorecard(uuid.uuid4(), uuid.uuid4(), [page()])
     assert findings_csv(scorecard).startswith(b"severity,category")
-    presentation = Presentation(io.BytesIO(executive_pptx(scorecard)))
+    presentation = pptx.Presentation(io.BytesIO(executive_pptx(scorecard)))
     assert len(presentation.slides) == 4
     assert "Catora Service Visibility Audit" in presentation.slides[0].shapes[0].text
 
