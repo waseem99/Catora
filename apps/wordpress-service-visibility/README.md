@@ -1,6 +1,10 @@
 # Catora Service Visibility WordPress bridge
 
+Current release: **0.2.1**.
+
 This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, resumable snapshots, connection health, optional scheduled snapshots, and approved draft delivery.
+
+The authoritative source and repository-side publisher record is [`waseem99/Catora`](https://github.com/waseem99/Catora). That repository authority verifies plugin provenance; it does not replace permission from the owner or authorized representative of the WordPress site where the plugin is installed.
 
 ## Install
 
