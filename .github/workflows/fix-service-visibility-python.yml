@@ -1,0 +1,161 @@
+name: Fix service visibility Python
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/fix-service-visibility-python.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  fix:
+    if: github.event.pull_request.head.ref == 'agent/wordpress-service-visibility-rebuild'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Apply focused source corrections
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/api/catora_api/api/service_visibility.py')
+          text = path.read_text()
+          text = text.replace(
+              'from catora_api.service_visibility.tasks import REPORT_TYPE, TEMPLATE_VERSION, run_service_visibility\n',
+              'from catora_api.service_visibility.tasks import (\n    REPORT_TYPE,\n    TEMPLATE_VERSION,\n    run_service_visibility,\n)\n',
+          )
+          path.write_text(text)
+
+          path = Path('apps/api/catora_api/connectors/public_catalog.py')
+          text = path.read_text()
+          text = text.replace(
+              '                            "No service-page evidence found" if self.source_type == "wordpress" else "No product evidence found",\n',
+              '                            (\n                                "No service-page evidence found"\n                                if self.source_type == "wordpress"\n                                else "No product evidence found"\n                            ),\n',
+          )
+          text = text.replace(
+              '            if urlparse(candidate).hostname == self._allowed_host and candidate not in normalized_links:\n',
+              '            if (\n                urlparse(candidate).hostname == self._allowed_host\n                and candidate not in normalized_links\n            ):\n',
+          )
+          text = text.replace(
+              '            "builder": "elementor" if any("elementor" in value for value in body_classes) else "gutenberg",\n',
+              '            "builder": (\n                "elementor"\n                if any("elementor" in value for value in body_classes)\n                else "gutenberg"\n            ),\n',
+          )
+          text = text.replace(
+              '                if any("rank math" in block.casefold() or "rankmath" in block.casefold() for block in parser.json_ld_blocks)\n',
+              '                if any(\n                    "rank math" in block.casefold()\n                    or "rankmath" in block.casefold()\n                    for block in parser.json_ld_blocks\n                )\n',
+          )
+          text = text.replace(
+              '            "meta_description": (parser.meta.get("description") or parser.meta.get("og:description") or "")[:1000],\n',
+              '            "meta_description": (\n                parser.meta.get("description")\n                or parser.meta.get("og:description")\n                or ""\n            )[:1000],\n',
+          )
+          path.write_text(text)
+
+          path = Path('apps/api/catora_api/connectors/wordpress.py')
+          text = path.read_text()
+          text = text.replace(
+              '        batches = [item for item in batches_value if isinstance(item, dict)] if isinstance(batches_value, list) else []\n',
+              '        batches = (\n            [item for item in batches_value if isinstance(item, dict)]\n            if isinstance(batches_value, list)\n            else []\n        )\n',
+          )
+          text = text.replace(
+              '                stable = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)\n',
+              '                stable = json.dumps(\n                    payload,\n                    sort_keys=True,\n                    separators=(",", ":"),\n                    ensure_ascii=False,\n                )\n',
+          )
+          path.write_text(text)
+
+          path = Path('apps/api/catora_api/service_visibility/models.py')
+          text = path.read_text()
+          text = text.replace(
+              '            "Catora does not guarantee rankings, traffic, leads, revenue, AI citations, or rich results.",\n            "Generated recommendations are evidence-backed proposals and require human review before publication.",\n',
+              '            (\n                "Catora does not guarantee rankings, traffic, leads, revenue, "\n                "AI citations, or rich results."\n            ),\n            (\n                "Generated recommendations are evidence-backed proposals and require "\n                "human review before publication."\n            ),\n',
+          )
+          path.write_text(text)
+
+          path = Path('apps/api/catora_api/service_visibility/tasks.py')
+          text = path.read_text()
+          text = text.replace(
+              '            report_job.input_snapshot = {**snapshot, "error": "Source or ingestion job is unavailable"}\n',
+              '            report_job.input_snapshot = {\n                **snapshot,\n                "error": "Source or ingestion job is unavailable",\n            }\n',
+          )
+          text = text.replace(
+              '    if not settings.service_visibility_enabled or not settings.service_visibility_monitoring_enabled:\n',
+              '    if (\n        not settings.service_visibility_enabled\n        or not settings.service_visibility_monitoring_enabled\n    ):\n',
+          )
+          text = text.replace(
+              '                    content_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",\n',
+              '                    content_type=(\n                        "application/vnd.openxmlformats-officedocument."\n                        "presentationml.presentation"\n                    ),\n',
+          )
+          path.write_text(text)
+
+          path = Path('apps/api/tests/test_service_visibility.py')
+          text = path.read_text()
+          text = text.replace(
+              'from catora_api.connectors.public_catalog import PublicCatalogConnector, PublicCatalogConnectorConfig\n',
+              'from catora_api.connectors.public_catalog import (\n    PublicCatalogConnector,\n    PublicCatalogConnectorConfig,\n)\n',
+          )
+          text = text.replace(
+              'from catora_api.schemas.service_visibility import WordPressSnapshotBatch\n',
+              '',
+          )
+          text = text.replace(
+              'from catora_api.service_visibility.analysis import QUESTION_TEMPLATES, analyze_service_site\n',
+              'from catora_api.service_visibility.analysis import (\n    QUESTION_TEMPLATES,\n    analyze_service_site,\n)\n',
+          )
+          text = text.replace(
+              '                    \'<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\'\n',
+              '                    \'<?xml version="1.0"?>\'\n                    \'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\'\n',
+          )
+          path.write_text(text)
+          PY
+      - name: Run pinned checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m ruff check --fix \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/catora_api/connectors/public_catalog.py \
+            apps/api/catora_api/connectors/wordpress.py \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py \
+            apps/api/tests/test_service_visibility.py
+          python -m ruff check \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/catora_api/connectors/public_catalog.py \
+            apps/api/catora_api/connectors/wordpress.py \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py \
+            apps/api/tests/test_service_visibility.py
+          python -m mypy --strict \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/catora_api/connectors/wordpress.py \
+            apps/api/catora_api/service_visibility \
+            apps/api/catora_api/schemas/service_visibility.py
+          python -m pytest -q \
+            apps/api/tests/test_service_visibility.py \
+            apps/api/tests/connectors/test_public_catalog.py
+      - name: Commit Python corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            apps/api/catora_api/api/service_visibility.py \
+            apps/api/catora_api/connectors/public_catalog.py \
+            apps/api/catora_api/connectors/wordpress.py \
+            apps/api/catora_api/service_visibility/models.py \
+            apps/api/catora_api/service_visibility/tasks.py \
+            apps/api/tests/test_service_visibility.py
+          git commit -m 'Fix service visibility Python checks'
+          git push origin HEAD:agent/wordpress-service-visibility-rebuild
