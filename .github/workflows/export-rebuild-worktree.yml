@@ -1,0 +1,24 @@
+name: Export service visibility rebuild worktree
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/export-rebuild-worktree.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Archive worktree
+        run: tar --exclude=.git -czf catora-worktree.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catora-rebuild-worktree
+          path: catora-worktree.tar.gz
+          retention-days: 1
