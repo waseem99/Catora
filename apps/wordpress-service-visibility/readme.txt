@@ -2,10 +2,12 @@
 Contributors: catora
 Requires at least: 6.4
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.2.1
 License: Proprietary
 
 Exports only published public WordPress content to an authorized Catora workspace for evidence-backed SEO, answer-readiness, and AI-discovery audits.
+
+The authoritative source and publisher record is https://github.com/waseem99/Catora. Repository ownership does not replace authorization from the owner of a WordPress site.
 
 == Safety ==
 * Does not export users, forms, customers, orders, private posts, passwords, or drafts.

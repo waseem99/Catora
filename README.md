@@ -6,6 +6,12 @@ Catora audits enterprise ecommerce catalogs, identifies data and discoverability
 
 This repository contains the production-shaped MVP and the prepared client-winning demonstration described in [the client demo guide](docs/client-demo.md).
 
+## Governance and verified authority
+
+The GitHub repository owner and authorized repository-side representative is [`@waseem99`](https://github.com/waseem99). Repository administration, review routing, release provenance, and the limits of that verification are documented in [the repository ownership record](docs/governance/repository-ownership.md) and its machine-readable companion.
+
+Use [SECURITY.md](SECURITY.md) for vulnerability reporting, [SUPPORT.md](SUPPORT.md) for repository support, and [LICENSE](LICENSE) for the proprietary rights notice. Authorization for external domains, stores, customer systems, and commercial pilots must still come from the actual system or business owner; GitHub ownership does not replace platform, legal, or client authorization.
+
 ## Client demo quick start
 
 ```bash
@@ -78,6 +84,7 @@ Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads
 
 ```bash
 npm run check
+python scripts/validate_repository_governance.py
 python3 -m ruff check apps/api
 python3 -m mypy --config-file apps/api/pyproject.toml apps/api/catora_api
 python3 -m pytest apps/api/tests

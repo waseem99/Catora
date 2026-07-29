@@ -23,6 +23,11 @@ dependencies = [
   "uvicorn[standard]==0.35.0"
 ]
 
+[project.urls]
+Repository = "https://github.com/waseem99/Catora"
+Issues = "https://github.com/waseem99/Catora/issues"
+Security = "https://github.com/waseem99/Catora/security"
+
 [project.optional-dependencies]
 dev = [
   "mypy==1.17.1",
