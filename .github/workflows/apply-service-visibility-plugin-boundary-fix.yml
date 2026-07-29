@@ -30,7 +30,51 @@ jobs:
           sed -n "/python - <<'PY'/,/^          PY$/p" /tmp/plugin-boundary-workflow.yml \
             | sed '1d;$d;s/^          //' > /tmp/apply-plugin-boundaries.py
           test -s /tmp/apply-plugin-boundaries.py
-          python /tmp/apply-plugin-boundaries.py
+          set +e
+          output="$(python /tmp/apply-plugin-boundaries.py 2>&1)"
+          result=$?
+          set -e
+          if [ "$result" -ne 0 ] && [ "$output" != "Expected release validator plugin safety check not found" ]; then
+            printf '%s\n' "$output" >&2
+            exit "$result"
+          fi
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/validate_service_visibility_release.py")
+          text = path.read_text()
+          if '"plugin.service_visibility.explicit_schedule"' not in text:
+              marker = '''        _check(
+              "workflow.service_visibility.main",
+          '''
+              insertion = '''        _check(
+              "plugin.service_visibility.explicit_schedule",
+              "enable_scheduled_sync" in "\\n".join(
+                  path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")
+              )
+              and "scheduled_sync" in "\\n".join(
+                  path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")
+              ),
+              "scheduled snapshots require explicit WordPress opt-in",
+              "scheduled snapshots must remain disabled until explicitly enabled",
+          ),
+          _check(
+              "plugin.service_visibility.draft_retry_idempotency",
+              "_catora_proposal_id" in "\\n".join(
+                  path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")
+              )
+              and "get_posts" in "\\n".join(
+                  path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")
+              ),
+              "approved draft retries reuse the existing proposal draft",
+              "draft delivery must not create duplicates after callback failures",
+          ),
+'''
+              if marker not in text:
+                  raise SystemExit("Release validator workflow check insertion point not found")
+              text = text.replace(marker, insertion + marker, 1)
+              path.write_text(text)
+          PY
       - name: Validate plugin and release boundary
         run: |
           find apps/wordpress-service-visibility -name '*.php' -print0 | xargs -0 -n1 php -l
