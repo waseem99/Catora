@@ -10,7 +10,7 @@ This repository contains the production-shaped MVP and the prepared client-winni
 
 The GitHub repository owner and authorized repository-side representative is [`@waseem99`](https://github.com/waseem99). Repository administration, review routing, release provenance, and the limits of that verification are documented in [the repository ownership record](docs/governance/repository-ownership.md) and its machine-readable companion.
 
-Use [SECURITY.md](SECURITY.md) for vulnerability reporting and [SUPPORT.md](SUPPORT.md) for repository support. Authorization for external domains, stores, customer systems, and commercial pilots must still come from the actual system or business owner; GitHub ownership does not replace platform, legal, or client authorization.
+Use [SECURITY.md](SECURITY.md) for vulnerability reporting, [SUPPORT.md](SUPPORT.md) for repository support, and [LICENSE](LICENSE) for the proprietary rights notice. Authorization for external domains, stores, customer systems, and commercial pilots must still come from the actual system or business owner; GitHub ownership does not replace platform, legal, or client authorization.
 
 ## Client demo quick start
 
