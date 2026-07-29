@@ -169,7 +169,7 @@ jobs:
               -v "$PWD/artifacts/service-visibility:/artifacts:ro" \
               -v "$PWD/apps/wordpress-service-visibility/tests:/runtime-tests:ro" \
               --user 33:33 \
-              wordpress:cli "$@"
+              wordpress:cli wp "$@"
           }
           wp_cli core install \
             --url=https://wp.example.test \
