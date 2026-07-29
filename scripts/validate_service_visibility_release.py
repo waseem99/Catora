@@ -44,6 +44,9 @@ def validate(root: Path = ROOT) -> list[CheckResult]:
     plugin_dir = root / "apps/wordpress-service-visibility"
     plugin = plugin_dir / "catora-service-visibility.php"
     plugin_builder = root / "apps/wordpress-service-visibility/build-plugin.sh"
+    plugin_php = "\n".join(
+        path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")
+    )
     migration = root / "apps/api/alembic/versions/0019_wordpress_service_visibility.py"
     api_route = root / "apps/api/catora_api/api/service_visibility.py"
     analysis = root / "apps/api/catora_api/service_visibility/analysis.py"
@@ -76,14 +79,25 @@ def validate(root: Path = ROOT) -> list[CheckResult]:
         ),
         _check(
             "plugin.service_visibility.safety",
-            "wp_insert_post"
-            in "\n".join(path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php"))
-            and "'draft'"
-            in "\n".join(path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php"))
-            and "wp_update_post"
-            not in "\n".join(path.read_text(encoding="utf-8") for path in plugin_dir.rglob("*.php")),
+            "wp_insert_post" in plugin_php
+            and "'draft'" in plugin_php
+            and "wp_update_post" not in plugin_php,
             "plugin creates separate drafts and does not update live posts",
             "plugin must create separate drafts and must not update live posts",
+        ),
+        _check(
+            "plugin.service_visibility.explicit_schedule",
+            "enable_scheduled_sync" in plugin_php
+            and "scheduled_sync" in plugin_php
+            and "wp_clear_scheduled_hook( self::CRON_HOOK );" in plugin_php,
+            "scheduled snapshots require explicit WordPress opt-in",
+            "scheduled snapshots must remain disabled until explicitly enabled",
+        ),
+        _check(
+            "plugin.service_visibility.draft_retry_idempotency",
+            "_catora_proposal_id" in plugin_php and "get_posts" in plugin_php,
+            "approved draft retries reuse the existing proposal draft",
+            "draft delivery must not create duplicates after callback failures",
         ),
         _check(
             "workflow.service_visibility.main",
@@ -109,7 +123,9 @@ def validate(root: Path = ROOT) -> list[CheckResult]:
         ),
         _check(
             "plugin.service_visibility.builder",
-            plugin_builder.is_file() and "catora-service-visibility.zip" in plugin_builder.read_text(encoding="utf-8"),
+            plugin_builder.is_file()
+            and "catora-service-visibility.zip"
+            in plugin_builder.read_text(encoding="utf-8"),
             "deterministic plugin builder present",
             "plugin builder must produce catora-service-visibility.zip",
         ),
