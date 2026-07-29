@@ -31,84 +31,9 @@ on:
       - .github/workflows/service-visibility-contract.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply-api-typing-fix:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'agent/wordpress-service-visibility'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-      - name: Apply exact full-repository MyPy fixes
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('apps/api/catora_api/api/service_visibility.py')
-          text = path.read_text()
-          replacements = [
-              (
-                  'from pydantic import ValidationError',
-                  'from pydantic import HttpUrl, ValidationError',
-              ),
-              (
-                  '''    endpoint = None
-    if token is not None:
-        endpoint = f"{str(request.base_url).rstrip('/')}/api/v1/service-visibility/sources/{source.id}/snapshots"
-''',
-                  '''    endpoint: HttpUrl | None = None
-    if token is not None:
-        endpoint = HttpUrl(
-            f"{str(request.base_url).rstrip('/')}/api/v1/service-visibility/sources/{source.id}/snapshots"
-        )
-''',
-              ),
-              (
-                  '''    job = await session.get(IngestionJob, uuid.UUID(str(active["job_id"])))
-    if job is None:
-        raise HTTPException(status_code=409, detail="WordPress snapshot job is unavailable")
-    checkpoint = dict(job.checkpoint)
-    sequences = [int(value) for value in checkpoint.get("received_sequences", [])]
-''',
-                  '''    current_job = await session.get(IngestionJob, uuid.UUID(str(active["job_id"])))
-    if current_job is None:
-        raise HTTPException(status_code=409, detail="WordPress snapshot job is unavailable")
-    job = current_job
-    checkpoint = dict(job.checkpoint)
-    sequences_value = checkpoint.get("received_sequences")
-    sequences = (
-        [int(value) for value in sequences_value]
-        if isinstance(sequences_value, list)
-        else []
-    )
-''',
-              ),
-          ]
-          changed = False
-          for old, new in replacements:
-              if old in text:
-                  text = text.replace(old, new, 1)
-                  changed = True
-              elif new not in text:
-                  raise SystemExit(f'Expected API typing pattern not found: {old[:80]!r}')
-          if changed:
-              path.write_text(text)
-          PY
-          python -m compileall -q apps/api/catora_api/api/service_visibility.py
-          if git diff --quiet -- apps/api/catora_api/api/service_visibility.py; then
-            exit 0
-          fi
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add apps/api/catora_api/api/service_visibility.py
-          git commit -m 'Fix service visibility API typing'
-          git push origin HEAD:agent/wordpress-service-visibility
-
   contract:
     runs-on: ubuntu-latest
     steps:
