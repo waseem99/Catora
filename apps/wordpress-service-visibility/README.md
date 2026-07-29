@@ -13,6 +13,8 @@ This plugin is optional. Catora can run a zero-install audit from an authorized 
 
 The token must be supplied through an approved secret channel. Rotate it in Catora if it is exposed.
 
+Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Draft delivery reuses an existing local draft for the same Catora proposal if a result callback must be retried.
+
 ## Data boundary
 
 Only published public posts and public post types are exported. The plugin excludes attachments, password-protected posts, users, forms, members, customers, orders, and private content.
