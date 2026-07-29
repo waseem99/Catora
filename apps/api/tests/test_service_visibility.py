@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import re
 import uuid
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -268,10 +269,10 @@ def test_wordpress_plugin_is_draft_only_and_excludes_private_data() -> None:
         / "includes"
         / "class-catora-service-visibility.php"
     ).read_text()
-    assert "'post_status'  => 'draft'" in plugin
+    assert re.search(r"'post_status'\s*=>\s*'draft'", plugin)
     assert "wp_update_post" not in plugin
-    assert "post_status'    => 'publish'" in plugin
-    assert "has_password'   => false" in plugin
+    assert re.search(r"'post_status'\s*=>\s*'publish'", plugin)
+    assert re.search(r"'has_password'\s*=>\s*false", plugin)
     assert "get_users" not in plugin
     assert "wc_get_orders" not in plugin
     assert "get_option( 'woocommerce" not in plugin

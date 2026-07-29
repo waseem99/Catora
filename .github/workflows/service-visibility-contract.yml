@@ -14,6 +14,7 @@ on:
       - "apps/api/catora_api/service_visibility/**"
       - "apps/api/catora_api/schemas/service_visibility.py"
       - "apps/api/tests/test_service_visibility.py"
+      - "apps/api/tests/test_service_visibility_hardening.py"
       - "apps/wordpress-service-visibility/**"
       - "apps/web/app/workspace/**/service-visibility/**"
       - "apps/web/components/service-visibility-console.tsx"
@@ -32,6 +33,7 @@ on:
       - "apps/api/catora_api/service_visibility/**"
       - "apps/api/catora_api/schemas/service_visibility.py"
       - "apps/api/tests/test_service_visibility.py"
+      - "apps/api/tests/test_service_visibility_hardening.py"
       - "apps/wordpress-service-visibility/**"
       - "apps/web/app/workspace/**/service-visibility/**"
       - "apps/web/components/service-visibility-console.tsx"
@@ -82,6 +84,7 @@ jobs:
           apps/api/catora_api/service_visibility
           apps/api/catora_api/schemas/service_visibility.py
           apps/api/tests/test_service_visibility.py
+          apps/api/tests/test_service_visibility_hardening.py
           scripts/validate_service_visibility_release.py
       - name: Run focused strict MyPy
         run: >-
@@ -94,18 +97,121 @@ jobs:
       - run: >-
           python -m pytest -q
           apps/api/tests/test_service_visibility.py
+          apps/api/tests/test_service_visibility_hardening.py
           apps/api/tests/connectors/test_public_catalog.py
 
   wordpress-plugin:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Validate PHP syntax
-        run: find apps/wordpress-service-visibility -name '*.php' -print0 | xargs -0 -n1 php -l
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate PHP and mock-server syntax
+        run: |
+          find apps/wordpress-service-visibility -name '*.php' -print0 | xargs -0 -n1 php -l
+          python -m py_compile apps/wordpress-service-visibility/tests/mock-catora-server.py
       - name: Build installable plugin
         run: bash apps/wordpress-service-visibility/build-plugin.sh artifacts/service-visibility/catora-service-visibility.zip
       - name: Inspect package boundary
         run: unzip -l artifacts/service-visibility/catora-service-visibility.zip
+      - name: Start signed Catora runtime mock
+        run: |
+          python apps/wordpress-service-visibility/tests/mock-catora-server.py > /tmp/catora-wordpress-mock.log 2>&1 &
+          echo $! > /tmp/catora-wordpress-mock.pid
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8787/__state >/dev/null && exit 0
+            sleep 1
+          done
+          cat /tmp/catora-wordpress-mock.log
+          exit 1
+      - name: Install and exercise plugin on clean WordPress
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker network create catora-wordpress-runtime
+          docker volume create catora-wordpress-data
+          docker run -d --name catora-wordpress-db \
+            --network catora-wordpress-runtime \
+            -e MARIADB_DATABASE=wordpress \
+            -e MARIADB_USER=wordpress \
+            -e MARIADB_PASSWORD=wordpress \
+            -e MARIADB_ROOT_PASSWORD=root \
+            mariadb:11
+          for attempt in $(seq 1 60); do
+            docker exec catora-wordpress-db mariadb-admin ping -uroot -proot --silent && break
+            sleep 1
+          done
+          docker run -d --name catora-wordpress \
+            --network catora-wordpress-runtime \
+            --add-host=host.docker.internal:host-gateway \
+            -p 8080:80 \
+            -e WORDPRESS_DB_HOST=catora-wordpress-db \
+            -e WORDPRESS_DB_USER=wordpress \
+            -e WORDPRESS_DB_PASSWORD=wordpress \
+            -e WORDPRESS_DB_NAME=wordpress \
+            -v catora-wordpress-data:/var/www/html \
+            wordpress:6.8-php8.3-apache
+          for attempt in $(seq 1 90); do
+            curl -sS http://127.0.0.1:8080 >/dev/null && break
+            sleep 1
+          done
+          wp_cli() {
+            docker run --rm \
+              --network catora-wordpress-runtime \
+              --add-host=host.docker.internal:host-gateway \
+              --volumes-from catora-wordpress \
+              -e WORDPRESS_DB_HOST=catora-wordpress-db \
+              -e WORDPRESS_DB_USER=wordpress \
+              -e WORDPRESS_DB_PASSWORD=wordpress \
+              -e WORDPRESS_DB_NAME=wordpress \
+              -v "$PWD/artifacts/service-visibility:/artifacts:ro" \
+              -v "$PWD/apps/wordpress-service-visibility/tests:/runtime-tests:ro" \
+              --user 33:33 \
+              wordpress:cli wp "$@"
+          }
+          wp_cli core install \
+            --url=https://wp.example.test \
+            --title='Catora Runtime' \
+            --admin_user=admin \
+            --admin_password='runtime-password' \
+            --admin_email=runtime@example.test \
+            --skip-email
+          wp_cli config set WP_ENVIRONMENT_TYPE local
+          wp_cli plugin install /artifacts/catora-service-visibility.zip --activate
+          wp_cli eval-file /runtime-tests/runtime-seed.php
+          wp_cli eval-file /runtime-tests/runtime-smoke.php
+          curl -fsS http://127.0.0.1:8787/__state > /tmp/catora-wordpress-runtime-state.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          state = json.loads(Path('/tmp/catora-wordpress-runtime-state.json').read_text())
+          assert state['completed'] is True
+          assert state['failed_sequence_one'] is True
+          assert state['accepted_batches'] == [0, 1]
+          assert state['accepted_pages'] == 55
+          assert state['declared_pages'] == 55
+          assert state['verified_requests'] >= 6
+          first = state['records'][0]
+          assert first['canonical_url'] == 'https://wp.example.test/canonical/runtime-service'
+          assert first['robots'] == 'noindex'
+          assert first['json_ld'][0]['@type'] == 'Service'
+          assert first['wordpress']['author']['name'] == 'admin'
+          PY
+          wp_cli plugin uninstall catora-service-visibility --deactivate
+          wp_cli eval 'if ( false !== get_option("catora_service_visibility_settings", false) || false !== get_option("catora_service_visibility_checkpoint", false) || false !== wp_next_scheduled("catora_service_visibility_sync") ) { exit(1); }'
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catora-service-visibility-wordpress-runtime
+          path: |
+            /tmp/catora-wordpress-runtime-state.json
+            /tmp/catora-wordpress-mock.log
+          if-no-files-found: warn
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: catora-service-visibility-wordpress-plugin
