@@ -6,8 +6,8 @@ import io
 import time
 import uuid
 
-import pytest
 from pptx import Presentation
+import pytest
 
 from catora_api.schemas.service_visibility import ServicePageSnapshot
 from catora_api.service_visibility.classification import classify_page
@@ -19,7 +19,25 @@ from catora_api.service_visibility.security import issue_token, verify_signed_bo
 
 
 HTML = """
-<html><head><title>Cloud Consulting Services</title><meta name="description" content="Cloud consulting for growing teams"><link rel="canonical" href="https://example.com/services/cloud"><script type="application/ld+json">{"@type":"Organization","name":"Example Co"}</script></head><body><h1>Cloud Consulting Services</h1><p>Our process starts with discovery and produces measurable project outcomes for healthcare teams.</p><p>Book a consultation to get started.</p><a href="/case-studies/acme">Case study</a></body></html>  # noqa: E501
+<html>
+  <head>
+    <title>Cloud Consulting Services</title>
+    <meta name="description" content="Cloud consulting for growing teams">
+    <link rel="canonical" href="https://example.com/services/cloud">
+    <script type="application/ld+json">
+      {"@type":"Organization","name":"Example Co"}
+    </script>
+  </head>
+  <body>
+    <h1>Cloud Consulting Services</h1>
+    <p>
+      Our process starts with discovery and produces measurable project outcomes
+      for healthcare teams.
+    </p>
+    <p>Book a consultation to get started.</p>
+    <a href="/case-studies/acme">Case study</a>
+  </body>
+</html>
 """
 
 
