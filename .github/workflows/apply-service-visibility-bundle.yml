@@ -84,6 +84,7 @@ jobs:
           set -euo pipefail
           rsync -a /tmp/service-visibility-extract/ ./
           rm -rf .github/service-visibility-bundle
+          rm -f .github/workflows/service-visibility-contract.yml
           git diff --check
           python -m compileall -q apps/api/catora_api/service_visibility apps/api/catora_api/schemas/service_visibility.py apps/api/catora_api/api/service_visibility.py
           find apps/wordpress-service-visibility -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
