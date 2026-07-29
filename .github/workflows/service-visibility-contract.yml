@@ -1,3 +1,4 @@
+# One-use API typing repair trigger; remove after the repair commit.
 name: Service visibility contract
 
 on:
