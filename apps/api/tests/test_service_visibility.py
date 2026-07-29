@@ -17,7 +17,6 @@ from catora_api.service_visibility.questions import build_default_questions
 from catora_api.service_visibility.reports import executive_pptx, findings_csv
 from catora_api.service_visibility.security import issue_token, verify_signed_body
 
-
 HTML = """
 <html>
   <head>
