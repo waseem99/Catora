@@ -114,7 +114,7 @@ jobs:
               -e WORDPRESS_DB_USER=wordpress \
               -e WORDPRESS_DB_PASSWORD=wordpress \
               -v catora-wordpress-data:/var/www/html \
-              wordpress:cli-php8.3 "$@" --allow-root
+              wordpress:cli-php8.3 wp "$@" --allow-root
           }
           wp core install \
             --url=http://127.0.0.1:8080 \
