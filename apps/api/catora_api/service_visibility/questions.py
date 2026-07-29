@@ -322,7 +322,8 @@ def evaluate_questions(
             state = "conflicting"
             score = 2_500
             explanation = (
-                "The site contains both supporting and contradictory public evidence for this question."
+                "The site contains both supporting and contradictory public "
+                "evidence for this question."
             )
         elif ratio == 1:
             state = "supported"
