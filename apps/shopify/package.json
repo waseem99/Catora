@@ -2,6 +2,7 @@
   "name": "@catora/shopify-app-home",
   "private": true,
   "version": "0.1.0",
+  "license": "UNLICENSED",
   "type": "module",
   "repository": {
     "type": "git",
