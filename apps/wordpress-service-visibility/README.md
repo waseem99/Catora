@@ -1,6 +1,6 @@
 # Catora Service Visibility WordPress bridge
 
-This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, scheduled snapshots, connection health, and approved draft delivery.
+This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, resumable snapshots, connection health, optional scheduled snapshots, and approved draft delivery.
 
 ## Install
 
@@ -8,15 +8,17 @@ This plugin is optional. Catora can run a zero-install audit from an authorized 
 2. In WordPress, open **Plugins → Add New Plugin → Upload Plugin**.
 3. Activate the plugin.
 4. Open **Settings → Catora Service Visibility**.
-5. Enter the Catora endpoint, source ID, and one-time site token.
+5. Enter the HTTPS Catora endpoint, source ID, and one-time site token.
 6. Save and run the read-only snapshot.
 
-The token must be supplied through an approved secret channel. Rotate it in Catora if it is exposed.
+The token must be supplied through an approved secret channel. Once saved, it is not rendered back into the settings form. Rotate it in Catora if it is exposed.
 
-Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Draft delivery reuses an existing local draft for the same Catora proposal if a result callback must be retried.
+Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Interrupted uploads retain private temporary batch checkpoints outside the public WordPress web root and resume from the last batch accepted by Catora.
 
 ## Data boundary
 
-Only published public posts and public post types are exported. The plugin excludes attachments, password-protected posts, users, forms, members, customers, orders, and private content.
+Only published, non-password-protected records from public post types are exported. The plugin excludes attachments as records, users as records, forms, members, customers, orders, private content, and unpublished content. It includes page URLs, supported Yoast/Rank Math metadata, headings, links, visible text, authorship, featured-media metadata, and JSON-LD found in rendered content or Rank Math schema metadata.
+
+A snapshot fails explicitly if the site exceeds the Catora bridge limit of 10,000 published public records; it is never silently truncated.
 
 Draft delivery is disabled unless both Catora and WordPress settings allow it. Approved proposals create a new unpublished draft; they never update or publish the original page. Elementor structures are not rewritten.
