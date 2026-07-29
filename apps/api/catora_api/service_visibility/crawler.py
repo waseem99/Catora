@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 from __future__ import annotations
 
 import asyncio
@@ -42,12 +41,14 @@ async def _public_host(host: str) -> None:
             or value.is_multicast
             or value.is_unspecified
         ):
-            raise ValueError("Service visibility crawl target must resolve only to public addresses")
+            raise ValueError(
+                "Service visibility crawl target must resolve only to public addresses"
+            )
 
 
 def _same_host(url: str, host: str) -> bool:
     parsed = urlparse(url)
-    return parsed.scheme in {"http", "https"} and parsed.hostname == host
+    return parsed.scheme == "https" and parsed.hostname == host
 
 
 async def _fetch_limited(
@@ -57,7 +58,7 @@ async def _fetch_limited(
     host: str,
 ) -> _Fetched:
     if not _same_host(url, host):
-        raise ValueError("Crawl request left the authorized host")
+        raise ValueError("Crawl request left the authorized HTTPS host")
     await _public_host(host)
     try:
         async with client.stream("GET", url) as response:
@@ -79,6 +80,9 @@ async def _fetch_limited(
 
 
 def _xml_locations(content: bytes) -> tuple[str, ...]:
+    lowered = content[:64_000].lower()
+    if b"<!doctype" in lowered or b"<!entity" in lowered:
+        raise ValueError("Sitemap XML declarations are not supported")
     try:
         root = ET.fromstring(content)
     except ET.ParseError:
@@ -110,6 +114,7 @@ async def _discover_sitemap_pages(
     sitemap_queue: deque[str] = deque(url for url in candidates if _same_host(url, host))
     seen_sitemaps: set[str] = set()
     page_urls: list[str] = []
+    page_set: set[str] = set()
     while sitemap_queue and len(seen_sitemaps) < _MAX_SITEMAPS and len(page_urls) < max_pages:
         sitemap_url = sitemap_queue.popleft()
         if sitemap_url in seen_sitemaps:
@@ -121,13 +126,22 @@ async def _discover_sitemap_pages(
             continue
         if response.status_code != 200:
             continue
-        for location in _xml_locations(response.content):
-            if not _same_host(location, host):
+        content_type = response.headers.get("content-type", "").casefold()
+        if content_type and not any(value in content_type for value in ("xml", "text/plain")):
+            continue
+        try:
+            locations = _xml_locations(response.content)
+        except ValueError:
+            continue
+        for location in locations:
+            normalized = location.split("#", 1)[0]
+            if not _same_host(normalized, host):
                 continue
-            if location.casefold().endswith(".xml"):
-                sitemap_queue.append(location)
-            elif location not in page_urls:
-                page_urls.append(location)
+            if normalized.casefold().endswith(".xml"):
+                sitemap_queue.append(normalized)
+            elif normalized not in page_set:
+                page_set.add(normalized)
+                page_urls.append(normalized)
                 if len(page_urls) >= max_pages:
                     break
     return tuple(page_urls)
@@ -135,12 +149,13 @@ async def _discover_sitemap_pages(
 
 async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePageSnapshot, ...]:
     parsed = urlparse(start_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
-        raise ValueError("A public HTTP(S) start URL is required")
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("A public HTTPS start URL is required")
     host = parsed.hostname
     await _public_host(host)
     queue: deque[str] = deque([start_url])
     seen: set[str] = set()
+    canonical_seen: set[str] = set()
     pages: list[ServicePageSnapshot] = []
     robots = RobotFileParser()
     robots_url = urljoin(start_url, "/robots.txt")
@@ -155,12 +170,15 @@ async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePa
     ) as client:
         try:
             response = await _fetch_limited(client, url=robots_url, host=host)
-            if response.status_code == 200:
-                robots_text = response.content.decode("utf-8", errors="replace")
-                robots.parse(robots_text.splitlines())
-                robots_loaded = True
-        except ValueError:
-            pass
+        except ValueError as exc:
+            raise ValueError("Unable to verify the site's robots policy") from exc
+        if response.status_code == 200:
+            robots_text = response.content.decode("utf-8", errors="replace")
+            robots.parse(robots_text.splitlines())
+            robots_loaded = True
+        elif response.status_code not in {404, 410}:
+            raise ValueError("Unable to verify the site's robots policy")
+
         queue.extend(
             await _discover_sitemap_pages(
                 client,
@@ -192,9 +210,13 @@ async def crawl_site(start_url: str, *, max_pages: int = 150) -> tuple[ServicePa
                 continue
             html = response.content.decode(response.encoding or "utf-8", errors="replace")
             page = extract_page(url, html, status_code=response.status_code)
-            if not _same_host(str(page.canonical_url), host):
+            canonical = str(page.canonical_url).split("#", 1)[0]
+            if not _same_host(canonical, host):
                 raise ValueError("Page canonical left the authorized host")
-            pages.append(page)
             queue.extend(str(link) for link in page.internal_links if str(link) not in seen)
+            if canonical in canonical_seen:
+                continue
+            canonical_seen.add(canonical)
+            pages.append(page)
             await asyncio.sleep(0.1)
     return tuple(pages)
