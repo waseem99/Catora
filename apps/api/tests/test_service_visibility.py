@@ -6,8 +6,8 @@ import io
 import time
 import uuid
 
-from pptx import Presentation
 import pytest
+from pptx import Presentation
 
 from catora_api.schemas.service_visibility import ServicePageSnapshot
 from catora_api.service_visibility.classification import classify_page
