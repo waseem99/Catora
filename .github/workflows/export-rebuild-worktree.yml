@@ -21,4 +21,5 @@ jobs:
         with:
           name: catora-rebuild-worktree
           path: /tmp/catora-worktree.tar.gz
+          if-no-files-found: error
           retention-days: 1
