@@ -7,6 +7,7 @@ from catora_api.api.catalog_identity import router as catalog_identity_router
 from catora_api.api.demo import router as demo_router
 from catora_api.api.diagnostics import router as diagnostics_router
 from catora_api.api.enrichment_policy import router as enrichment_policy_router
+from catora_api.api.git_publishing import router as git_publishing_router
 from catora_api.api.ingestion import router as ingestion_router
 from catora_api.api.intent_breakdown import router as _intent_breakdown_router
 from catora_api.api.intent_coverage import router as _intent_coverage_router
@@ -45,6 +46,7 @@ __all__ = [
     "demo_router",
     "diagnostics_router",
     "enrichment_policy_router",
+    "git_publishing_router",
     "ingestion_router",
     "intent_parsing_router",
     "intent_runs_router",

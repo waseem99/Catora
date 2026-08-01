@@ -17,6 +17,7 @@ from catora_api.db.models.catalog_identity import (
     ProductIdentityCandidate,
     ProductIdentityMembership,
 )
+from catora_api.db.models.git_publishing import GitChangeProposal, GitRepositoryConnection
 from catora_api.db.models.identity import (
     Locale,
     Market,
@@ -88,6 +89,8 @@ __all__ = [
     "CommercialProductIdentity",
     "EvidenceReference",
     "ExportArtifact",
+    "GitChangeProposal",
+    "GitRepositoryConnection",
     "IngestionJob",
     "Invitation",
     "IntentProductMatch",
