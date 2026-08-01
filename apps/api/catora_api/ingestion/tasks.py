@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from typing import Protocol
 
 from celery import shared_task
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.config import get_settings
 from catora_api.database import SessionFactory
@@ -12,12 +14,37 @@ from catora_api.ingestion.factory import connector_for_source
 from catora_api.ingestion.service import IngestionService
 from catora_api.normalization.catalog_bridge import CatalogBridgeNormalizationPipeline
 from catora_api.normalization.pipeline import CatalogNormalizationPipeline
+from catora_api.normalization.restaurant_bridge_runtime import (
+    RestaurantBridgeRuntimePipeline,
+)
 from catora_api.storage import ObjectStorage
+
+
+class _NormalizationSummary(Protocol):
+    def as_dict(self) -> dict[str, int]: ...
+
+
+class _NormalizationPipeline(Protocol):
+    async def normalize_job(
+        self,
+        session: AsyncSession,
+        *,
+        source: CatalogSource,
+        job: IngestionJob,
+    ) -> _NormalizationSummary: ...
 
 
 @shared_task(name="catora.ingestion.run", ignore_result=True)  # type: ignore[misc]
 def run_ingestion_job(job_id: str) -> None:
     asyncio.run(_run_ingestion_job(uuid.UUID(job_id)))
+
+
+def _normalization_pipeline(source: CatalogSource) -> _NormalizationPipeline:
+    if source.source_type != "bridge":
+        return CatalogNormalizationPipeline()
+    if source.config.get("profile") == "restaurant/v1":
+        return RestaurantBridgeRuntimePipeline()
+    return CatalogBridgeNormalizationPipeline()
 
 
 async def _run_ingestion_job(job_id: uuid.UUID) -> None:
@@ -63,11 +90,7 @@ async def _run_ingestion_job(job_id: uuid.UUID) -> None:
         if job.status not in {"completed", "partially_completed"}:
             return
 
-        normalization = (
-            CatalogBridgeNormalizationPipeline()
-            if source.source_type == "bridge"
-            else CatalogNormalizationPipeline()
-        )
+        normalization = _normalization_pipeline(source)
         try:
             summary = await normalization.normalize_job(
                 session,
