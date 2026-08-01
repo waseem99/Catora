@@ -1,6 +1,7 @@
 from catora_api.restaurant.models import (
     RESTAURANT_DOMAIN_VERSION,
     Address,
+    FactState,
     FreshnessPolicy,
     GeoCoordinates,
     IdentityAlias,
@@ -13,6 +14,7 @@ from catora_api.restaurant.models import (
     OpeningHoursInterval,
     RestaurantBrandProjection,
     RestaurantFact,
+    RestaurantJsonValue,
     RestaurantLocationProjection,
     RestaurantSnapshot,
     ServiceArea,
@@ -32,6 +34,7 @@ from catora_api.restaurant.projection import (
 __all__ = [
     "RESTAURANT_DOMAIN_VERSION",
     "Address",
+    "FactState",
     "FreshnessPolicy",
     "GeoCoordinates",
     "IdentityAlias",
@@ -44,6 +47,7 @@ __all__ = [
     "OpeningHoursInterval",
     "RestaurantBrandProjection",
     "RestaurantFact",
+    "RestaurantJsonValue",
     "RestaurantLocationProjection",
     "RestaurantSnapshot",
     "ServiceArea",
