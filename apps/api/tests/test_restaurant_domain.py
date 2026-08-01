@@ -9,8 +9,10 @@ from pydantic import ValidationError
 
 from catora_api.config import Settings
 from catora_api.db.base import Base
+from catora_api.db.models.restaurant import RestaurantBrand
 from catora_api.restaurant import (
     Address,
+    FactState,
     FreshnessPolicy,
     GeoCoordinates,
     Menu,
@@ -22,6 +24,7 @@ from catora_api.restaurant import (
     OpeningHoursInterval,
     RestaurantBrandProjection,
     RestaurantFact,
+    RestaurantJsonValue,
     RestaurantLocationProjection,
     RestaurantSnapshot,
     SpecialHoursInterval,
@@ -37,10 +40,10 @@ OBSERVED_AT = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)
 
 def _fact(
     key: str,
-    value: object,
+    value: RestaurantJsonValue,
     *,
     observed_at: datetime = OBSERVED_AT,
-    state: str = "supported",
+    state: FactState = "supported",
     expires_at: datetime | None = None,
     invalidated_at: datetime | None = None,
 ) -> RestaurantFact:
@@ -49,7 +52,7 @@ def _fact(
         value=value,
         value_type="string",
         state=state,
-        source_record_id=str(uuid.uuid4()),
+        source_record_id=uuid.uuid4(),
         field_path=f"$.{key}",
         observed_at=observed_at,
         expires_at=expires_at,
@@ -169,6 +172,7 @@ def test_restaurant_models_register_additive_tables() -> None:
         "restaurant_freshness_policies",
         "restaurant_fact_observations",
     }
+    assert RestaurantBrand.__tablename__ == "restaurant_brands"
     assert expected.issubset(Base.metadata.tables)
     assert "products" in Base.metadata.tables
     assert "catalog_sources" in Base.metadata.tables
@@ -248,8 +252,8 @@ def test_snapshot_hash_is_stable_across_input_order() -> None:
     first_brand = _brand("North Grill", "Lahore")
     second_brand = _brand("South Grill", "Karachi")
     first = RestaurantSnapshot(
-        source_id=str(uuid.uuid4()),
-        snapshot_id=str(uuid.uuid4()),
+        source_id=uuid.uuid4(),
+        snapshot_id=uuid.uuid4(),
         observed_at=OBSERVED_AT,
         brands=(first_brand, second_brand),
     )
