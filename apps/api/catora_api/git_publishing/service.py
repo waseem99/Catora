@@ -9,10 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.db.models import AuditEvent
-from catora_api.db.models.git_publishing import GitChangeProposal, GitRepositoryConnection
+from catora_api.db.models.git_publishing import (
+    GitChangeProposal,
+    GitRepositoryConnection,
+)
 from catora_api.git_publishing.models import (
     GitPatchItem,
     GitPatchManifest,
+    GitProvider,
     GitProviderCapabilities,
     GitProviderPullRequest,
     GitRepositoryConfiguration,
@@ -21,7 +25,11 @@ from catora_api.git_publishing.policy import (
     GitPublishingPolicyError,
     build_patch_manifest,
 )
-from catora_api.git_publishing.provider import GitHostingProvider, GitProviderError, GitHubProvider
+from catora_api.git_publishing.provider import (
+    GitHostingProvider,
+    GitHubProvider,
+    GitProviderError,
+)
 
 
 class CredentialResolver(Protocol):
@@ -135,9 +143,8 @@ class GitPublishingService:
         if existing is not None:
             manifest = GitPatchManifest.model_validate(existing.patch_manifest)
             return existing, manifest
-        configuration = self._configuration(connection)
         manifest = build_patch_manifest(
-            configuration=configuration,
+            configuration=self._configuration(connection),
             base_revision=base_revision,
             proposal_branch=proposal_branch,
             title=title,
@@ -243,23 +250,10 @@ class GitPublishingService:
             lock=True,
         )
         if proposal.status == "submitted":
-            if proposal.provider_pr_number is None or proposal.provider_pr_url is None:
-                raise GitPublishingPolicyError("Submitted proposal provider state is incomplete")
-            connection = await self._connection(
+            return proposal, await self._submitted_pull_request(
                 session,
                 workspace_id=workspace_id,
-                connection_id=proposal.repository_connection_id,
-            )
-            return proposal, GitProviderPullRequest(
-                provider=cast("github | gitlab | bitbucket", connection.provider),
-                repository_full_name=connection.repository_full_name,
-                number=proposal.provider_pr_number,
-                url=proposal.provider_pr_url,
-                head_branch=proposal.proposal_branch,
-                base_branch=connection.default_branch,
-                base_revision=proposal.base_revision,
-                submitted_revision=cast(str, proposal.published_revision),
-                draft=True,
+                proposal=proposal,
             )
         if proposal.status != "approved" or proposal.reviewed_by_user_id is None:
             raise GitPublishingPolicyError("Proposal requires explicit human approval")
@@ -342,6 +336,36 @@ class GitPublishingService:
         await session.commit()
         return connection
 
+    async def _submitted_pull_request(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: uuid.UUID,
+        proposal: GitChangeProposal,
+    ) -> GitProviderPullRequest:
+        if (
+            proposal.provider_pr_number is None
+            or proposal.provider_pr_url is None
+            or proposal.published_revision is None
+        ):
+            raise GitPublishingPolicyError("Submitted proposal provider state is incomplete")
+        connection = await self._connection(
+            session,
+            workspace_id=workspace_id,
+            connection_id=proposal.repository_connection_id,
+        )
+        return GitProviderPullRequest(
+            provider=cast(GitProvider, connection.provider),
+            repository_full_name=connection.repository_full_name,
+            number=proposal.provider_pr_number,
+            url=proposal.provider_pr_url,
+            head_branch=proposal.proposal_branch,
+            base_branch=connection.default_branch,
+            base_revision=proposal.base_revision,
+            submitted_revision=proposal.published_revision,
+            draft=True,
+        )
+
     async def _connection(
         self,
         session: AsyncSession,
@@ -383,9 +407,11 @@ class GitPublishingService:
         return proposal
 
     @staticmethod
-    def _configuration(connection: GitRepositoryConnection) -> GitRepositoryConfiguration:
+    def _configuration(
+        connection: GitRepositoryConnection,
+    ) -> GitRepositoryConfiguration:
         return GitRepositoryConfiguration(
-            provider=cast("github | gitlab | bitbucket", connection.provider),
+            provider=cast(GitProvider, connection.provider),
             repository_full_name=connection.repository_full_name,
             default_branch=connection.default_branch,
             allowed_paths=tuple(connection.allowed_paths),
