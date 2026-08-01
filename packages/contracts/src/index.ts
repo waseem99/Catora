@@ -1,5 +1,6 @@
 export * from "./catalog";
 export * from "./catalog-bridge";
+export * from "./restaurant";
 
 import { z } from "zod";
 
