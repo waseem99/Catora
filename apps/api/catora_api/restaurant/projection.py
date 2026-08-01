@@ -47,7 +47,7 @@ def _canonicalize(value: object) -> object:
             str(key): _canonicalize(item)
             for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
         }
-    if isinstance(value, (list, tuple)):
+    if isinstance(value, list | tuple):
         canonical_items = [_canonicalize(item) for item in value]
         return sorted(
             canonical_items,
