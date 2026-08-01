@@ -4,11 +4,30 @@ import hashlib
 import json
 import re
 from collections import defaultdict
+from uuid import UUID
 
-from catora_api.reputation.models import ReviewAnalysis, ReviewObservation, ReviewResponseDraft
+from catora_api.reputation.models import (
+    ReviewAnalysis,
+    ReviewObservation,
+    ReviewResponseDraft,
+)
 
 _THEME_TERMS: dict[str, tuple[str, ...]] = {
-    "food_quality": ("taste", "tasty", "fresh", "cold", "stale", "undercooked", "burnt"),
+    "food_quality": (
+        "food",
+        "meal",
+        "dish",
+        "burger",
+        "pizza",
+        "taste",
+        "tasty",
+        "delicious",
+        "fresh",
+        "cold",
+        "stale",
+        "undercooked",
+        "burnt",
+    ),
     "service": ("service", "staff", "waiter", "rude", "friendly", "slow"),
     "delivery": ("delivery", "late", "rider", "packaging", "leak", "missing item"),
     "cleanliness": ("clean", "dirty", "hygiene", "smell", "washroom"),
@@ -22,14 +41,27 @@ _RISK_TERMS: dict[str, tuple[str, ...]] = {
     "legal": ("lawsuit", "lawyer", "legal action", "police"),
     "discrimination": ("racist", "discrimination", "harassment"),
 }
-_POSITIVE_TERMS = ("excellent", "great", "amazing", "delicious", "friendly", "fast", "clean")
+_POSITIVE_TERMS = (
+    "excellent",
+    "great",
+    "amazing",
+    "delicious",
+    "friendly",
+    "fast",
+    "clean",
+)
 _NEGATIVE_TERMS = ("bad", "terrible", "awful", "rude", "slow", "cold", "dirty", "late")
 _WORDS = re.compile(r"\b[\w'-]+\b", flags=re.UNICODE)
 
 
 def canonical_hash(value: object) -> str:
     return hashlib.sha256(
-        json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode()
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode()
     ).hexdigest()
 
 
@@ -61,7 +93,12 @@ def analyze_review(review: ReviewObservation) -> ReviewAnalysis:
     if review.rating <= 2 and not concerns:
         concerns.append("low_rating_without_textual_reason")
     if escalation:
-        risk_level = "critical" if any(item in {"food_safety", "allergen", "threat"} for item in escalation) else "high"
+        critical_reasons = {"food_safety", "allergen", "threat"}
+        risk_level = (
+            "critical"
+            if any(item in critical_reasons for item in escalation)
+            else "high"
+        )
     elif review.rating == 1:
         risk_level = "high"
     elif review.rating == 2:
@@ -96,14 +133,10 @@ def draft_review_response(
     review: ReviewObservation,
     analysis: ReviewAnalysis,
     *,
-    review_id: object,
+    review_id: UUID,
     restaurant_name: str,
     policy_version: str = "restaurant-review-response/v1",
 ) -> ReviewResponseDraft:
-    from uuid import UUID
-
-    if not isinstance(review_id, UUID):
-        raise ValueError("review_id must be a UUID")
     if analysis.escalation_reasons:
         raise ValueError("Escalated reviews cannot receive an automatic response draft")
     if not review.text:
@@ -114,7 +147,11 @@ def draft_review_response(
             "We appreciate your feedback and are glad the visit went well."
         )
     else:
-        issue = analysis.themes[0].replace("_", " ") if analysis.themes else "your experience"
+        issue = (
+            analysis.themes[0].replace("_", " ")
+            if analysis.themes
+            else "your experience"
+        )
         draft = (
             f"Thank you for sharing this feedback with {restaurant_name}. "
             f"We are sorry that {issue} did not meet expectations. "
