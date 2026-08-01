@@ -53,7 +53,10 @@ class GitProviderFactory:
     def __init__(self, resolver: CredentialResolver | None = None) -> None:
         self._resolver = resolver or EnvironmentCredentialResolver()
 
-    def create(self, configuration: GitRepositoryConfiguration) -> GitHostingProvider:
+    def create(
+        self,
+        configuration: GitRepositoryConfiguration,
+    ) -> GitHostingProvider:
         token = self._resolver.resolve(configuration.credential_reference)
         if configuration.provider == "github":
             return GitHubProvider(token=token)
