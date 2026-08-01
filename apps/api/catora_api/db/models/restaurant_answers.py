@@ -32,8 +32,17 @@ class RestaurantAnswerSuiteVersion(
 ):
     __tablename__ = "restaurant_answer_suite_versions"
     __table_args__ = (
-        UniqueConstraint("workspace_id", "suite_key", "suite_version"),
-        UniqueConstraint("workspace_id", "suite_sha256"),
+        UniqueConstraint(
+            "workspace_id",
+            "suite_key",
+            "suite_version",
+            name="uq_restaurant_answer_suite_workspace_key_version",
+        ),
+        UniqueConstraint(
+            "workspace_id",
+            "suite_sha256",
+            name="uq_restaurant_answer_suite_workspace_sha256",
+        ),
     )
 
     suite_key: Mapped[str] = mapped_column(String(100), nullable=False)
