@@ -156,7 +156,9 @@ class GitHubProvider:
             configuration.default_branch,
         )
         if current_revision != manifest.base_revision:
-            raise GitPublishingPolicyError("Repository default branch changed after proposal review")
+            raise GitPublishingPolicyError(
+                "Repository default branch changed after proposal review"
+            )
         for item in manifest.items:
             state = await self.file_state(
                 configuration,
@@ -167,11 +169,12 @@ class GitHubProvider:
                 raise GitPublishingPolicyError(
                     f"Create target '{item.path}' already exists at the reviewed revision"
                 )
-            if item.operation == "update":
-                if not state.exists or state.blob_sha != item.expected_blob_sha:
-                    raise GitPublishingPolicyError(
-                        f"Update target '{item.path}' changed after review"
-                    )
+            if item.operation == "update" and (
+                not state.exists or state.blob_sha != item.expected_blob_sha
+            ):
+                raise GitPublishingPolicyError(
+                    f"Update target '{item.path}' changed after review"
+                )
         base_commit = await self._request(
             "GET",
             f"/repos/{configuration.repository_full_name}/git/commits/{manifest.base_revision}",
