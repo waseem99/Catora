@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal, TypeAlias
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -34,7 +34,7 @@ ServiceMode = Literal[
     "curbside",
     "catering",
 ]
-RestaurantJsonValue: TypeAlias = (
+type RestaurantJsonValue = (
     dict[str, object] | list[object] | str | int | float | bool | None
 )
 
