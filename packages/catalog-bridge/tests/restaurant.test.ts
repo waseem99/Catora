@@ -124,7 +124,7 @@ describe("restaurant bridge client", () => {
   });
 
   it("fails before completion when declared nested counts do not reconcile", async () => {
-    const fetchImplementation: typeof fetch = async (input, init) => {
+    const fetchImplementation: typeof fetch = async (_input, init) => {
       const body = typeof init?.body === "string" ? init.body : "";
       const snapshotId = JSON.parse(body || "{}").snapshotId;
       return new Response(
@@ -170,17 +170,18 @@ describe("explicit Mongo restaurant mapper", () => {
       find: (filter: Record<string, unknown> = {}) => {
         const and = Array.isArray(filter.$and) ? filter.$and : [];
         const cursor = (and[1] as { _id?: { $gt?: string } } | undefined)?._id?.$gt;
-        const rows = cursor
+        const available = cursor
           ? documents.filter((document) => document._id > cursor)
-          : documents;
+          : [...documents];
+        let limit = available.length;
         const query = {
           sort: () => query,
-          limit: (limit: number) => {
-            rows.splice(limit);
+          limit: (value: number) => {
+            limit = value;
             return query;
           },
           lean: () => query,
-          exec: async () => rows,
+          exec: async () => available.slice(0, limit),
         };
         return query;
       },
@@ -202,10 +203,13 @@ describe("explicit Mongo restaurant mapper", () => {
       }),
     };
 
-    const mapped = [await Array.fromAsync(mongoRestaurantBrands(options))];
+    const mapped = [];
+    for await (const item of mongoRestaurantBrands(options)) {
+      mapped.push(item);
+    }
     const inspection = await inspectMongoRestaurant(options);
 
-    expect(mapped[0]).toHaveLength(2);
+    expect(mapped).toHaveLength(2);
     expect(inspection).toMatchObject({
       brandCount: 2,
       locationCount: 2,
