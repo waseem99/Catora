@@ -49,8 +49,17 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("workspace_id", "suite_key", "suite_version"),
-        sa.UniqueConstraint("workspace_id", "suite_sha256"),
+        sa.UniqueConstraint(
+            "workspace_id",
+            "suite_key",
+            "suite_version",
+            name="uq_restaurant_answer_suite_workspace_key_version",
+        ),
+        sa.UniqueConstraint(
+            "workspace_id",
+            "suite_sha256",
+            name="uq_restaurant_answer_suite_workspace_sha256",
+        ),
     )
     op.create_index(
         "ix_restaurant_answer_suite_versions_workspace_id",
