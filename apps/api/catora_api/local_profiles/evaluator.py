@@ -238,7 +238,9 @@ def evaluate_profile_conflicts(
                 ),
             )
         )
-    return tuple(sorted(conflicts, key=lambda conflict: (conflict.field_key, conflict.fingerprint)))
+    return tuple(
+        sorted(conflicts, key=lambda conflict: (conflict.field_key, conflict.fingerprint))
+    )
 
 
 def reconcile_profile_inventory(
@@ -272,7 +274,7 @@ def _present(value: object, *, field_key: str) -> bool:
         return isinstance(value, int) and value > 0
     if isinstance(value, str):
         return bool(value.strip())
-    if isinstance(value, (list, tuple, dict)):
+    if isinstance(value, list | tuple | dict):
         return bool(value)
     return value is not None
 
