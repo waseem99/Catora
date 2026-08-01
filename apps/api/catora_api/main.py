@@ -23,6 +23,7 @@ from catora_api.api import (
     demo_router,
     diagnostics_router,
     enrichment_policy_router,
+    git_publishing_router,
     ingestion_router,
     intent_parsing_router,
     intent_runs_router,
@@ -90,6 +91,7 @@ app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
 app.include_router(service_visibility_router)
 app.include_router(restaurant_answers_router)
+app.include_router(git_publishing_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)
