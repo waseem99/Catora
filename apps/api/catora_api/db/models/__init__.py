@@ -55,6 +55,12 @@ from catora_api.db.models.restaurant import (
     RestaurantOfferOrPromotion,
     RestaurantServiceArea,
 )
+from catora_api.db.models.restaurant_answers import (
+    RestaurantAnswerResult,
+    RestaurantAnswerRun,
+    RestaurantAnswerSuiteVersion,
+    RestaurantExternalCitationObservation,
+)
 from catora_api.db.models.shopify import ShopifyStoreInvitation
 from catora_api.db.models.taxonomy import ProductCategoryTag
 from catora_api.db.models.workflow import (
@@ -109,7 +115,11 @@ __all__ = [
     "RecommendationField",
     "RecommendationJob",
     "ReportJob",
+    "RestaurantAnswerResult",
+    "RestaurantAnswerRun",
+    "RestaurantAnswerSuiteVersion",
     "RestaurantBrand",
+    "RestaurantExternalCitationObservation",
     "RestaurantFactObservation",
     "RestaurantFreshnessPolicy",
     "RestaurantIdentityAlias",
