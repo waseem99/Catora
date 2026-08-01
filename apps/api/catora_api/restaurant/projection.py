@@ -134,16 +134,16 @@ def _menu_item_json_ld(item: MenuItem) -> dict[str, Any]:
     if item.description:
         payload["description"] = item.description
     if item.price_amount is not None and item.currency is not None:
-        payload["offers"] = {
+        offer: dict[str, Any] = {
             "@type": "Offer",
             "price": str(item.price_amount),
             "priceCurrency": item.currency.upper(),
-            "availability": (
-                "https://schema.org/InStock"
-                if item.availability_state == "available"
-                else "https://schema.org/OutOfStock"
-            ),
         }
+        if item.availability_state == "available":
+            offer["availability"] = "https://schema.org/InStock"
+        elif item.availability_state == "unavailable":
+            offer["availability"] = "https://schema.org/OutOfStock"
+        payload["offers"] = offer
     return payload
 
 
@@ -173,6 +173,18 @@ def _menu_json_ld(menu: Menu) -> dict[str, Any]:
     return payload
 
 
+def _location_address(location: RestaurantLocationProjection) -> dict[str, str]:
+    address = location.address
+    values = {
+        "streetAddress": address.street_address,
+        "addressLocality": address.address_locality,
+        "addressRegion": address.address_region,
+        "postalCode": address.postal_code,
+        "addressCountry": address.address_country,
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
 def _location_json_ld(location: RestaurantLocationProjection) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "@type": "Restaurant",
@@ -183,7 +195,7 @@ def _location_json_ld(location: RestaurantLocationProjection) -> dict[str, Any]:
         payload["url"] = location.website_url
     if location.phone:
         payload["telephone"] = location.phone
-    address = location.address.model_dump(mode="json", exclude_none=True)
+    address = _location_address(location)
     if address:
         payload["address"] = {"@type": "PostalAddress", **address}
     if location.geo is not None:
@@ -192,6 +204,19 @@ def _location_json_ld(location: RestaurantLocationProjection) -> dict[str, Any]:
             "latitude": str(location.geo.latitude),
             "longitude": str(location.geo.longitude),
         }
+    if location.regular_hours:
+        payload["openingHoursSpecification"] = [
+            {
+                "@type": "OpeningHoursSpecification",
+                "dayOfWeek": interval.day_of_week.title(),
+                "opens": interval.opens,
+                "closes": interval.closes,
+            }
+            for interval in sorted(
+                location.regular_hours,
+                key=lambda item: (item.day_of_week, item.opens, item.closes),
+            )
+        ]
     if location.cuisine_types:
         payload["servesCuisine"] = sorted(set(location.cuisine_types))
     active_menus = [menu for menu in location.menus if menu.status == "active"]
