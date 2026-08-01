@@ -8,8 +8,9 @@ Create Date: 2026-08-01
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0022"
 down_revision: str | None = "0021"
@@ -52,7 +53,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["workspace_id"], ["workspaces.id"], ondelete="CASCADE"
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
@@ -101,7 +104,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("provider_pr_number", sa.Integer(), nullable=True),
-        sa.Column("provider_pr_url", sa.String(length=2000), nullable=True),
+        sa.Column("provider_pr_url", sa.String(length=2_000), nullable=True),
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("published_revision", sa.String(length=64), nullable=True),
         sa.Column(
@@ -122,7 +125,9 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(
-            ["workspace_id"], ["workspaces.id"], ondelete="CASCADE"
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(
             ["repository_connection_id"],
@@ -130,13 +135,19 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["change_set_id"], ["change_sets.id"], ondelete="SET NULL"
+            ["change_set_id"],
+            ["change_sets.id"],
+            ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
-            ["requested_by_user_id"], ["users.id"], ondelete="RESTRICT"
+            ["requested_by_user_id"],
+            ["users.id"],
+            ondelete="RESTRICT",
         ),
         sa.ForeignKeyConstraint(
-            ["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"
+            ["reviewed_by_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
