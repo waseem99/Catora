@@ -30,6 +30,7 @@ from catora_api.api import (
     intents_router,
     public_catalog_router,
     recommendations_router,
+    restaurant_bridge_router,
     service_visibility_router,
     shopify_router,
     taxonomy_router,
@@ -77,6 +78,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(ingestion_router)
 app.include_router(catalog_bridge_router)
+app.include_router(restaurant_bridge_router)
 app.include_router(shopify_router)
 app.include_router(public_catalog_router)
 app.include_router(catalog_router)
