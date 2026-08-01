@@ -7,6 +7,8 @@ import unicodedata
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from pydantic import BaseModel
+
 from catora_api.restaurant.models import (
     FactState,
     FreshnessPolicy,
@@ -60,10 +62,11 @@ def _canonicalize(value: object) -> object:
 
 
 def canonical_json(value: object) -> str:
-    if hasattr(value, "model_dump"):
-        payload = value.model_dump(mode="json", exclude_none=True)  # type: ignore[attr-defined]
-    else:
-        payload = value
+    payload = (
+        value.model_dump(mode="json", exclude_none=True)
+        if isinstance(value, BaseModel)
+        else value
+    )
     return json.dumps(
         _canonicalize(payload),
         ensure_ascii=False,
