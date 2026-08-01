@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import uuid
 from datetime import UTC, datetime
-from decimal import Decimal
 from typing import cast
 
 from sqlalchemy import select, update
@@ -22,9 +22,10 @@ from catora_api.local_profiles.evaluator import (
 )
 from catora_api.local_profiles.models import (
     BranchProfileMatch,
-    LocalAddress,
-    LocalProfileObservation,
+    LocalProfileConflict,
+    LocalProvider,
     LocalProviderAccount,
+    ProviderCapability,
     RestaurantLocationIdentity,
 )
 from catora_api.local_profiles.provider import LocalProfileProvider
@@ -110,7 +111,7 @@ class LocalProfileIntelligenceService:
             lock=True,
         )
         account = LocalProviderAccount(
-            provider=cast("google_business_profile | synthetic", account_record.provider),
+            provider=cast(LocalProvider, account_record.provider),
             external_account_id=account_record.external_account_id,
             display_name=account_record.display_name,
             credential_reference=account_record.credential_reference,
@@ -345,18 +346,15 @@ class LocalProfileIntelligenceService:
         workspace_id: uuid.UUID,
         link_id: uuid.UUID,
         observation_id: uuid.UUID,
-        conflict: object,
+        conflict: LocalProfileConflict,
         observed_at: datetime,
     ) -> LocalProfileConflictRecord:
-        from catora_api.local_profiles.models import LocalProfileConflict
-
-        value = cast(LocalProfileConflict, conflict)
         record = await session.scalar(
             select(LocalProfileConflictRecord).where(
                 LocalProfileConflictRecord.workspace_id == workspace_id,
                 LocalProfileConflictRecord.branch_profile_link_id == link_id,
-                LocalProfileConflictRecord.field_key == value.field_key,
-                LocalProfileConflictRecord.fingerprint == value.fingerprint,
+                LocalProfileConflictRecord.field_key == conflict.field_key,
+                LocalProfileConflictRecord.fingerprint == conflict.fingerprint,
             )
         )
         if record is None:
@@ -364,14 +362,14 @@ class LocalProfileIntelligenceService:
                 workspace_id=workspace_id,
                 branch_profile_link_id=link_id,
                 local_profile_observation_id=observation_id,
-                field_key=value.field_key,
-                severity=value.severity,
+                field_key=conflict.field_key,
+                severity=conflict.severity,
                 status="open",
-                restaurant_value=value.restaurant_value,
-                provider_value=value.provider_value,
-                evidence={"fingerprint": value.fingerprint},
-                fingerprint=value.fingerprint,
-                explanation=value.explanation,
+                restaurant_value=conflict.restaurant_value,
+                provider_value=conflict.provider_value,
+                evidence={"fingerprint": conflict.fingerprint},
+                fingerprint=conflict.fingerprint,
+                explanation=conflict.explanation,
                 first_seen_at=observed_at,
                 last_seen_at=observed_at,
             )
@@ -405,13 +403,9 @@ class LocalProfileIntelligenceService:
         return account
 
 
-def _capability_from_payload(payload: object):
-    from catora_api.local_profiles.models import ProviderCapability
-
+def _capability_from_payload(payload: object) -> ProviderCapability:
     return ProviderCapability.model_validate(payload)
 
 
 def _hash_identifier(value: str) -> str:
-    import hashlib
-
     return hashlib.sha256(value.encode()).hexdigest()
