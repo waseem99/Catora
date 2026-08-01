@@ -101,7 +101,8 @@ describe("restaurant bridge profile", () => {
     { loyaltySession: "not-allowed" },
   ])("rejects restricted nested restaurant data", (restricted) => {
     const candidate = brand();
-    candidate.locations[0]!.menus[0]!.sections[0]!.items[0]!.dietaryFacts = restricted;
+    const item = candidate.locations[0]!.menus[0]!.sections[0]!.items[0]!;
+    (item as { dietaryFacts: unknown }).dietaryFacts = restricted;
     expect(() => RestaurantBridgeBrandSchema.parse(candidate)).toThrow();
   });
 
