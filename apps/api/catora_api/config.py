@@ -108,6 +108,9 @@ class Settings(BaseSettings):
     service_visibility_drafts_enabled: bool = False
     service_visibility_monitoring_enabled: bool = False
 
+    # Additive restaurant and multi-location projections. No live source is enabled here.
+    restaurant_domain_enabled: bool = False
+
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
