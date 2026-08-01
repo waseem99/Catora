@@ -30,6 +30,7 @@ from catora_api.api import (
     intents_router,
     public_catalog_router,
     recommendations_router,
+    restaurant_answers_router,
     restaurant_bridge_router,
     service_visibility_router,
     shopify_router,
@@ -88,6 +89,7 @@ app.include_router(audits_router)
 app.include_router(audit_rules_router)
 app.include_router(recommendations_router)
 app.include_router(service_visibility_router)
+app.include_router(restaurant_answers_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)

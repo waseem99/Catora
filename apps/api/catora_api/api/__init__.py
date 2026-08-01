@@ -17,6 +17,7 @@ from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
+from catora_api.api.restaurant_answers import router as restaurant_answers_router
 from catora_api.api.restaurant_bridge import router as restaurant_bridge_router
 from catora_api.api.service_visibility import router as service_visibility_router
 from catora_api.api.shopify import router as shopify_router
@@ -51,6 +52,7 @@ __all__ = [
     "intents_router",
     "public_catalog_router",
     "recommendations_router",
+    "restaurant_answers_router",
     "restaurant_bridge_router",
     "service_visibility_router",
     "shopify_router",
