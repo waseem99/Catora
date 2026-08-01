@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Literal, TypeAlias
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-RESTAURANT_DOMAIN_VERSION = "restaurant-domain/v1"
+RESTAURANT_DOMAIN_VERSION: Literal["restaurant-domain/v1"] = "restaurant-domain/v1"
 
 FactState = Literal[
     "supported",
@@ -33,7 +34,7 @@ ServiceMode = Literal[
     "curbside",
     "catering",
 ]
-RestaurantJsonValue = (
+RestaurantJsonValue: TypeAlias = (
     dict[str, object] | list[object] | str | int | float | bool | None
 )
 
@@ -91,7 +92,7 @@ class RestaurantFact(RestaurantModel):
     value_type: str = Field(min_length=1, max_length=50)
     state: FactState
     confidence: Confidence = "high"
-    source_record_id: str
+    source_record_id: UUID
     field_path: str = Field(min_length=1, max_length=500)
     observed_at: datetime
     effective_at: datetime | None = None
@@ -138,7 +139,7 @@ class FreshnessPolicy(RestaurantModel):
 class IdentityAlias(RestaurantModel):
     alias: str = Field(min_length=1, max_length=500)
     normalized_alias: str = Field(min_length=1, max_length=500)
-    source_record_id: str | None = None
+    source_record_id: UUID | None = None
 
 
 class ServiceArea(RestaurantModel):
@@ -321,8 +322,8 @@ class RestaurantBrandProjection(RestaurantModel):
 
 class RestaurantSnapshot(RestaurantModel):
     version: Literal["restaurant-domain/v1"] = RESTAURANT_DOMAIN_VERSION
-    source_id: str
-    snapshot_id: str
+    source_id: UUID
+    snapshot_id: UUID
     observed_at: datetime
     brands: tuple[RestaurantBrandProjection, ...]
 
