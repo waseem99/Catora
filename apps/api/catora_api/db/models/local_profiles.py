@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,7 +38,9 @@ class LocalProfileProviderAccount(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -45,7 +57,9 @@ class LocalProfileProviderAccount(Base):
     sync_checkpoint: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -78,7 +92,9 @@ class LocalProfileObservationRecord(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -114,7 +130,9 @@ class LocalProfileObservationRecord(Base):
     observation_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
@@ -141,7 +159,9 @@ class BranchLocalProfileLink(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -163,11 +183,14 @@ class BranchLocalProfileLink(Base):
     confidence_basis_points: Mapped[int] = mapped_column(Integer, nullable=False)
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     decided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
     )
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -196,7 +219,9 @@ class LocalProfileConflictRecord(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
     )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -225,5 +250,7 @@ class LocalProfileConflictRecord(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
