@@ -8,8 +8,9 @@ Create Date: 2026-08-01
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0024"
 down_revision: str | None = "0023"
@@ -29,9 +30,23 @@ def upgrade() -> None:
         sa.Column("status", sa.String(30), nullable=False),
         sa.Column("sync_checkpoint", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("disconnected_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "workspace_id",
@@ -58,17 +73,38 @@ def upgrade() -> None:
         sa.Column("language", sa.String(35), nullable=True),
         sa.Column("reviewer_display_name", sa.String(300), nullable=True),
         sa.Column("provider_response_text", sa.Text(), nullable=True),
-        sa.Column("provider_response_updated_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column(
+            "provider_response_updated_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
         sa.Column("review_created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("review_updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("review_state", sa.String(30), nullable=False),
         sa.Column("observation_hash", sa.String(64), nullable=False),
         sa.Column("is_current", sa.Boolean(), nullable=False),
         sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["provider_account_id"], ["review_provider_accounts.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["restaurant_location_id"], ["restaurant_locations.id"], ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["provider_account_id"],
+            ["review_provider_accounts.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["restaurant_location_id"],
+            ["restaurant_locations.id"],
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "provider_account_id",
@@ -97,12 +133,29 @@ def upgrade() -> None:
         sa.Column("praise", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("concerns", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("risk_level", sa.String(30), nullable=False),
-        sa.Column("escalation_reasons", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "escalation_reasons",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
         sa.Column("evidence", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("fingerprint", sa.String(64), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["review_observation_id"], ["review_observations.id"], ondelete="CASCADE"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["review_observation_id"],
+            ["review_observations.id"],
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "workspace_id",
@@ -131,11 +184,32 @@ def upgrade() -> None:
         sa.Column("evidence", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("decision_reason", sa.Text(), nullable=True),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["review_observation_id"], ["review_observations.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["generated_by_user_id"], ["users.id"], ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["reviewed_by_user_id"], ["users.id"], ondelete="SET NULL"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["workspace_id"],
+            ["workspaces.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["review_observation_id"],
+            ["review_observations.id"],
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["generated_by_user_id"],
+            ["users.id"],
+            ondelete="RESTRICT",
+        ),
+        sa.ForeignKeyConstraint(
+            ["reviewed_by_user_id"],
+            ["users.id"],
+            ondelete="SET NULL",
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "workspace_id",
@@ -152,12 +226,27 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index("ix_review_response_drafts_workspace_status", table_name="review_response_drafts")
+    op.drop_index(
+        "ix_review_response_drafts_workspace_status",
+        table_name="review_response_drafts",
+    )
     op.drop_table("review_response_drafts")
-    op.drop_index("ix_review_analyses_workspace_risk", table_name="review_analyses")
+    op.drop_index(
+        "ix_review_analyses_workspace_risk",
+        table_name="review_analyses",
+    )
     op.drop_table("review_analyses")
-    op.drop_index("ix_review_observations_account_current", table_name="review_observations")
-    op.drop_index("ix_review_observations_workspace_location_created", table_name="review_observations")
+    op.drop_index(
+        "ix_review_observations_account_current",
+        table_name="review_observations",
+    )
+    op.drop_index(
+        "ix_review_observations_workspace_location_created",
+        table_name="review_observations",
+    )
     op.drop_table("review_observations")
-    op.drop_index("ix_review_accounts_workspace_status", table_name="review_provider_accounts")
+    op.drop_index(
+        "ix_review_accounts_workspace_status",
+        table_name="review_provider_accounts",
+    )
     op.drop_table("review_provider_accounts")
