@@ -4,7 +4,17 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -23,9 +33,15 @@ class ReviewProviderAccount(Base):
         Index("ix_review_accounts_workspace_status", "workspace_id", "status"),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     external_account_id: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -35,10 +51,15 @@ class ReviewProviderAccount(Base):
     sync_checkpoint: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     disconnected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
@@ -64,9 +85,15 @@ class ReviewObservationRecord(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     provider_account_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True),
@@ -74,7 +101,8 @@ class ReviewObservationRecord(Base):
         nullable=False,
     )
     restaurant_location_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("restaurant_locations.id", ondelete="SET NULL")
+        Uuid(as_uuid=True),
+        ForeignKey("restaurant_locations.id", ondelete="SET NULL"),
     )
     external_location_id: Mapped[str | None] = mapped_column(String(500))
     external_review_id: Mapped[str] = mapped_column(String(500), nullable=False)
@@ -83,15 +111,22 @@ class ReviewObservationRecord(Base):
     language: Mapped[str | None] = mapped_column(String(35))
     reviewer_display_name: Mapped[str | None] = mapped_column(String(300))
     provider_response_text: Mapped[str | None] = mapped_column(Text)
-    provider_response_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    review_created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    provider_response_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    review_created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
     review_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     review_state: Mapped[str] = mapped_column(String(30), nullable=False)
     observation_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     is_current: Mapped[bool] = mapped_column(nullable=False, default=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
@@ -112,12 +147,20 @@ class ReviewAnalysisRecord(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     review_observation_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("review_observations.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("review_observations.id", ondelete="CASCADE"),
+        nullable=False,
     )
     analysis_version: Mapped[str] = mapped_column(String(100), nullable=False)
     themes: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
@@ -128,7 +171,9 @@ class ReviewAnalysisRecord(Base):
     evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
 
 
@@ -149,19 +194,30 @@ class ReviewResponseDraftRecord(Base):
         ),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
     workspace_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     review_observation_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("review_observations.id", ondelete="CASCADE"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("review_observations.id", ondelete="CASCADE"),
+        nullable=False,
     )
     draft_version: Mapped[int] = mapped_column(Integer, nullable=False)
     generated_by_user_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL")
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
     )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="draft")
     draft_text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -171,5 +227,7 @@ class ReviewResponseDraftRecord(Base):
     decision_reason: Mapped[str | None] = mapped_column(Text)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=func.now()
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
     )
