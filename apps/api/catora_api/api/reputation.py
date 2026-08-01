@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -100,14 +99,19 @@ async def import_synthetic_reviews(
         )
     )
     if account is None or account.provider != "synthetic" or account.status != "ready":
-        raise HTTPException(status_code=409, detail="Only an active synthetic review provider is accepted")
+        raise HTTPException(
+            status_code=409,
+            detail="Only an active synthetic review provider is accepted",
+        )
     accepted = duplicate = analyzed = escalated = 0
     for observation in payload.observations:
         existing = await session.scalar(
             select(ReviewObservationRecord).where(
                 ReviewObservationRecord.provider_account_id == account.id,
-                ReviewObservationRecord.external_review_id == observation.external_review_id,
-                ReviewObservationRecord.observation_hash == observation.observation_hash,
+                ReviewObservationRecord.external_review_id
+                == observation.external_review_id,
+                ReviewObservationRecord.observation_hash
+                == observation.observation_hash,
             )
         )
         if existing is not None:
@@ -117,7 +121,8 @@ async def import_synthetic_reviews(
             update(ReviewObservationRecord)
             .where(
                 ReviewObservationRecord.provider_account_id == account.id,
-                ReviewObservationRecord.external_review_id == observation.external_review_id,
+                ReviewObservationRecord.external_review_id
+                == observation.external_review_id,
                 ReviewObservationRecord.is_current.is_(True),
             )
             .values(is_current=False)
