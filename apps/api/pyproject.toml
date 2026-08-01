@@ -68,3 +68,5 @@ testpaths = ["tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*.py" = ["E501"]
+"catora_api/normalization/restaurant_bridge.py" = ["F401"]
+"catora_api/schemas/restaurant_bridge.py" = ["UP040"]
