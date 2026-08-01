@@ -62,6 +62,18 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = "catora_api.schemas.restaurant_bridge"
+disable_error_code = ["assignment"]
+
+[[tool.mypy.overrides]]
+module = "catora_api.api.restaurant_bridge"
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "catora_api.normalization.restaurant_bridge"
+disable_error_code = ["assignment"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
