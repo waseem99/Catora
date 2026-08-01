@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +19,12 @@ from catora_api.restaurant_answers.evaluator import (
     restaurant_question_suite,
 )
 from catora_api.restaurant_answers.models import (
+    AnswerState,
     ExternalCitationObservation,
     RestaurantAnswerRunSnapshot,
+    RestaurantEntityType,
     RestaurantFactEvidence,
+    RestaurantQuestionEvaluation,
 )
 
 
@@ -35,7 +39,7 @@ class RestaurantAnswerEvaluationService:
         *,
         workspace_id: uuid.UUID,
         actor_user_id: uuid.UUID,
-        entity_type: str,
+        entity_type: RestaurantEntityType,
         entity_id: uuid.UUID,
         evidence: tuple[RestaurantFactEvidence, ...],
         idempotency_key: str,
@@ -72,7 +76,7 @@ class RestaurantAnswerEvaluationService:
             input_sha256=snapshot.input_sha256,
             status="completed",
             evaluated_at=snapshot.evaluated_at,
-            state_counts=dict(snapshot.state_counts),
+            state_counts={key: value for key, value in snapshot.state_counts.items()},
             input_snapshot={
                 "contract_version": snapshot.contract_version,
                 "suite_key": snapshot.suite_key,
@@ -145,15 +149,14 @@ class RestaurantAnswerEvaluationService:
                 .order_by(RestaurantAnswerResult.question_key)
             )
         ).all()
-        from catora_api.restaurant_answers.models import RestaurantQuestionEvaluation
-
+        entity_type = cast(RestaurantEntityType, run.entity_type)
         results = tuple(
             RestaurantQuestionEvaluation(
                 question_key=row.question_key,
                 question=row.question,
-                entity_type=run.entity_type,  # type: ignore[arg-type]
+                entity_type=entity_type,
                 entity_id=run.entity_id,
-                state=row.state,  # type: ignore[arg-type]
+                state=cast(AnswerState, row.state),
                 rationale=row.rationale,
                 evidence_ids=tuple(uuid.UUID(value) for value in row.evidence_ids),
                 fact_keys=tuple(row.fact_keys),
@@ -162,15 +165,19 @@ class RestaurantAnswerEvaluationService:
             for row in rows
         )
         input_snapshot = dict(run.input_snapshot)
+        state_counts = {
+            cast(AnswerState, key): value
+            for key, value in run.state_counts.items()
+        }
         return RestaurantAnswerRunSnapshot(
             suite_key=str(input_snapshot["suite_key"]),
             suite_version=str(input_snapshot["suite_version"]),
             suite_sha256=str(input_snapshot["suite_sha256"]),
-            entity_type=run.entity_type,  # type: ignore[arg-type]
+            entity_type=entity_type,
             entity_id=run.entity_id,
             evaluated_at=run.evaluated_at,
             results=results,
-            state_counts=dict(run.state_counts),  # type: ignore[arg-type]
+            state_counts=state_counts,
             input_sha256=run.input_sha256,
         )
 
@@ -180,7 +187,7 @@ class RestaurantAnswerEvaluationService:
         *,
         workspace_id: uuid.UUID,
         actor_user_id: uuid.UUID,
-        entity_type: str,
+        entity_type: RestaurantEntityType,
         entity_id: uuid.UUID,
         observation: ExternalCitationObservation,
         provider_cost_microunits: int | None = None,
