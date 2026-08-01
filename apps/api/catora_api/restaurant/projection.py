@@ -39,13 +39,33 @@ def stable_canonical_key(namespace: str, *parts: str) -> str:
     return f"{normalized_namespace}:{readable}:{digest}"
 
 
+def _canonicalize(value: object) -> object:
+    if isinstance(value, dict):
+        return {
+            str(key): _canonicalize(item)
+            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+        }
+    if isinstance(value, (list, tuple)):
+        canonical_items = [_canonicalize(item) for item in value]
+        return sorted(
+            canonical_items,
+            key=lambda item: json.dumps(
+                item,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                sort_keys=True,
+            ),
+        )
+    return value
+
+
 def canonical_json(value: object) -> str:
     if hasattr(value, "model_dump"):
         payload = value.model_dump(mode="json", exclude_none=True)  # type: ignore[attr-defined]
     else:
         payload = value
     return json.dumps(
-        payload,
+        _canonicalize(payload),
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
