@@ -3,8 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
-from typing import Any
-from uuid import uuid4
+from uuid import UUID
 
 import httpx
 import pytest
@@ -27,6 +26,7 @@ TREE_SHA = "c" * 40
 NEW_BLOB = "d" * 40
 NEW_TREE = "e" * 40
 NEW_COMMIT = "f" * 40
+EVIDENCE_ID = UUID("eea45767-a78c-493d-916c-0a502a43a2a8")
 
 
 def _configuration() -> GitRepositoryConfiguration:
@@ -51,7 +51,7 @@ def _evidence() -> tuple[GitEvidenceReference, ...]:
     return (
         GitEvidenceReference(
             evidence_type="restaurant_audit_finding",
-            evidence_id=uuid4(),
+            evidence_id=EVIDENCE_ID,
             checksum=hashlib.sha256(b"evidence").hexdigest(),
             observed_at=datetime(2026, 8, 1, 12, 0, tzinfo=UTC).isoformat(),
             source_url="https://example.test/locations/lahore",
