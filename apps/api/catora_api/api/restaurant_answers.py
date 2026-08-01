@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from catora_api.auth.dependencies import (
     AuthContextDependency,
@@ -15,6 +17,7 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
+from catora_api.db.models.restaurant_answers import RestaurantAnswerRun
 from catora_api.restaurant_answers.evaluator import restaurant_question_suite
 from catora_api.restaurant_answers.models import (
     RestaurantAnswerRunSnapshot,
@@ -50,10 +53,15 @@ class RestaurantAnswerRunResponse(RestaurantAnswerApiModel):
     snapshot: RestaurantAnswerRunSnapshot
 
 
+def _answer_evaluation_enabled() -> bool:
+    value = os.getenv("CATORA_RESTAURANT_ANSWER_EVALUATION_ENABLED", "false")
+    return value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
 def _require_enabled(settings: SettingsDependency) -> None:
     if not settings.restaurant_domain_enabled:
         raise HTTPException(status_code=503, detail="Restaurant domain is disabled")
-    if not settings.restaurant_answer_evaluation_enabled:
+    if not _answer_evaluation_enabled():
         raise HTTPException(
             status_code=503,
             detail="Restaurant answer evaluation is disabled",
@@ -147,13 +155,12 @@ async def get_restaurant_answer_run(
         )
     except RestaurantAnswerEvaluationError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    run = await session.get(
-        __import__(
-            "catora_api.db.models.restaurant_answers",
-            fromlist=["RestaurantAnswerRun"],
-        ).RestaurantAnswerRun,
-        run_id,
+    run = await session.scalar(
+        select(RestaurantAnswerRun).where(
+            RestaurantAnswerRun.id == run_id,
+            RestaurantAnswerRun.workspace_id == workspace_id,
+        )
     )
-    if run is None or run.workspace_id != workspace_id:
+    if run is None:
         raise HTTPException(status_code=404, detail="Restaurant answer run not found")
     return RestaurantAnswerRunResponse(run_id=run.id, snapshot=snapshot)
