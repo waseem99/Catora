@@ -14,7 +14,9 @@ from catora_api.ingestion.factory import connector_for_source
 from catora_api.ingestion.service import IngestionService
 from catora_api.normalization.catalog_bridge import CatalogBridgeNormalizationPipeline
 from catora_api.normalization.pipeline import CatalogNormalizationPipeline
-from catora_api.normalization.restaurant_bridge import RestaurantBridgeNormalizationPipeline
+from catora_api.normalization.restaurant_bridge_runtime import (
+    RestaurantBridgeRuntimePipeline,
+)
 from catora_api.storage import ObjectStorage
 
 
@@ -41,7 +43,7 @@ def _normalization_pipeline(source: CatalogSource) -> _NormalizationPipeline:
     if source.source_type != "bridge":
         return CatalogNormalizationPipeline()
     if source.config.get("profile") == "restaurant/v1":
-        return RestaurantBridgeNormalizationPipeline()
+        return RestaurantBridgeRuntimePipeline()
     return CatalogBridgeNormalizationPipeline()
 
 
