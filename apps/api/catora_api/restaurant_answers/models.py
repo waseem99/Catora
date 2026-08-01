@@ -94,9 +94,12 @@ class RestaurantFactEvidence(RestaurantAnswerModel):
         values = (self.observed_at, self.effective_at, self.expires_at)
         if any(value is not None and value.tzinfo is None for value in values):
             raise ValueError("Evidence timestamps must be timezone-aware")
-        if self.effective_at is not None and self.expires_at is not None:
-            if self.expires_at <= self.effective_at:
-                raise ValueError("expires_at must be later than effective_at")
+        if (
+            self.effective_at is not None
+            and self.expires_at is not None
+            and self.expires_at <= self.effective_at
+        ):
+            raise ValueError("expires_at must be later than effective_at")
         return self
 
 
