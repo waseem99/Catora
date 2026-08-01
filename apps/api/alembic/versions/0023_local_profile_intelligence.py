@@ -8,8 +8,9 @@ Create Date: 2026-08-01
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0023"
 down_revision: str | None = "0022"
@@ -84,7 +85,11 @@ def upgrade() -> None:
         sa.Column("service_areas", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("media_summary", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("completeness", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-        sa.Column("raw_fields_present", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column(
+            "raw_fields_present",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+        ),
         sa.Column("observed_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("source_updated_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("observation_hash", sa.String(length=64), nullable=False),
@@ -195,8 +200,16 @@ def upgrade() -> None:
         sa.Column("field_key", sa.String(length=160), nullable=False),
         sa.Column("severity", sa.String(length=30), nullable=False),
         sa.Column("status", sa.String(length=30), nullable=False),
-        sa.Column("restaurant_value", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column("provider_value", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "restaurant_value",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
+        sa.Column(
+            "provider_value",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=True,
+        ),
         sa.Column("evidence", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("fingerprint", sa.String(length=64), nullable=False),
         sa.Column("explanation", sa.Text(), nullable=False),
