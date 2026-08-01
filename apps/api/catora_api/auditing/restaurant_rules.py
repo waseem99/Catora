@@ -4,7 +4,7 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from catora_api.auditing.rules import (
@@ -15,6 +15,7 @@ from catora_api.auditing.rules import (
 )
 from catora_api.auditing.types import (
     AttributeSnapshot,
+    AttributeValue,
     EvidenceSnapshot,
     FindingCandidate,
     ProductAuditSnapshot,
@@ -239,7 +240,12 @@ def restaurant_page_snapshot(page: RestaurantWebPageSnapshot) -> ProductAuditSna
         ("rendered_text", page.rendered_text, "string"),
         ("response_time_ms", page.response_time_ms, "integer"),
     ):
-        attributes[key] = _attribute(key, value, value_type, page.evidence)
+        attributes[key] = _attribute(
+            key,
+            cast(AttributeValue, value),
+            value_type,
+            page.evidence,
+        )
     return ProductAuditSnapshot(
         product_id=page.page_id,
         category_key=_PAGE_CATEGORY[page.page_type],
@@ -314,7 +320,7 @@ def _field_rule(
 
 def _attribute(
     key: str,
-    value: object,
+    value: AttributeValue,
     value_type: str,
     evidence: tuple[EvidenceSnapshot, ...],
 ) -> AttributeSnapshot:
@@ -401,7 +407,11 @@ def _specialized_evaluations(
     )
     raw_words = _word_count(page.body_text)
     rendered_words = _word_count(page.rendered_text or "")
-    rendered_consistent = page.rendered_text is None or raw_words < 50 or rendered_words >= raw_words // 3
+    rendered_consistent = (
+        page.rendered_text is None
+        or raw_words < 50
+        or rendered_words >= raw_words // 3
+    )
     evaluations.append(
         _condition_evaluation(
             page,
@@ -414,7 +424,7 @@ def _specialized_evaluations(
             failure_code="content_hidden_after_render",
             business_impact="discoverability",
             remediation_type="expose_content_in_rendered_html",
-            affected_value={"raw_words": raw_words, "rendered_words": rendered_words},
+            affected_value=f"raw_words={raw_words};rendered_words={rendered_words}",
         )
     )
     thin_threshold = 150 if page.page_type in {"location", "service_area"} else 100
@@ -512,7 +522,7 @@ def _condition_evaluation(
     failure_code: str,
     business_impact: str,
     remediation_type: str,
-    affected_value: object,
+    affected_value: AttributeValue,
 ) -> RuleEvaluation:
     rule_key = f"builtin.restaurant.{rule_suffix}.{RESTAURANT_AUDIT_PACK_VERSION}"
     rule_version_id = uuid.uuid5(_RESTAURANT_RULE_NAMESPACE, rule_key)
@@ -561,10 +571,13 @@ def _condition_evaluation(
 
 
 def _normalized_url(value: str) -> str:
-    parsed = urlsplit(value)
-    scheme = parsed.scheme.casefold()
-    host = (parsed.hostname or "").casefold()
-    port = parsed.port
+    try:
+        parsed = urlsplit(value)
+        scheme = parsed.scheme.casefold()
+        host = (parsed.hostname or "").casefold()
+        port = parsed.port
+    except ValueError:
+        return ""
     netloc = host if port is None else f"{host}:{port}"
     path = parsed.path or "/"
     if path != "/":
