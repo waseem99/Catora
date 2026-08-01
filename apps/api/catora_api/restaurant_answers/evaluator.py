@@ -8,6 +8,7 @@ from uuid import UUID
 from catora_api.restaurant_answers.models import (
     AnswerState,
     RestaurantAnswerRunSnapshot,
+    RestaurantEntityType,
     RestaurantFactEvidence,
     RestaurantQuestionDefinition,
     RestaurantQuestionEvaluation,
@@ -111,14 +112,16 @@ def restaurant_question_suite() -> RestaurantQuestionSuite:
         "questions": [question.model_dump(mode="json") for question in _QUESTIONS],
     }
     return RestaurantQuestionSuite(
-        **payload,
+        suite_key=_SUITE_KEY,
+        suite_version=_SUITE_VERSION,
+        questions=_QUESTIONS,
         suite_sha256=_sha256(payload),
     )
 
 
 def evaluate_restaurant_questions(
     *,
-    entity_type: str,
+    entity_type: RestaurantEntityType,
     entity_id: UUID,
     evidence: tuple[RestaurantFactEvidence, ...],
     as_of: datetime | None = None,
@@ -170,7 +173,7 @@ def evaluate_restaurant_questions(
         suite_key=selected_suite.suite_key,
         suite_version=selected_suite.suite_version,
         suite_sha256=selected_suite.suite_sha256,
-        entity_type=entity_type,  # type: ignore[arg-type]
+        entity_type=entity_type,
         entity_id=entity_id,
         evaluated_at=evaluated_at,
         results=results,
@@ -191,9 +194,7 @@ def _evaluate_question(
         for key in question.required_fact_keys
     }
     all_items = tuple(item for values in by_key.values() for item in values)
-    evidence_ids = tuple(
-        sorted({item.evidence_id for item in all_items}, key=str)
-    )
+    evidence_ids = tuple(sorted({item.evidence_id for item in all_items}, key=str))
     missing_keys = tuple(key for key, values in by_key.items() if not values)
     inaccessible_keys = tuple(
         key
