@@ -7,12 +7,14 @@ from typing import Any
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-CURRENT_SCHEMA_REVISION = "0025"
+CURRENT_SCHEMA_REVISION = "0027"
 _REQUIRED_SCHEMA_CHAIN = {
     "0022": "0021",
     "0023": "0022",
     "0024": "0023",
     "0025": "0024",
+    "0026": "0025",
+    "0027": "0026",
 }
 _REQUIRED_TABLES = {
     "local_profile_provider_accounts",
@@ -28,6 +30,18 @@ _REQUIRED_TABLES = {
     "measurement_observations",
     "measurement_attribution_links",
     "measurement_change_annotations",
+    "authority_provider_accounts",
+    "authority_observations",
+    "authority_opportunities",
+    "authority_suppressions",
+    "authority_outreach_drafts",
+    "authority_outreach_decisions",
+    "operations_console_snapshots",
+    "operations_console_alerts",
+    "operations_console_actions",
+    "operations_monitor_schedules",
+    "operations_monitor_runs",
+    "operations_console_exports",
 }
 _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/local-profile-accounts",
@@ -45,11 +59,36 @@ _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/measurements/attributions",
     "/api/v1/workspaces/{workspace_id}/measurements/annotations",
     "/api/v1/workspaces/{workspace_id}/measurements/accounts/{account_id}",
+    "/api/v1/workspaces/{workspace_id}/authority/import-synthetic",
+    "/api/v1/workspaces/{workspace_id}/authority/accounts",
+    "/api/v1/workspaces/{workspace_id}/authority/observations",
+    "/api/v1/workspaces/{workspace_id}/authority/opportunities",
+    "/api/v1/workspaces/{workspace_id}/authority/suppressions",
+    "/api/v1/workspaces/{workspace_id}/authority/opportunities/{opportunity_id}/outreach-drafts",
+    "/api/v1/workspaces/{workspace_id}/authority/outreach-drafts/{draft_id}/decision",
+    "/api/v1/workspaces/{workspace_id}/authority/accounts/{account_id}",
+    "/api/v1/workspaces/{workspace_id}/operations-console/snapshots",
+    "/api/v1/workspaces/{workspace_id}/operations-console/snapshots/latest",
+    "/api/v1/workspaces/{workspace_id}/operations-console/snapshots/{snapshot_id}",
+    "/api/v1/workspaces/{workspace_id}/operations-console/snapshots/{snapshot_id}/exports/{export_format}",
+    "/api/v1/workspaces/{workspace_id}/operations-console/exports/{export_id}",
+    "/api/v1/workspaces/{workspace_id}/operations-console/alerts",
+    "/api/v1/workspaces/{workspace_id}/operations-console/alerts/{alert_id}/acknowledge",
+    "/api/v1/workspaces/{workspace_id}/operations-console/alerts/{alert_id}/resolve",
+    "/api/v1/workspaces/{workspace_id}/operations-console/actions",
+    "/api/v1/workspaces/{workspace_id}/operations-console/actions/{action_id}/decision",
+    "/api/v1/workspaces/{workspace_id}/operations-console/monitor-schedules",
+    "/api/v1/workspaces/{workspace_id}/operations-console/monitor-schedules/{schedule_key}",
+    "/api/v1/workspaces/{workspace_id}/operations-console/monitor-schedules/{schedule_id}/run",
+    "/api/v1/workspaces/{workspace_id}/operations-console/monitor-runs",
 }
 _REQUIRED_SETTINGS = {
     "local_profile_intelligence_enabled",
     "reputation_intelligence_enabled",
     "measurement_connectors_enabled",
+    "authority_intelligence_enabled",
+    "restaurant_operations_console_enabled",
+    "restaurant_monitoring_enabled",
 }
 
 
