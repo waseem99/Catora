@@ -166,3 +166,5 @@ The source-controlled version policy is `shopify/public/api-version-policy.json`
 ## Required operator metadata
 
 Copy `shopify/public/review-submission.example.json` to the ignored file `shopify/public/review-submission.json` and fill every blank field with authoritative information. Do not commit review-store contact details or internal release notes unless they are intentionally public.
+
+<!-- Branch-only CI maintenance verification marker; do not merge. -->
