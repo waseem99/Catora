@@ -97,6 +97,12 @@ from catora_api.db.models.restaurant_answers import (
     RestaurantAnswerSuiteVersion,
     RestaurantExternalCitationObservation,
 )
+from catora_api.db.models.restaurant_pilot import (
+    RestaurantPilotAcceptanceCheckRecord,
+    RestaurantPilotAcceptanceDecisionRecord,
+    RestaurantPilotAcceptancePlanRecord,
+    RestaurantPilotDisconnectRunRecord,
+)
 from catora_api.db.models.shopify import ShopifyStoreInvitation
 from catora_api.db.models.taxonomy import ProductCategoryTag
 from catora_api.db.models.workflow import (
@@ -189,6 +195,10 @@ __all__ = [
     "RestaurantModifierGroup",
     "RestaurantModifierOption",
     "RestaurantOfferOrPromotion",
+    "RestaurantPilotAcceptanceCheckRecord",
+    "RestaurantPilotAcceptanceDecisionRecord",
+    "RestaurantPilotAcceptancePlanRecord",
+    "RestaurantPilotDisconnectRunRecord",
     "RestaurantServiceArea",
     "ReviewAnalysisRecord",
     "ReviewDecision",
