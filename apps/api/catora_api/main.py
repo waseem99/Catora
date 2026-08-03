@@ -29,8 +29,10 @@ from catora_api.api import (
     intent_runs_router,
     intent_templates_router,
     intents_router,
+    local_profiles_router,
     public_catalog_router,
     recommendations_router,
+    reputation_router,
     restaurant_answers_router,
     restaurant_bridge_router,
     service_visibility_router,
@@ -74,7 +76,7 @@ settings = get_settings()
 app = FastAPI(
     title="Catora API",
     version=__version__,
-    description="Enterprise catalog and service visibility intelligence API",
+    description="Enterprise catalog, restaurant and service visibility intelligence API",
     lifespan=lifespan,
 )
 app.include_router(auth_router)
@@ -92,6 +94,8 @@ app.include_router(recommendations_router)
 app.include_router(service_visibility_router)
 app.include_router(restaurant_answers_router)
 app.include_router(git_publishing_router)
+app.include_router(local_profiles_router)
+app.include_router(reputation_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)
@@ -172,8 +176,6 @@ async def _check_storage(settings: Settings) -> None:
             aws_access_key_id=settings.s3_access_key,
             aws_secret_access_key=settings.s3_secret_key,
         )
-        # Railway Bucket credentials are scoped to one bucket and support
-        # bucket object operations, not the account-wide ListBuckets API.
         client.list_objects_v2(Bucket=settings.s3_bucket, MaxKeys=1)
 
     await asyncio.to_thread(check)
