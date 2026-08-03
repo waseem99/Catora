@@ -17,6 +17,7 @@ from catora_api.api.intent_suites import router as _intent_suites_router
 from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
 from catora_api.api.local_profiles import router as local_profiles_router
+from catora_api.api.measurement import router as measurement_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.reputation import router as reputation_router
@@ -55,6 +56,7 @@ __all__ = [
     "intent_templates_router",
     "intents_router",
     "local_profiles_router",
+    "measurement_router",
     "public_catalog_router",
     "recommendations_router",
     "reputation_router",

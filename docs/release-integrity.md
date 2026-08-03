@@ -17,7 +17,7 @@ The release-integrity command fails when:
 
 - Alembic has zero, multiple, unexpected, or broken heads;
 - a required migration predecessor is missing;
-- local-profile or reputation ORM tables are not registered through `catora_api.db`;
+- local-profile, reputation or measurement ORM tables are not registered through `catora_api.db`;
 - required FastAPI routes are not registered in the application;
 - release-bearing feature flags bypass the typed `Settings` model.
 
@@ -35,11 +35,12 @@ The job also runs the enterprise-demo reset twice and validates the generated Sh
 
 ## Feature-state rules
 
-`CATORA_LOCAL_PROFILE_INTELLIGENCE_ENABLED` and `CATORA_REPUTATION_INTELLIGENCE_ENABLED` default to `false`. Enabling either flag exposes only the repository-tested synthetic/read-only runtime:
+`CATORA_LOCAL_PROFILE_INTELLIGENCE_ENABLED`, `CATORA_REPUTATION_INTELLIGENCE_ENABLED` and `CATORA_MEASUREMENT_CONNECTORS_ENABLED` default to `false`. Enabling these flags exposes only the repository-tested synthetic/read-only runtime:
 
 - Google Business Profile access is unavailable until an explicit account-level acceptance exists.
 - Reputation response drafts require human approval and cannot be posted by Catora.
-- Neither module connects Ranchers or any other production client account.
+- Measurement imports accept only aggregate allowlisted dimensions, expose no live provider-connect route and prohibit causal, ranking, traffic, revenue or ROI claims.
+- None of these modules connects Ranchers or another production client account.
 
 ## Merge and deployment evidence
 

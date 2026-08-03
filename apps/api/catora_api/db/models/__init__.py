@@ -41,6 +41,13 @@ from catora_api.db.models.local_profiles import (
     LocalProfileObservationRecord,
     LocalProfileProviderAccount,
 )
+from catora_api.db.models.measurement import (
+    MeasurementAttributionLink,
+    MeasurementChangeAnnotation,
+    MeasurementObservationRecord,
+    MeasurementPropertyRecord,
+    MeasurementProviderAccount,
+)
 from catora_api.db.models.reporting import (
     AuditEvent,
     ExportArtifact,
@@ -118,7 +125,12 @@ __all__ = [
     "Market",
     "MarketComparison",
     "MarketConflict",
+    "MeasurementAttributionLink",
     "MeasurementBaseline",
+    "MeasurementChangeAnnotation",
+    "MeasurementObservationRecord",
+    "MeasurementPropertyRecord",
+    "MeasurementProviderAccount",
     "Membership",
     "Organization",
     "PasswordResetToken",

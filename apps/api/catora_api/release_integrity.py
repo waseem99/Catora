@@ -7,11 +7,12 @@ from typing import Any
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-CURRENT_SCHEMA_REVISION = "0024"
+CURRENT_SCHEMA_REVISION = "0025"
 _REQUIRED_SCHEMA_CHAIN = {
     "0022": "0021",
     "0023": "0022",
     "0024": "0023",
+    "0025": "0024",
 }
 _REQUIRED_TABLES = {
     "local_profile_provider_accounts",
@@ -22,6 +23,11 @@ _REQUIRED_TABLES = {
     "review_observations",
     "review_analyses",
     "review_response_drafts",
+    "measurement_provider_accounts",
+    "measurement_properties",
+    "measurement_observations",
+    "measurement_attribution_links",
+    "measurement_change_annotations",
 }
 _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/local-profile-accounts",
@@ -33,10 +39,17 @@ _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/review-observations/import-synthetic",
     "/api/v1/workspaces/{workspace_id}/review-observations/{review_id}/response-drafts",
     "/api/v1/workspaces/{workspace_id}/review-analyses",
+    "/api/v1/workspaces/{workspace_id}/measurements/import-synthetic",
+    "/api/v1/workspaces/{workspace_id}/measurements/accounts",
+    "/api/v1/workspaces/{workspace_id}/measurements/observations",
+    "/api/v1/workspaces/{workspace_id}/measurements/attributions",
+    "/api/v1/workspaces/{workspace_id}/measurements/annotations",
+    "/api/v1/workspaces/{workspace_id}/measurements/accounts/{account_id}",
 }
 _REQUIRED_SETTINGS = {
     "local_profile_intelligence_enabled",
     "reputation_intelligence_enabled",
+    "measurement_connectors_enabled",
 }
 
 
