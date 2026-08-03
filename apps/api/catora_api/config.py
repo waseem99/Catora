@@ -111,6 +111,10 @@ class Settings(BaseSettings):
     # Additive restaurant and multi-location projections. No live source is enabled here.
     restaurant_domain_enabled: bool = False
 
+    # Provider-neutral, read-only restaurant intelligence modules.
+    local_profile_intelligence_enabled: bool = False
+    reputation_intelligence_enabled: bool = False
+
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
