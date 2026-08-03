@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     # Provider-neutral, read-only restaurant intelligence modules.
     local_profile_intelligence_enabled: bool = False
     reputation_intelligence_enabled: bool = False
+    measurement_connectors_enabled: bool = False
 
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
