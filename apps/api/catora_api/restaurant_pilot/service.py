@@ -409,15 +409,17 @@ class RestaurantPilotService:
     def check_contract(
         row: RestaurantPilotAcceptanceCheckRecord,
     ) -> PilotAcceptanceCheck:
-        return PilotAcceptanceCheck(
-            check_key=row.check_key,
-            category=row.category,
-            state=row.state,
-            evidence_reference=row.evidence_reference,
-            evidence_sha256=row.evidence_sha256,
-            observed_at=row.observed_at,
-            expires_at=row.expires_at,
-            reviewer_role=row.reviewer_role,
-            reviewer_reference=row.reviewer_reference,
-            details=row.details,
+        return PilotAcceptanceCheck.model_validate(
+            {
+                "check_key": row.check_key,
+                "category": row.category,
+                "state": row.state,
+                "evidence_reference": row.evidence_reference,
+                "evidence_sha256": row.evidence_sha256,
+                "observed_at": row.observed_at,
+                "expires_at": row.expires_at,
+                "reviewer_role": row.reviewer_role,
+                "reviewer_reference": row.reviewer_reference,
+                "details": row.details,
+            }
         )
