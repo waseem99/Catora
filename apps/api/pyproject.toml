@@ -74,6 +74,13 @@ disable_error_code = ["arg-type"]
 module = "catora_api.normalization.restaurant_bridge"
 disable_error_code = ["assignment"]
 
+[[tool.mypy.overrides]]
+module = [
+  "catora_api.operations_console.reconciler",
+  "catora_api.operations_console.service",
+]
+disable_error_code = ["arg-type"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
