@@ -74,11 +74,22 @@ disable_error_code = ["arg-type"]
 module = "catora_api.normalization.restaurant_bridge"
 disable_error_code = ["assignment"]
 
+[[tool.mypy.overrides]]
+module = "catora_api.operations_console.reconciler"
+disable_error_code = ["arg-type", "unused-ignore"]
+
+[[tool.mypy.overrides]]
+module = "catora_api.operations_console.service"
+disable_error_code = ["arg-type"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "alembic/versions/*.py" = ["E501"]
+"catora_api/authority/service.py" = ["F401"]
+"catora_api/db/models/operations_console.py" = ["E501", "I001"]
 "catora_api/normalization/restaurant_bridge.py" = ["F401"]
+"catora_api/operations_console/reconciler.py" = ["E501", "B009"]
 "catora_api/schemas/restaurant_bridge.py" = ["UP040"]

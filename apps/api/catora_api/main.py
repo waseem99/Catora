@@ -17,6 +17,7 @@ from catora_api.api import (
     audit_rules_router,
     audits_router,
     auth_router,
+    authority_router,
     catalog_bridge_router,
     catalog_identity_router,
     catalog_router,
@@ -31,6 +32,7 @@ from catora_api.api import (
     intents_router,
     local_profiles_router,
     measurement_router,
+    operations_console_router,
     public_catalog_router,
     recommendations_router,
     reputation_router,
@@ -98,6 +100,8 @@ app.include_router(git_publishing_router)
 app.include_router(local_profiles_router)
 app.include_router(reputation_router)
 app.include_router(measurement_router)
+app.include_router(authority_router)
+app.include_router(operations_console_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)

@@ -1,6 +1,7 @@
 from catora_api.api.audit_rules import router as audit_rules_router
 from catora_api.api.audits import router as audits_router
 from catora_api.api.auth import router as auth_router
+from catora_api.api.authority import router as authority_router
 from catora_api.api.catalog import router as catalog_router
 from catora_api.api.catalog_bridge import router as catalog_bridge_router
 from catora_api.api.catalog_identity import router as catalog_identity_router
@@ -18,6 +19,7 @@ from catora_api.api.intent_templates import router as intent_templates_router
 from catora_api.api.intents import router as intents_router
 from catora_api.api.local_profiles import router as local_profiles_router
 from catora_api.api.measurement import router as measurement_router
+from catora_api.api.operations_console import router as operations_console_router
 from catora_api.api.public_catalog import router as public_catalog_router
 from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.reputation import router as reputation_router
@@ -43,6 +45,7 @@ __all__ = [
     "audit_rules_router",
     "audits_router",
     "auth_router",
+    "authority_router",
     "catalog_bridge_router",
     "catalog_identity_router",
     "catalog_router",
@@ -57,6 +60,7 @@ __all__ = [
     "intents_router",
     "local_profiles_router",
     "measurement_router",
+    "operations_console_router",
     "public_catalog_router",
     "recommendations_router",
     "reputation_router",
