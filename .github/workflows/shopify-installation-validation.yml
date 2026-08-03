@@ -41,8 +41,8 @@ jobs:
       CATORA_SHOPIFY_REQUIRED_SCOPES: '["read_products"]'
       CATORA_SHOPIFY_EXPIRING_OFFLINE_TOKENS: 'true'
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -73,7 +73,7 @@ jobs:
           exit "$status"
       - name: Upload Shopify lifecycle report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shopify-pilot-report
           path: /tmp/shopify-pilot-report.txt
