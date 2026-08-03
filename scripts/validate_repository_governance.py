@@ -10,6 +10,14 @@ AUTHORITY_PATH = ROOT / "docs/governance/repository-authority.json"
 EXPECTED_REPOSITORY = "waseem99/Catora"
 EXPECTED_OWNER = "waseem99"
 EXPECTED_REPOSITORY_URL = "https://github.com/waseem99/Catora"
+EXPECTED_CONTINUITY_CONTROLS = {
+    "administrator_bypass_failure_test",
+    "backup_repository_administrator",
+    "independent_approving_reviewer",
+    "organization_or_shared_administrative_ownership",
+    "private_continuity_acceptance_record",
+    "protected_main_ruleset",
+}
 
 
 def fail(message: str) -> None:
@@ -40,6 +48,7 @@ def require(condition: bool, message: str) -> None:
 
 def main() -> int:
     authority = load_json(AUTHORITY_PATH)
+    require(authority.get("schema_version") == "1.1", "authority schema version mismatch")
     require(authority.get("repository") == EXPECTED_REPOSITORY, "repository slug mismatch")
     require(authority.get("repository_owner") == EXPECTED_OWNER, "repository owner mismatch")
     require(
@@ -62,6 +71,36 @@ def main() -> int:
     require(representative.get("github_login") == EXPECTED_OWNER, "representative login mismatch")
     require(representative.get("permission") == "admin", "representative must retain admin authority")
 
+    continuity = authority.get("continuity")
+    require(isinstance(continuity, dict), "continuity record must be an object")
+    require(continuity.get("evaluated_on") == "2026-08-03", "continuity date mismatch")
+    require(
+        continuity.get("status") == "pending_external_admin_acceptance",
+        "continuity must remain pending until independent acceptance exists",
+    )
+    require(
+        continuity.get("repository_owner_type") == "personal_user",
+        "current personal repository ownership must remain explicit",
+    )
+    require(
+        continuity.get("verified_repository_admin_count") == 1,
+        "verified repository administrator count mismatch",
+    )
+    require(
+        continuity.get("verified_independent_reviewer_count") == 0,
+        "independent reviewer count must not be fabricated",
+    )
+    branch_inventory = continuity.get("branch_inventory")
+    require(isinstance(branch_inventory, dict), "branch inventory must be an object")
+    require(branch_inventory.get("count") == 1, "branch inventory count must be one")
+    require(branch_inventory.get("branches") == ["main"], "branch inventory must contain main only")
+    required_controls = continuity.get("required_controls")
+    require(
+        isinstance(required_controls, list)
+        and set(required_controls) == EXPECTED_CONTINUITY_CONTROLS,
+        "continuity required controls mismatch",
+    )
+
     codeowners = read(".github/CODEOWNERS")
     require(f"* @{EXPECTED_OWNER}" in codeowners, "default CODEOWNER is missing")
     require("/docs/governance/ @waseem99" in codeowners, "governance ownership is missing")
@@ -71,6 +110,7 @@ def main() -> int:
     support = read("SUPPORT.md")
     license_notice = read("LICENSE")
     ownership = read("docs/governance/repository-ownership.md")
+    continuity_policy = read("docs/governance/repository-continuity.md")
     authorization_template = read(".github/ISSUE_TEMPLATE/external-owner-authorization.yml")
     readme = read("README.md")
     for name, content in (
@@ -79,6 +119,23 @@ def main() -> int:
         ("ownership record", ownership),
     ):
         require("@waseem99" in content, f"{name} does not identify the owner representative")
+    require(
+        "repository-continuity.md" in ownership,
+        "ownership record does not link the continuity policy",
+    )
+    require(
+        "pending_external_admin_acceptance" in continuity_policy,
+        "continuity policy does not expose the pending state",
+    )
+    require(
+        "Private recovery material must never be committed" in continuity_policy,
+        "continuity policy does not protect recovery material",
+    )
+    require(
+        "A bot, GitHub App, shared credential or alternate account controlled by the same person"
+        in continuity_policy,
+        "continuity policy does not define independent review",
+    )
     require("SECURITY.md" in readme, "README does not link the security policy")
     require("SUPPORT.md" in readme, "README does not link the support policy")
     require("LICENSE" in readme, "README does not link the proprietary notice")
@@ -97,7 +154,10 @@ def main() -> int:
         repository.get("url") == f"git+{EXPECTED_REPOSITORY_URL}.git",
         "package repository metadata is not canonical",
     )
-    require(package.get("homepage") == f"{EXPECTED_REPOSITORY_URL}#readme", "package homepage is not canonical")
+    require(
+        package.get("homepage") == f"{EXPECTED_REPOSITORY_URL}#readme",
+        "package homepage is not canonical",
+    )
     require(package.get("license") == "UNLICENSED", "private root package must remain unlicensed")
 
     shopify_package = json.loads(read("apps/shopify/package.json"))
