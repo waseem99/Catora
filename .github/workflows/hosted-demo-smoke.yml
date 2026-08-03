@@ -29,9 +29,9 @@ jobs:
       CATORA_SMOKE_REQUIRE_SHOPIFY: ${{ inputs.require_shopify }}
       CATORA_SMOKE_REPORT_PATH: hosted-demo-smoke-report.json
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload bounded smoke-test evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hosted-demo-smoke-evidence
           path: |
