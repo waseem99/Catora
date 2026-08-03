@@ -38,6 +38,7 @@ from catora_api.api import (
     reputation_router,
     restaurant_answers_router,
     restaurant_bridge_router,
+    restaurant_pilot_router,
     service_visibility_router,
     shopify_router,
     taxonomy_router,
@@ -102,6 +103,7 @@ app.include_router(reputation_router)
 app.include_router(measurement_router)
 app.include_router(authority_router)
 app.include_router(operations_console_router)
+app.include_router(restaurant_pilot_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)
