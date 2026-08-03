@@ -132,14 +132,18 @@ def evaluate_pilot_readiness(
             except ValueError as exc:
                 blockers.append(f"Snapshot reconciliation is invalid: {exc}")
                 continue
-        if key in {"ordering_path_isolation", "deployment_isolation"}:
-            if check.details.get("impact_observed") is not False:
-                blockers.append(f"Isolation check observed an impact: {key}")
-                continue
-        if key == "restricted_field_rejection":
-            if check.details.get("restricted_fields_accepted") is not False:
-                blockers.append("Restricted-field rejection did not fail closed")
-                continue
+        if (
+            key in {"ordering_path_isolation", "deployment_isolation"}
+            and check.details.get("impact_observed") is not False
+        ):
+            blockers.append(f"Isolation check observed an impact: {key}")
+            continue
+        if (
+            key == "restricted_field_rejection"
+            and check.details.get("restricted_fields_accepted") is not False
+        ):
+            blockers.append("Restricted-field rejection did not fail closed")
+            continue
         passed_checks.append(key)
 
     unavailable_capabilities = tuple(
