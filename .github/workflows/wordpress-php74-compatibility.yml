@@ -22,8 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Build installable plugin
@@ -152,7 +152,7 @@ jobs:
           php74 -r 'require "/var/www/html/wp-load.php"; require_once ABSPATH . "wp-admin/includes/plugin.php"; deactivate_plugins( "catora-service-visibility/catora-service-visibility.php" ); if ( ! defined( "WP_UNINSTALL_PLUGIN" ) ) { define( "WP_UNINSTALL_PLUGIN", true ); } require WP_PLUGIN_DIR . "/catora-service-visibility/uninstall.php"; if ( false !== get_option( "catora_service_visibility_settings", false ) || false !== get_option( "catora_service_visibility_checkpoint", false ) || false !== wp_next_scheduled( "catora_service_visibility_sync" ) ) { exit( 1 ); }'
       - name: Upload PHP 7.4 runtime evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catora-service-visibility-wordpress-runtime-php74
           path: |
