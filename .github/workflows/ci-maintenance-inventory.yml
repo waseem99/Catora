@@ -1,0 +1,38 @@
+name: CI maintenance inventory
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'apps/api/alembic.ini'
+      - 'apps/api/pyproject.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Inventory workflow actions
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .github/workflows -maxdepth 1 -type f -print | sort > /tmp/workflow-files.txt
+          grep -RInE 'uses: actions/(checkout|setup-node|setup-python|upload-artifact)@' .github/workflows \
+            | sort > /tmp/first-party-actions.txt || true
+          {
+            echo 'WORKFLOW FILES'
+            cat /tmp/workflow-files.txt
+            echo
+            echo 'FIRST-PARTY ACTIONS'
+            cat /tmp/first-party-actions.txt
+          } > /tmp/ci-maintenance-inventory.txt
+          cat /tmp/ci-maintenance-inventory.txt
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ci-maintenance-inventory
+          path: /tmp/ci-maintenance-inventory.txt
+          if-no-files-found: error
+          retention-days: 1
