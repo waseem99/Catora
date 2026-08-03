@@ -20,6 +20,7 @@ CapabilityState = Literal[
     "prohibited",
 ]
 ProfileMatchState = Literal["exact", "alias", "ambiguous", "unmatched", "rejected"]
+_MANAGED_CREDENTIAL_PREFIXES = ("env:", "vault:", "secret:", "synthetic:")
 
 
 class LocalProfileModel(BaseModel):
@@ -56,6 +57,18 @@ class LocalProviderAccount(LocalProfileModel):
         operations = [capability.operation for capability in self.capabilities]
         if len(operations) != len(set(operations)):
             raise ValueError("Provider capability operations must be unique")
+        if not self.credential_reference.startswith(_MANAGED_CREDENTIAL_PREFIXES):
+            raise ValueError(
+                "credential_reference must use env:, vault:, secret:, or synthetic:"
+            )
+        if self.provider == "google_business_profile" and any(
+            capability.state in {"granted", "tested"}
+            for capability in self.capabilities
+        ):
+            raise ValueError(
+                "Google Business Profile capabilities cannot be granted or tested "
+                "until a live adapter and account acceptance are implemented"
+            )
         return self
 
 
