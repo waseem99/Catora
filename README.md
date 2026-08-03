@@ -8,7 +8,9 @@ This repository contains the production-shaped MVP and the prepared client-winni
 
 ## Governance and verified authority
 
-The GitHub repository owner and authorized repository-side representative is [`@waseem99`](https://github.com/waseem99). Repository administration, review routing, release provenance, and the limits of that verification are documented in [the repository ownership record](docs/governance/repository-ownership.md) and its machine-readable companion.
+The GitHub repository owner and authorized repository-side representative is [`@waseem99`](https://github.com/waseem99). Repository administration, review routing, release provenance, and the limits of that verification are documented in [the repository ownership record](docs/governance/repository-ownership.md), [the continuity policy](docs/governance/repository-continuity.md), and the machine-readable authority record.
+
+The current closeout state is recorded in [the August 3, 2026 repository audit](docs/governance/repository-closeout-audit-2026-08-03.md). Source-controlled implementation and deployments are ready for continued development. Shared organization ownership, an independent reviewer, protected-`main` enforcement evidence, and external client/provider authorization remain human-admin or external-system gates and are not represented as complete.
 
 Use [SECURITY.md](SECURITY.md) for vulnerability reporting, [SUPPORT.md](SUPPORT.md) for repository support, and [LICENSE](LICENSE) for the proprietary rights notice. Authorization for external domains, stores, customer systems, and commercial pilots must still come from the actual system or business owner; GitHub ownership does not replace platform, legal, or client authorization.
 
@@ -82,7 +84,19 @@ Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads
 
 ## Restaurant intelligence boundaries
 
-Local-profile, reputation and aggregate measurement intelligence are feature-gated off by default. The repository implementation supports deterministic synthetic/read-only acceptance only; it does not activate Google Business Profile, post review responses, connect GSC/GA4/CrUX or another live measurement provider, or connect a Ranchers production account. Aggregate measurement contracts reject customer, session, order and transaction identifiers and prohibit causal, ranking, traffic, revenue and ROI claims. See [the local-profile runbook](docs/local-profile-intelligence.md), [the measurement runbook](docs/restaurant-measurement-connectors.md) and [the release-integrity runbook](docs/release-integrity.md).
+The restaurant platform is implemented through Alembic revision `0028`: canonical restaurant evidence, the signed Catalog Bridge profile, restaurant audit and answer-readiness evaluation, governed Git proposals, local-profile and reputation intelligence, aggregate measurement, authority intelligence, the operations console, monitoring records, and the generic production-pilot acceptance gate.
+
+All provider- or pilot-facing modules remain feature-gated off by default. The repository-tested runtime is synthetic, evidence-only, read-only, or draft-only as appropriate:
+
+- Google Business Profile and other live profile providers are unavailable until account-level acceptance exists.
+- Reputation response drafts require human review and cannot be posted by Catora.
+- Measurement accepts only aggregate allowlisted dimensions and prohibits causal, ranking, traffic, revenue, and ROI claims.
+- Authority intelligence cannot buy links, publish placements, or send outreach.
+- Operations monitoring records intended actions and notification state but cannot execute remediation or send notifications.
+- The pilot gate records evidence and external decisions but permanently exposes no live activation capability.
+- No Ranchers production account, repository, database, provider, ordering flow, pricing, or availability system is connected.
+
+See [the release-integrity runbook](docs/release-integrity.md) and the module runbooks under `docs/`.
 
 ## Validation
 
