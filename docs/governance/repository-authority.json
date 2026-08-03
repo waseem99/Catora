@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "repository": "waseem99/Catora",
   "repository_owner": "waseem99",
   "authorized_repository_representatives": [
@@ -27,6 +27,27 @@
   "verification_scope": "repository_and_release_authority_only",
   "canonical_branch": "main",
   "canonical_repository_url": "https://github.com/waseem99/Catora",
+  "continuity": {
+    "evaluated_on": "2026-08-03",
+    "status": "pending_external_admin_acceptance",
+    "repository_owner_type": "personal_user",
+    "verified_repository_admin_count": 1,
+    "verified_independent_reviewer_count": 0,
+    "branch_inventory": {
+      "count": 1,
+      "branches": [
+        "main"
+      ]
+    },
+    "required_controls": [
+      "organization_or_shared_administrative_ownership",
+      "backup_repository_administrator",
+      "independent_approving_reviewer",
+      "protected_main_ruleset",
+      "administrator_bypass_failure_test",
+      "private_continuity_acceptance_record"
+    ]
+  },
   "external_verification_required": [
     "legal_entity_identity",
     "government_identity_or_kyc",
