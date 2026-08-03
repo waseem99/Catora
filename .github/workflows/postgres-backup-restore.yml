@@ -45,9 +45,9 @@ jobs:
       CATORA_S3_SECRET_KEY: backup-test-secret
       CATORA_DEMO_PASSWORD: backup-restore-demo-password
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -268,7 +268,7 @@ jobs:
 
       - name: Upload bounded backup and restore evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: postgres-backup-restore-evidence
           path: backup-evidence
