@@ -56,6 +56,14 @@ from catora_api.db.models.measurement import (
     MeasurementPropertyRecord,
     MeasurementProviderAccount,
 )
+from catora_api.db.models.operations_console import (
+    OperationsConsoleActionRecord,
+    OperationsConsoleAlertRecord,
+    OperationsConsoleExportRecord,
+    OperationsConsoleSnapshotRecord,
+    OperationsMonitorRunRecord,
+    OperationsMonitorScheduleRecord,
+)
 from catora_api.db.models.reporting import (
     AuditEvent,
     ExportArtifact,
@@ -146,6 +154,12 @@ __all__ = [
     "MeasurementPropertyRecord",
     "MeasurementProviderAccount",
     "Membership",
+    "OperationsConsoleActionRecord",
+    "OperationsConsoleAlertRecord",
+    "OperationsConsoleExportRecord",
+    "OperationsConsoleSnapshotRecord",
+    "OperationsMonitorRunRecord",
+    "OperationsMonitorScheduleRecord",
     "Organization",
     "PasswordResetToken",
     "Product",
