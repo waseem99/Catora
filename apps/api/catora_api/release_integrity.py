@@ -77,7 +77,11 @@ def validate_release_integrity(api_root: Path | None = None) -> dict[str, Any]:
             f"Persistence models are not registered for tables: {missing_tables}"
         )
 
-    paths = {route.path for route in app.routes}
+    paths: set[str] = set()
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if isinstance(path, str):
+            paths.add(path)
     missing_routes = sorted(_REQUIRED_ROUTES.difference(paths))
     if missing_routes:
         raise ReleaseIntegrityError(
