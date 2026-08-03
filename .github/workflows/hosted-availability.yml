@@ -131,7 +131,7 @@ jobs:
           PY
       - name: Upload bounded availability report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: hosted-availability-report
           path: hosted-availability-report.txt
