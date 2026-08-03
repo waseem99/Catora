@@ -86,24 +86,38 @@ class Settings(BaseSettings):
     enrichment_http_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     enrichment_http_max_request_cost_microunits: int = Field(default=100_000, ge=0)
 
+    # Push-only bridge used by approved custom Node.js commerce backends.
     catalog_bridge_enabled: bool = False
     catalog_bridge_credential_encryption_key: str = Field(default="", repr=False)
     catalog_bridge_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
-    catalog_bridge_max_batch_bytes: int = Field(default=5 * 1024 * 1024, ge=64 * 1024, le=25 * 1024 * 1024)
+    catalog_bridge_max_batch_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=25 * 1024 * 1024,
+    )
 
+    # WordPress-first service website visibility audits.
     service_visibility_enabled: bool = False
     service_visibility_credential_encryption_key: str = Field(default="", repr=False)
     service_visibility_clock_skew_seconds: int = Field(default=300, ge=30, le=900)
-    service_visibility_max_batch_bytes: int = Field(default=5 * 1024 * 1024, ge=64 * 1024, le=25 * 1024 * 1024)
+    service_visibility_max_batch_bytes: int = Field(
+        default=5 * 1024 * 1024,
+        ge=64 * 1024,
+        le=25 * 1024 * 1024,
+    )
     service_visibility_drafts_enabled: bool = False
     service_visibility_monitoring_enabled: bool = False
 
+    # Additive restaurant and multi-location projections. No live source is enabled here.
     restaurant_domain_enabled: bool = False
+
+    # Provider-neutral, read-only restaurant intelligence modules.
     local_profile_intelligence_enabled: bool = False
     reputation_intelligence_enabled: bool = False
     measurement_connectors_enabled: bool = False
     authority_intelligence_enabled: bool = False
 
+    # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
     shopify_client_id: str = ""
     shopify_client_secret: str = Field(default="", repr=False)
@@ -114,8 +128,12 @@ class Settings(BaseSettings):
     shopify_credential_encryption_key: str = Field(default="", repr=False)
     shopify_http_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
+    # Embedded public-distribution app used for invite-only prospect demos.
     shopify_public_enabled: bool = False
-    shopify_public_registration_identity: Literal["public_development", "public_production"] = "public_development"
+    shopify_public_registration_identity: Literal[
+        "public_development",
+        "public_production",
+    ] = "public_development"
     shopify_public_new_activations_enabled: bool = True
     shopify_public_client_id: str = ""
     shopify_public_client_secret: str = Field(default="", repr=False)
@@ -126,25 +144,41 @@ class Settings(BaseSettings):
     shopify_public_session_clock_skew_seconds: int = Field(default=5, ge=0, le=30)
 
     def catalog_bridge_encryption_key_bytes(self) -> bytes:
-        return _decode_encryption_key(self.catalog_bridge_credential_encryption_key, variable="CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY")
+        return _decode_encryption_key(
+            self.catalog_bridge_credential_encryption_key,
+            variable="CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY",
+        )
 
     def service_visibility_encryption_key_bytes(self) -> bytes:
-        return _decode_encryption_key(self.service_visibility_credential_encryption_key, variable="CATORA_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY")
+        return _decode_encryption_key(
+            self.service_visibility_credential_encryption_key,
+            variable="CATORA_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY",
+        )
 
     def shopify_encryption_key_bytes(self) -> bytes:
-        return _decode_encryption_key(self.shopify_credential_encryption_key, variable="CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY")
+        return _decode_encryption_key(
+            self.shopify_credential_encryption_key,
+            variable="CATORA_SHOPIFY_CREDENTIAL_ENCRYPTION_KEY",
+        )
 
     def shopify_public_encryption_key_bytes(self) -> bytes:
-        return _decode_encryption_key(self.shopify_public_credential_encryption_key, variable="CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY")
+        return _decode_encryption_key(
+            self.shopify_public_credential_encryption_key,
+            variable="CATORA_SHOPIFY_PUBLIC_CREDENTIAL_ENCRYPTION_KEY",
+        )
 
     def validate_catalog_bridge(self) -> None:
-        if self.catalog_bridge_enabled:
-            self.catalog_bridge_encryption_key_bytes()
+        if not self.catalog_bridge_enabled:
+            return
+        self.catalog_bridge_encryption_key_bytes()
 
     def validate_service_visibility(self) -> None:
         if not self.service_visibility_enabled:
             if self.service_visibility_drafts_enabled or self.service_visibility_monitoring_enabled:
-                raise ValueError("Service visibility drafts and monitoring require CATORA_SERVICE_VISIBILITY_ENABLED=true")
+                raise ValueError(
+                    "Service visibility drafts and monitoring require "
+                    "CATORA_SERVICE_VISIBILITY_ENABLED=true"
+                )
             return
         self.service_visibility_encryption_key_bytes()
 
@@ -155,38 +189,72 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_SHOPIFY_CLIENT_ID is required")
         if len(self.shopify_client_secret) < 16:
             raise ValueError("CATORA_SHOPIFY_CLIENT_SECRET is required")
+
         callback = urlsplit(self.shopify_callback_url)
         if self.environment == "production":
             if callback.scheme != "https" or not callback.netloc:
-                raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS in production")
+                raise ValueError(
+                    "CATORA_SHOPIFY_CALLBACK_URL must use HTTPS in production"
+                )
         elif not self.shopify_callback_url.startswith(("http://localhost:", "https://")):
-            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost")
-        if callback.path != "/api/v1/shopify/oauth/callback" or callback.query or callback.fragment:
-            raise ValueError("CATORA_SHOPIFY_CALLBACK_URL must use the canonical callback path")
+            raise ValueError(
+                "CATORA_SHOPIFY_CALLBACK_URL must use HTTPS outside localhost"
+            )
+        if (
+            callback.path != "/api/v1/shopify/oauth/callback"
+            or callback.query
+            or callback.fragment
+        ):
+            raise ValueError(
+                "CATORA_SHOPIFY_CALLBACK_URL must use the canonical callback path"
+            )
+
         scopes = [scope.strip() for scope in self.shopify_required_scopes if scope.strip()]
         if scopes != ["read_products"]:
             raise ValueError("Catora's pilot Shopify app must request only read_products")
         if self.environment == "production" and not self.shopify_expiring_offline_tokens:
-            raise ValueError("Production Shopify installations must use expiring offline tokens")
+            raise ValueError(
+                "Production Shopify installations must use expiring offline tokens"
+            )
         self.shopify_encryption_key_bytes()
 
     def validate_shopify_public(self) -> None:
         if not self.shopify_public_enabled:
             return
-        expected_registration = "public_production" if self.environment == "production" else "public_development"
+        expected_registration = (
+            "public_production"
+            if self.environment == "production"
+            else "public_development"
+        )
         if self.shopify_public_registration_identity != expected_registration:
-            raise ValueError(f"CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY must match the runtime environment ({expected_registration})")
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_REGISTRATION_IDENTITY must match the runtime "
+                f"environment ({expected_registration})"
+            )
         if len(self.shopify_public_client_id.strip()) < 8:
             raise ValueError("CATORA_SHOPIFY_PUBLIC_CLIENT_ID is required")
         if len(self.shopify_public_client_secret) < 16:
             raise ValueError("CATORA_SHOPIFY_PUBLIC_CLIENT_SECRET is required")
         if not _local_or_https_origin(self.shopify_public_app_url):
-            raise ValueError("CATORA_SHOPIFY_PUBLIC_APP_URL must be an HTTPS origin outside localhost")
-        if self.environment == "production" and self.shopify_public_app_url.rstrip("/") != PUBLIC_SHOPIFY_APP_URL:
-            raise ValueError("CATORA_SHOPIFY_PUBLIC_APP_URL must use the canonical production origin")
-        scopes = [scope.strip() for scope in self.shopify_public_required_scopes if scope.strip()]
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_APP_URL must be an HTTPS origin outside localhost"
+            )
+        if (
+            self.environment == "production"
+            and self.shopify_public_app_url.rstrip("/") != PUBLIC_SHOPIFY_APP_URL
+        ):
+            raise ValueError(
+                "CATORA_SHOPIFY_PUBLIC_APP_URL must use the canonical production origin"
+            )
+        scopes = [
+            scope.strip()
+            for scope in self.shopify_public_required_scopes
+            if scope.strip()
+        ]
         if scopes != ["read_products"]:
-            raise ValueError("Catora's public Shopify app must request only read_products")
+            raise ValueError(
+                "Catora's public Shopify app must request only read_products"
+            )
         self.shopify_public_encryption_key_bytes()
 
     def validate_production(self) -> None:
@@ -204,19 +272,29 @@ class Settings(BaseSettings):
         if not self.database_url.startswith("postgresql+"):
             raise ValueError("Production database must use PostgreSQL")
         if self.enrichment_provider == "mock":
-            raise ValueError("The deterministic mock enrichment provider is not allowed in production")
+            raise ValueError(
+                "The deterministic mock enrichment provider is not allowed in production"
+            )
         if self.enrichment_provider == "http_json":
             endpoint = self.enrichment_http_endpoint or ""
             if not endpoint.startswith("https://"):
-                raise ValueError("CATORA_ENRICHMENT_HTTP_ENDPOINT must use HTTPS in production")
+                raise ValueError(
+                    "CATORA_ENRICHMENT_HTTP_ENDPOINT must use HTTPS in production"
+                )
             if len(self.enrichment_http_api_key) < 16:
-                raise ValueError("CATORA_ENRICHMENT_HTTP_API_KEY must be a production secret")
+                raise ValueError(
+                    "CATORA_ENRICHMENT_HTTP_API_KEY must be a production secret"
+                )
             if not self.enrichment_http_model.strip():
                 raise ValueError("CATORA_ENRICHMENT_HTTP_MODEL is required")
         if not _https_origin(self.frontend_url):
             raise ValueError("CATORA_FRONTEND_URL must be an HTTPS origin in production")
-        if not self.cors_origins or any(not _https_origin(origin) for origin in self.cors_origins):
-            raise ValueError("CATORA_CORS_ORIGINS must contain only HTTPS origins in production")
+        if not self.cors_origins or any(
+            not _https_origin(origin) for origin in self.cors_origins
+        ):
+            raise ValueError(
+                "CATORA_CORS_ORIGINS must contain only HTTPS origins in production"
+            )
         normalized_frontend = self.frontend_url.rstrip("/")
         normalized_origins = {origin.rstrip("/") for origin in self.cors_origins}
         if normalized_frontend not in normalized_origins:
