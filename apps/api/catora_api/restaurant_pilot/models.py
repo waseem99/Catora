@@ -113,9 +113,11 @@ class PilotOwner(RestaurantPilotModel):
 
     @model_validator(mode="after")
     def validate_approval(self) -> PilotOwner:
-        if self.approval_state == "approved":
-            if self.approved_at is None or self.approval_evidence_reference is None:
-                raise ValueError("Approved owners require dated approval evidence")
+        if (
+            self.approval_state == "approved"
+            and (self.approved_at is None or self.approval_evidence_reference is None)
+        ):
+            raise ValueError("Approved owners require dated approval evidence")
         if self.approved_at is not None and self.approved_at.tzinfo is None:
             raise ValueError("Owner approved_at must be timezone-aware")
         return self
@@ -137,9 +139,11 @@ class PilotAccessGrant(RestaurantPilotModel):
             lowered = self.credential_reference.casefold()
             if any(token in lowered for token in ("password=", "token=", "secret=")):
                 raise ValueError("Credential references cannot contain secret values")
-        if self.state in {"tested", "accepted"}:
-            if self.tested_at is None or self.evidence_reference is None:
-                raise ValueError("Tested or accepted access requires dated evidence")
+        if (
+            self.state in {"tested", "accepted"}
+            and (self.tested_at is None or self.evidence_reference is None)
+        ):
+            raise ValueError("Tested or accepted access requires dated evidence")
         if self.tested_at is not None and self.tested_at.tzinfo is None:
             raise ValueError("Access tested_at must be timezone-aware")
         return self
@@ -295,9 +299,14 @@ class PilotAcceptanceDecision(RestaurantPilotModel):
     def validate_decision(self) -> PilotAcceptanceDecision:
         if self.decided_at.tzinfo is None:
             raise ValueError("Decision decided_at must be timezone-aware")
-        if self.decision == "record_external_acceptance":
-            if not self.external_authorization_reference or not self.external_authorization_sha256:
-                raise ValueError("External acceptance requires a hashed authorization reference")
+        if (
+            self.decision == "record_external_acceptance"
+            and (
+                not self.external_authorization_reference
+                or not self.external_authorization_sha256
+            )
+        ):
+            raise ValueError("External acceptance requires a hashed authorization reference")
         return self
 
 
