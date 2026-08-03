@@ -237,3 +237,6 @@ def test_identical_shopify_ids_remain_isolated_by_catalog_source() -> None:
     assert batch_a.products[0].canonical_key != batch_b.products[0].canonical_key
     assert str(source_a_id) in batch_a.products[0].canonical_key
     assert str(source_b_id) in batch_b.products[0].canonical_key
+
+
+# Branch-only CI maintenance verification marker; do not merge.
