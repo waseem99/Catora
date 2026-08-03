@@ -1,24 +1,20 @@
 name: CI maintenance inventory
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'apps/api/alembic.ini'
-      - 'apps/api/pyproject.toml'
-      - 'apps/api/tests/test_ci_maintenance.py'
+  push:
+    branches:
+      - agent/236-ci-framework-maintenance
 
 permissions:
   contents: write
 
 jobs:
   apply-maintenance:
-    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.head_ref }}
+          ref: agent/236-ci-framework-maintenance
           fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
@@ -117,4 +113,4 @@ jobs:
           git add -A
           git diff --cached --check
           git commit -m 'Modernize CI runtimes and framework compatibility'
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+          git push origin HEAD:agent/236-ci-framework-maintenance
