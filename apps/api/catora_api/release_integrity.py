@@ -7,7 +7,7 @@ from typing import Any
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 
-CURRENT_SCHEMA_REVISION = "0027"
+CURRENT_SCHEMA_REVISION = "0028"
 _REQUIRED_SCHEMA_CHAIN = {
     "0022": "0021",
     "0023": "0022",
@@ -15,6 +15,7 @@ _REQUIRED_SCHEMA_CHAIN = {
     "0025": "0024",
     "0026": "0025",
     "0027": "0026",
+    "0028": "0027",
 }
 _REQUIRED_TABLES = {
     "local_profile_provider_accounts",
@@ -42,6 +43,10 @@ _REQUIRED_TABLES = {
     "operations_monitor_schedules",
     "operations_monitor_runs",
     "operations_console_exports",
+    "restaurant_pilot_acceptance_plans",
+    "restaurant_pilot_acceptance_checks",
+    "restaurant_pilot_acceptance_decisions",
+    "restaurant_pilot_disconnect_runs",
 }
 _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/local-profile-accounts",
@@ -81,6 +86,14 @@ _REQUIRED_ROUTES = {
     "/api/v1/workspaces/{workspace_id}/operations-console/monitor-schedules/{schedule_key}",
     "/api/v1/workspaces/{workspace_id}/operations-console/monitor-schedules/{schedule_id}/run",
     "/api/v1/workspaces/{workspace_id}/operations-console/monitor-runs",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{pilot_key}",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}/checks/{check_key}",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}/checks",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}/readiness",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}/decisions",
+    "/api/v1/workspaces/{workspace_id}/restaurant-pilots/plans/{plan_id}/disconnect-runs",
 }
 _REQUIRED_SETTINGS = {
     "local_profile_intelligence_enabled",
@@ -89,6 +102,7 @@ _REQUIRED_SETTINGS = {
     "authority_intelligence_enabled",
     "restaurant_operations_console_enabled",
     "restaurant_monitoring_enabled",
+    "restaurant_pilot_acceptance_enabled",
 }
 
 

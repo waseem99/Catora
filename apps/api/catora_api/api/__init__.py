@@ -25,6 +25,7 @@ from catora_api.api.recommendations import router as recommendations_router
 from catora_api.api.reputation import router as reputation_router
 from catora_api.api.restaurant_answers import router as restaurant_answers_router
 from catora_api.api.restaurant_bridge import router as restaurant_bridge_router
+from catora_api.api.restaurant_pilot import router as restaurant_pilot_router
 from catora_api.api.service_visibility import router as service_visibility_router
 from catora_api.api.shopify import router as shopify_router
 from catora_api.api.shopify_activity import router as _shopify_activity_router
@@ -66,6 +67,7 @@ __all__ = [
     "reputation_router",
     "restaurant_answers_router",
     "restaurant_bridge_router",
+    "restaurant_pilot_router",
     "service_visibility_router",
     "shopify_router",
     "taxonomy_router",

@@ -118,6 +118,7 @@ class Settings(BaseSettings):
     authority_intelligence_enabled: bool = False
     restaurant_operations_console_enabled: bool = False
     restaurant_monitoring_enabled: bool = False
+    restaurant_pilot_acceptance_enabled: bool = False
 
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
