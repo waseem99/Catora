@@ -20,6 +20,7 @@ from catora_api.db.models import Membership
 from catora_api.db.models.git_publishing import GitChangeProposal, GitRepositoryConnection
 from catora_api.git_publishing.models import (
     GitPatchItem,
+    GitProvider,
     GitProviderCapabilities,
     GitProviderPullRequest,
     GitRepositoryConfiguration,
@@ -35,7 +36,7 @@ class GitPublishingApiModel(BaseModel):
 
 
 class GitRepositoryCreateRequest(GitPublishingApiModel):
-    provider: str
+    provider: GitProvider
     repository_full_name: str
     default_branch: str
     allowed_paths: tuple[str, ...] = Field(min_length=1, max_length=500)
