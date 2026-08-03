@@ -273,6 +273,7 @@ async def create_review_response_draft(
         evidence={"review_hash": contract.evidence_review_hash},
     )
     session.add(row)
+    await session.flush()
     session.add(
         AuditEvent(
             workspace_id=workspace_id,
