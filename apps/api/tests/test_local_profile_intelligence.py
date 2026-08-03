@@ -97,6 +97,38 @@ def test_provider_capability_matrix_rejects_unaccepted_mutation() -> None:
     assert prohibited.state == "prohibited"
 
 
+def test_provider_account_rejects_raw_credentials() -> None:
+    with pytest.raises(ValidationError, match="credential_reference must use"):
+        LocalProviderAccount(
+            provider="synthetic",
+            external_account_id="synthetic-account",
+            credential_reference="raw-access-token",
+            capabilities=(
+                ProviderCapability(
+                    operation="list_locations",
+                    state="tested",
+                    tested_at=OBSERVED_AT,
+                ),
+            ),
+        )
+
+
+def test_google_account_cannot_claim_granted_or_tested_capabilities() -> None:
+    with pytest.raises(ValidationError, match="cannot be granted or tested"):
+        LocalProviderAccount(
+            provider="google_business_profile",
+            external_account_id="accounts/1",
+            credential_reference="env:CATORA_GBP_TOKEN",
+            capabilities=(
+                ProviderCapability(
+                    operation="list_locations",
+                    state="tested",
+                    tested_at=OBSERVED_AT,
+                ),
+            ),
+        )
+
+
 def test_profile_completeness_is_transparent_and_reconciled() -> None:
     completeness = profile_completeness(_observation())
     assert completeness.present_fields == (
