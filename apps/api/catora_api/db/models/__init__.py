@@ -1,5 +1,13 @@
 from catora_api.db.models.audit import AuditFinding, AuditRun, RuleDefinition, RuleVersion
 from catora_api.db.models.auth import AuthSession, Invitation, PasswordResetToken
+from catora_api.db.models.authority import (
+    AuthorityObservationRecord,
+    AuthorityOpportunityRecord,
+    AuthorityOutreachDecisionRecord,
+    AuthorityOutreachDraftRecord,
+    AuthorityProviderAccount,
+    AuthoritySuppressionRecord,
+)
 from catora_api.db.models.catalog import (
     CatalogSource,
     Category,
@@ -100,6 +108,12 @@ __all__ = [
     "AuditEvent",
     "AuditFinding",
     "AuditRun",
+    "AuthorityObservationRecord",
+    "AuthorityOpportunityRecord",
+    "AuthorityOutreachDecisionRecord",
+    "AuthorityOutreachDraftRecord",
+    "AuthorityProviderAccount",
+    "AuthoritySuppressionRecord",
     "BranchLocalProfileLink",
     "BuyerIntent",
     "CatalogSource",
