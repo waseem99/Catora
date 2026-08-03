@@ -5,6 +5,8 @@ import json
 import re
 from pathlib import PurePosixPath
 
+from pydantic import BaseModel
+
 from catora_api.git_publishing.models import (
     GIT_PUBLISHING_CONTRACT_VERSION,
     GitPatchItem,
@@ -45,10 +47,11 @@ class GitPublishingPolicyError(ValueError):
 
 
 def canonical_json(value: object) -> str:
-    if hasattr(value, "model_dump"):
-        payload = value.model_dump(mode="json", exclude_none=True)  # type: ignore[attr-defined]
-    else:
-        payload = value
+    payload = (
+        value.model_dump(mode="json", exclude_none=True)
+        if isinstance(value, BaseModel)
+        else value
+    )
     return json.dumps(
         payload,
         ensure_ascii=False,
@@ -140,7 +143,15 @@ def build_patch_manifest(
         "idempotency_key": idempotency_key,
     }
     return GitPatchManifest(
-        **core,
+        contract_version=GIT_PUBLISHING_CONTRACT_VERSION,
+        repository_full_name=configuration.repository_full_name,
+        base_revision=base_revision,
+        proposal_branch=branch,
+        title=title,
+        body=body,
+        items=validated,
+        rollback_plan=rollback_plan,
+        idempotency_key=idempotency_key,
         manifest_sha256=sha256_text(canonical_json(core)),
     )
 
