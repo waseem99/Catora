@@ -166,6 +166,7 @@ def propose_console_actions(
 def render_operations_export(
     snapshot: RestaurantConsoleSnapshot,
     *,
+    snapshot_id: UUID,
     export_format: ExportFormat,
     generated_at: datetime | None = None,
 ) -> OperationsExportBundle:
@@ -237,7 +238,7 @@ def render_operations_export(
     if len(payload_bytes) > 5 * 1024 * 1024:
         raise ValueError("Operations export exceeds the 5 MiB safety limit")
     return OperationsExportBundle(
-        snapshot_id=UUID(str(snapshot.snapshot_sha256[:32])),
+        snapshot_id=snapshot_id,
         export_format=export_format,
         content_type=content_type,
         payload_sha256=hashlib.sha256(payload_bytes).hexdigest(),
