@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
 import uuid
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,6 +15,7 @@ from catora_api.auth.dependencies import (
 )
 from catora_api.auth.roles import Role, can
 from catora_api.auth.service import AuthorizationError
+from catora_api.config import get_settings
 from catora_api.db.models import AuditEvent, Membership
 from catora_api.db.models.reputation import (
     ReviewAnalysisRecord,
@@ -24,8 +24,10 @@ from catora_api.db.models.reputation import (
     ReviewResponseDraftRecord,
 )
 from catora_api.reputation import ReviewObservation, analyze_review, draft_review_response
+from catora_api.reputation.models import ReviewState
 
 router = APIRouter(prefix="/api/v1", tags=["review reputation intelligence"])
+_VALID_REVIEW_STATES = {"published", "updated", "deleted", "unavailable"}
 
 
 class ReputationApiModel(BaseModel):
@@ -68,13 +70,22 @@ async def _membership(
 
 
 def _require_enabled() -> None:
-    if os.environ.get("CATORA_REPUTATION_INTELLIGENCE_ENABLED", "false").lower() != "true":
+    if not get_settings().reputation_intelligence_enabled:
         raise HTTPException(status_code=503, detail="Reputation intelligence is disabled")
 
 
 def _require_writer(role: str) -> None:
     if not can(Role(role), "recommendations.write"):
         raise AuthorizationError("Reputation intelligence write permission required")
+
+
+def _validated_review_state(value: str) -> ReviewState:
+    if value not in _VALID_REVIEW_STATES:
+        raise HTTPException(
+            status_code=500,
+            detail="Persisted review observation contains an invalid review state",
+        )
+    return cast(ReviewState, value)
 
 
 @router.post(
@@ -228,7 +239,7 @@ async def create_review_response_draft(
         provider_response_updated_at=review.provider_response_updated_at,
         review_created_at=review.review_created_at,
         review_updated_at=review.review_updated_at,
-        review_state=review.review_state,
+        review_state=_validated_review_state(review.review_state),
         observed_at=review.observed_at,
         observation_hash=review.observation_hash,
     )
@@ -262,6 +273,21 @@ async def create_review_response_draft(
         evidence={"review_hash": contract.evidence_review_hash},
     )
     session.add(row)
+    await session.flush()
+    session.add(
+        AuditEvent(
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            event_type="reputation.response_draft_created",
+            entity_type="review_response_draft",
+            entity_id=row.id,
+            payload={
+                "review_observation_id": str(review.id),
+                "draft_version": row.draft_version,
+                "posting_allowed": False,
+            },
+        )
+    )
     await session.commit()
     return ReviewDraftResponse(
         id=row.id,
@@ -282,6 +308,7 @@ async def list_review_analyses(
     auth_service: AuthServiceDependency,
     context: AuthContextDependency,
 ) -> list[dict[str, Any]]:
+    _require_enabled()
     await _membership(workspace_id, session, auth_service, context)
     rows = (
         await session.scalars(

@@ -4,7 +4,7 @@
 
 Catora audits enterprise ecommerce catalogs, identifies data and discoverability gaps, tests conversational buyer intents, proposes evidence-backed improvements, and packages the results into controlled operational workflows and executive reports.
 
-This repository contains the production-shaped MVP and the prepared client-winning demonstration described in [the client demo guide](docs/client-demo.md).
+This repository contains the production-shaped MVP and the prepared client-winning demonstration described in [the client demo guide](docs/client-demo.md). A commit is release-ready only when the validation and deployment evidence described in [the release-integrity runbook](docs/release-integrity.md) is green.
 
 ## Governance and verified authority
 
@@ -80,11 +80,16 @@ The first usable ingestion path supports authenticated, tenant-scoped CSV upload
 
 Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads are streamed and default to a 25 MiB limit configured through `CATORA_MAX_CATALOG_UPLOAD_BYTES`. Ordinary job responses exclude raw rejected rows; detailed source samples remain restricted to authorized catalog managers.
 
+## Restaurant intelligence boundaries
+
+Local-profile and reputation intelligence are feature-gated off by default. The repository implementation supports deterministic synthetic/read-only acceptance only; it does not activate Google Business Profile, post review responses, or connect a Ranchers production account. See [the local-profile runbook](docs/local-profile-intelligence.md) and [the release-integrity runbook](docs/release-integrity.md).
+
 ## Validation
 
 ```bash
 npm run check
 python scripts/validate_repository_governance.py
+python -m catora_api.release_integrity
 python3 -m ruff check apps/api
 python3 -m mypy --config-file apps/api/pyproject.toml apps/api/catora_api
 python3 -m pytest apps/api/tests
@@ -96,7 +101,10 @@ python3 -m pytest apps/api/tests
 cd apps/api
 alembic upgrade head
 alembic downgrade -1
+alembic upgrade head
 ```
+
+A successful clean upgrade and downgrade/re-upgrade cycle is required before a migration-bearing pull request can be merged.
 
 ## Repository layout
 
@@ -116,3 +124,4 @@ docs/adr                    Architecture decisions
 - Tenant boundaries are enforced in backend queries, not only in the UI.
 - No catalog write occurs without explicit approval.
 - Secrets must never be committed or emitted in logs.
+- An issue is not complete until merged code, green workflows, migrations and deployment evidence agree.

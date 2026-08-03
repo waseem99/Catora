@@ -51,6 +51,8 @@ jobs:
           python-version: '3.13'
           cache: pip
       - run: python -m pip install --quiet -e 'apps/api[dev]'
+      - name: Validate release integrity
+        run: python -m catora_api.release_integrity
       - name: Validate hosted deployment and enterprise demo assets
         shell: bash
         run: |
@@ -198,6 +200,11 @@ jobs:
               exit "$validation_status"
             fi
             alembic downgrade -1
+            downgrade_status=$?
+            if [ "$downgrade_status" -ne 0 ]; then
+              exit "$downgrade_status"
+            fi
+            alembic upgrade head
           ) > /tmp/migration-report.txt 2>&1
           status=$?
           tail -n 100 /tmp/migration-report.txt > /tmp/migration-tail.txt

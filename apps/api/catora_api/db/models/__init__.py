@@ -35,12 +35,24 @@ from catora_api.db.models.intents import (
     IntentSuiteMember,
     IntentSuiteRun,
 )
+from catora_api.db.models.local_profiles import (
+    BranchLocalProfileLink,
+    LocalProfileConflictRecord,
+    LocalProfileObservationRecord,
+    LocalProfileProviderAccount,
+)
 from catora_api.db.models.reporting import (
     AuditEvent,
     ExportArtifact,
     MeasurementBaseline,
     ProductCohort,
     ReportJob,
+)
+from catora_api.db.models.reputation import (
+    ReviewAnalysisRecord,
+    ReviewObservationRecord,
+    ReviewProviderAccount,
+    ReviewResponseDraftRecord,
 )
 from catora_api.db.models.restaurant import (
     RestaurantBrand,
@@ -81,6 +93,7 @@ __all__ = [
     "AuditEvent",
     "AuditFinding",
     "AuditRun",
+    "BranchLocalProfileLink",
     "BuyerIntent",
     "CatalogSource",
     "Category",
@@ -99,6 +112,9 @@ __all__ = [
     "IntentSuiteMember",
     "IntentSuiteRun",
     "Locale",
+    "LocalProfileConflictRecord",
+    "LocalProfileObservationRecord",
+    "LocalProfileProviderAccount",
     "Market",
     "MarketComparison",
     "MarketConflict",
@@ -134,7 +150,11 @@ __all__ = [
     "RestaurantModifierOption",
     "RestaurantOfferOrPromotion",
     "RestaurantServiceArea",
+    "ReviewAnalysisRecord",
     "ReviewDecision",
+    "ReviewObservationRecord",
+    "ReviewProviderAccount",
+    "ReviewResponseDraftRecord",
     "RuleDefinition",
     "RuleVersion",
     "ShopifyStoreInvitation",
