@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
+from typing import Literal
 
 from catora_api.restaurant_pilot.models import (
     REQUIRED_CHECK_KEYS,
@@ -47,6 +48,11 @@ _RECONCILIATION_KEYS = frozenset(
         "rejected_count",
     }
 )
+ReadinessState = Literal[
+    "blocked",
+    "ready_for_external_acceptance",
+    "external_acceptance_recorded",
+]
 
 
 def canonical_hash(value: object) -> str:
@@ -96,12 +102,16 @@ def evaluate_pilot_readiness(
             blockers.append(f"Required access is not accepted: {system}")
 
     for module in sorted(_REQUIRED_READY_MODULES):
-        state = plan.module_states.get(module)
-        if state not in {"synthetic_tested", "accepted"}:
+        module_state = plan.module_states.get(module)
+        if module_state not in {"synthetic_tested", "accepted"}:
             blockers.append(f"Required module is not ready: {module}")
     for module in sorted(_OPTIONAL_MODULES):
-        state = plan.module_states.get(module)
-        if state is None or state in {"disabled", "unavailable", "prohibited"}:
+        module_state = plan.module_states.get(module)
+        if module_state is None or module_state in {
+            "disabled",
+            "unavailable",
+            "prohibited",
+        }:
             warnings.append(f"Optional module is not accepted: {module}")
 
     check_by_key: dict[str, PilotAcceptanceCheck] = {}
@@ -154,16 +164,16 @@ def evaluate_pilot_readiness(
         )
     )
 
-    state = "blocked"
+    readiness_state: ReadinessState = "blocked"
     if not blockers:
-        state = (
+        readiness_state = (
             "external_acceptance_recorded"
             if external_acceptance_recorded
             else "ready_for_external_acceptance"
         )
     readiness_payload = {
         "plan_sha256": plan_hash(plan),
-        "state": state,
+        "state": readiness_state,
         "blockers": sorted(blockers),
         "warnings": sorted(warnings),
         "passed_checks": passed_checks,
@@ -174,7 +184,7 @@ def evaluate_pilot_readiness(
         "live_activation_performed": False,
     }
     return PilotReadiness(
-        state=state,
+        state=readiness_state,
         blockers=tuple(blockers),
         warnings=tuple(warnings),
         passed_checks=tuple(passed_checks),
