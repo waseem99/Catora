@@ -36,8 +36,8 @@ jobs:
       CATORA_S3_SECRET_KEY: test-secret
       CATORA_DEMO_PASSWORD: ci-demo-password
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -65,7 +65,7 @@ jobs:
           exit "$status"
       - name: Upload prospect diagnostic report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: prospect-diagnostic-report
           path: /tmp/prospect-diagnostic-report.txt
