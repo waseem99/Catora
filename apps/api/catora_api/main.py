@@ -30,6 +30,7 @@ from catora_api.api import (
     intent_templates_router,
     intents_router,
     local_profiles_router,
+    measurement_router,
     public_catalog_router,
     recommendations_router,
     reputation_router,
@@ -96,6 +97,7 @@ app.include_router(restaurant_answers_router)
 app.include_router(git_publishing_router)
 app.include_router(local_profiles_router)
 app.include_router(reputation_router)
+app.include_router(measurement_router)
 app.include_router(enrichment_policy_router)
 app.include_router(intent_parsing_router)
 app.include_router(intent_runs_router)
