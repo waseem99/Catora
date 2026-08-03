@@ -115,6 +115,7 @@ class Settings(BaseSettings):
     local_profile_intelligence_enabled: bool = False
     reputation_intelligence_enabled: bool = False
     measurement_connectors_enabled: bool = False
+    authority_intelligence_enabled: bool = False
 
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
