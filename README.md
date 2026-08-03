@@ -82,7 +82,7 @@ Writes require a valid CSRF token for cookie-authenticated sessions. CSV uploads
 
 ## Restaurant intelligence boundaries
 
-Local-profile and reputation intelligence are feature-gated off by default. The repository implementation supports deterministic synthetic/read-only acceptance only; it does not activate Google Business Profile, post review responses, or connect a Ranchers production account. See [the local-profile runbook](docs/local-profile-intelligence.md) and [the release-integrity runbook](docs/release-integrity.md).
+Local-profile, reputation and aggregate measurement intelligence are feature-gated off by default. The repository implementation supports deterministic synthetic/read-only acceptance only; it does not activate Google Business Profile, post review responses, connect GSC/GA4/CrUX or another live measurement provider, or connect a Ranchers production account. Aggregate measurement contracts reject customer, session, order and transaction identifiers and prohibit causal, ranking, traffic, revenue and ROI claims. See [the local-profile runbook](docs/local-profile-intelligence.md), [the measurement runbook](docs/restaurant-measurement-connectors.md) and [the release-integrity runbook](docs/release-integrity.md).
 
 ## Validation
 
