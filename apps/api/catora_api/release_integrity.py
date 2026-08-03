@@ -44,34 +44,6 @@ class ReleaseIntegrityError(RuntimeError):
     pass
 
 
-def _collect_route_paths(value: object, *, seen: set[int]) -> set[str]:
-    identity = id(value)
-    if identity in seen:
-        return set()
-    seen.add(identity)
-
-    paths: set[str] = set()
-    if isinstance(value, list | tuple):
-        for item in value:
-            paths.update(_collect_route_paths(item, seen=seen))
-        return paths
-
-    path = getattr(value, "path", None)
-    if isinstance(path, str):
-        paths.add(path)
-
-    nested_routes = getattr(value, "routes", None)
-    if isinstance(nested_routes, list | tuple):
-        for route in nested_routes:
-            paths.update(_collect_route_paths(route, seen=seen))
-
-    nested_router = getattr(value, "router", None)
-    if nested_router is not None:
-        paths.update(_collect_route_paths(nested_router, seen=seen))
-
-    return paths
-
-
 def validate_release_integrity(api_root: Path | None = None) -> dict[str, Any]:
     root = api_root or Path(__file__).resolve().parents[1]
     config = Config(str(root / "alembic.ini"))
@@ -105,7 +77,10 @@ def validate_release_integrity(api_root: Path | None = None) -> dict[str, Any]:
             f"Persistence models are not registered for tables: {missing_tables}"
         )
 
-    paths = _collect_route_paths(app, seen=set())
+    openapi_paths = app.openapi().get("paths")
+    if not isinstance(openapi_paths, dict):
+        raise ReleaseIntegrityError("FastAPI did not produce an OpenAPI paths object")
+    paths = {path for path in openapi_paths if isinstance(path, str)}
     missing_routes = sorted(_REQUIRED_ROUTES.difference(paths))
     if missing_routes:
         raise ReleaseIntegrityError(
