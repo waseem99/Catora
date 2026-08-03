@@ -16,8 +16,8 @@ jobs:
   web:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.13.0
           cache: npm
@@ -32,7 +32,7 @@ jobs:
           exit "$status"
       - name: Upload web lint report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: web-lint-report
           path: web-lint-report.txt
@@ -45,8 +45,8 @@ jobs:
   api-static:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -85,7 +85,7 @@ jobs:
           exit "$status"
       - name: Upload Ruff report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ruff-report
           path: ruff-report.txt
@@ -103,7 +103,7 @@ jobs:
           exit "$status"
       - name: Upload MyPy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mypy-report
           path: mypy-report.txt
@@ -140,8 +140,8 @@ jobs:
       CATORA_S3_SECRET_KEY: test-secret
       CATORA_DEMO_PASSWORD: ci-demo-password
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -156,7 +156,7 @@ jobs:
           exit "$status"
       - name: Upload pytest report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pytest-report
           path: pytest-report.txt
@@ -212,7 +212,7 @@ jobs:
           exit "$status"
       - name: Upload enterprise migration tail
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: enterprise-migration-tail
           path: /tmp/migration-tail.txt
@@ -222,7 +222,7 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Scan active code for secrets
@@ -247,7 +247,7 @@ jobs:
               --redact \
               --no-banner
           fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.13.0
           cache: npm
@@ -267,12 +267,12 @@ jobs:
           exit "$audit_status"
       - name: Upload Node.js audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: npm-audit-report
           path: npm-audit-report.txt
           retention-days: 3
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
           cache: pip
@@ -292,7 +292,7 @@ jobs:
           exit "$audit_status"
       - name: Upload Python audit report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: pip-audit-report
           path: pip-audit-report.txt
