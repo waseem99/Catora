@@ -115,7 +115,9 @@ def _plan(*, pending_role: str | None = None) -> RestaurantPilotPlan:
         rollback_contract=PilotRollbackContract(
             rollback_owner_reference="directory:deployment_owner",
             runbook_reference="docs:restaurant-pilot-acceptance#rollback",
-            source_disable_method="Disable the approved source adapter and revoke its managed secret.",
+            source_disable_method=(
+                "Disable the approved source adapter and revoke its managed secret."
+            ),
             provider_revoke_method="Revoke every accepted provider account independently.",
         ),
         submitted_at=NOW,
@@ -188,9 +190,15 @@ def test_unapproved_owner_and_missing_checks_block_readiness() -> None:
 
 def test_expired_or_impacting_evidence_blocks_readiness() -> None:
     checks = list(_checks())
-    index = next(i for i, check in enumerate(checks) if check.check_key == "ordering_path_isolation")
+    index = next(
+        i
+        for i, check in enumerate(checks)
+        if check.check_key == "ordering_path_isolation"
+    )
     checks[index] = checks[index].model_copy(update={"details": {"impact_observed": True}})
-    expired_index = next(i for i, check in enumerate(checks) if check.check_key == "backup_restore")
+    expired_index = next(
+        i for i, check in enumerate(checks) if check.check_key == "backup_restore"
+    )
     checks[expired_index] = checks[expired_index].model_copy(
         update={"expires_at": NOW - timedelta(seconds=1)}
     )
