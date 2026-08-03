@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     reputation_intelligence_enabled: bool = False
     measurement_connectors_enabled: bool = False
     authority_intelligence_enabled: bool = False
+    restaurant_operations_console_enabled: bool = False
+    restaurant_monitoring_enabled: bool = False
 
     # Existing standalone custom-distribution pilot app.
     shopify_enabled: bool = False
@@ -181,6 +183,13 @@ class Settings(BaseSettings):
                 )
             return
         self.service_visibility_encryption_key_bytes()
+
+    def validate_restaurant_intelligence(self) -> None:
+        if self.restaurant_monitoring_enabled and not self.restaurant_operations_console_enabled:
+            raise ValueError(
+                "CATORA_RESTAURANT_MONITORING_ENABLED requires "
+                "CATORA_RESTAURANT_OPERATIONS_CONSOLE_ENABLED=true"
+            )
 
     def validate_shopify(self) -> None:
         if not self.shopify_enabled:
@@ -261,6 +270,7 @@ class Settings(BaseSettings):
         if self.environment != "production":
             self.validate_catalog_bridge()
             self.validate_service_visibility()
+            self.validate_restaurant_intelligence()
             self.validate_shopify()
             self.validate_shopify_public()
             return
@@ -303,6 +313,7 @@ class Settings(BaseSettings):
             raise ValueError("CATORA_TRUST_PROXY_HEADERS must be true in production")
         self.validate_catalog_bridge()
         self.validate_service_visibility()
+        self.validate_restaurant_intelligence()
         self.validate_shopify()
         self.validate_shopify_public()
 
