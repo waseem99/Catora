@@ -43,8 +43,8 @@ jobs:
   contract:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22.13.0
           cache: npm
@@ -61,7 +61,7 @@ jobs:
           exit "$status"
       - name: Upload bridge lint report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalog-bridge-lint-report
           path: catalog-bridge-lint.txt
@@ -77,7 +77,7 @@ jobs:
           exit "$status"
       - name: Upload bridge typecheck report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalog-bridge-typecheck-report
           path: catalog-bridge-typecheck.txt
@@ -102,7 +102,7 @@ jobs:
           npm install "$GITHUB_WORKSPACE/$package" >/dev/null
           node -e 'import("@catora/catalog-bridge").then((module) => { if (typeof module.CatalogBridgeClient !== "function") process.exit(1); })'
       - name: Upload installable bridge package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catora-catalog-bridge-0.1.0
           path: artifacts/catalog-bridge/*.tgz
@@ -117,7 +117,7 @@ jobs:
           exit "$status"
       - name: Upload root workspace build report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalog-bridge-root-build-report
           path: catalog-bridge-root-build.txt
@@ -145,8 +145,8 @@ jobs:
       CATORA_CATALOG_BRIDGE_ENABLED: "true"
       CATORA_CATALOG_BRIDGE_CREDENTIAL_ENCRYPTION_KEY: YmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmI=
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -171,7 +171,7 @@ jobs:
           exit "$status"
       - name: Upload focused Ruff report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalog-bridge-ruff-report
           path: catalog-bridge-ruff.txt
@@ -192,7 +192,7 @@ jobs:
           exit "$status"
       - name: Upload focused MyPy report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: catalog-bridge-mypy-report
           path: catalog-bridge-mypy.txt
