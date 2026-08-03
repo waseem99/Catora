@@ -30,8 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Validate release script syntax
@@ -46,7 +46,7 @@ jobs:
         run: pytest -q apps/api/tests/test_shopify_public_release_script.py
       - name: Upload sanitized readiness evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: shopify-public-release-readiness
           path: artifacts/shopify-public-release-readiness.json
