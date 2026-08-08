@@ -61,7 +61,9 @@ module = [
   "botocore",
   "botocore.*",
   "celery",
-  "celery.*"
+  "celery.*",
+  "google",
+  "google.*"
 ]
 ignore_missing_imports = true
 
@@ -96,6 +98,7 @@ filterwarnings = [
 "alembic/versions/*.py" = ["E501"]
 "catora_api/authority/service.py" = ["F401"]
 "catora_api/db/models/operations_console.py" = ["E501", "I001"]
+"catora_api/measurement/google.py" = ["E501"]
 "catora_api/normalization/restaurant_bridge.py" = ["F401"]
 "catora_api/operations_console/reconciler.py" = ["E501", "B009"]
 "catora_api/schemas/restaurant_bridge.py" = ["UP040"]
