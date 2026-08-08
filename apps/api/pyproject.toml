@@ -68,6 +68,14 @@ module = [
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "catora_api.measurement.google"
+disable_error_code = ["no-untyped-call"]
+
+[[tool.mypy.overrides]]
+module = "catora_api.api.measurement"
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
 module = "catora_api.schemas.restaurant_bridge"
 disable_error_code = ["assignment"]
 
