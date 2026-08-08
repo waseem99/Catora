@@ -31,9 +31,10 @@ jobs:
       - name: Verify legacy compatibility metadata
         run: |
           unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/catora-service-visibility.php | grep -F "Requires PHP: 7.4"
-          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/catora-service-visibility.php | grep -F "Version: 0.2.2"
-          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/readme.txt | grep -F "Stable tag: 0.2.2"
+          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/catora-service-visibility.php | grep -F "Version: 0.2.3"
+          unzip -p artifacts/service-visibility/catora-service-visibility.zip catora-service-visibility/readme.txt | grep -F "Stable tag: 0.2.3"
           unzip -l artifacts/service-visibility/catora-service-visibility.zip | grep -F "catora-service-visibility/includes/php-compatibility.php"
+          unzip -l artifacts/service-visibility/catora-service-visibility.zip | grep -F "catora-service-visibility/includes/class-catora-service-visibility-auto-rescan.php"
       - name: Validate mock-server syntax
         run: python -m py_compile apps/wordpress-service-visibility/tests/mock-catora-server.py
       - name: Start signed Catora runtime mock
