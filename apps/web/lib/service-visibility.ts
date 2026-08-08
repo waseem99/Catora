@@ -46,8 +46,8 @@ export const ServiceVisibilityReportPageSchema = z.object({
   visible_text: z.string(),
   headings: z.array(z.object({ level: z.string(), text: z.string() })),
   wordpress: z.object({
-    post_id: z.number().int().positive(),
-    revision: z.string().min(1),
+    post_id: z.number().int().positive().optional(),
+    revision: z.string().min(1).optional(),
     builder: z.string().optional(),
   }).passthrough(),
 });
