@@ -48,7 +48,7 @@ async def _prior_report(
     workspace_id: uuid.UUID,
     source_id: uuid.UUID,
     report_id: uuid.UUID,
-) -> tuple[str | None, set[str]]:
+) -> tuple[str | None, set[str], dict[str, str]]:
     candidates = list(
         (
             await session.scalars(
@@ -69,11 +69,47 @@ async def _prior_report(
         if snapshot.get("source_id") != str(source_id):
             continue
         fingerprints = snapshot.get("finding_fingerprints")
-        if isinstance(fingerprints, list):
-            return str(candidate.id), {
-                value for value in fingerprints if isinstance(value, str)
+        page_hashes = snapshot.get("page_hashes")
+        return (
+            str(candidate.id),
+            {
+                value
+                for value in fingerprints
+                if isinstance(value, str)
             }
-    return None, set()
+            if isinstance(fingerprints, list)
+            else set(),
+            {
+                key: value
+                for key, value in page_hashes.items()
+                if isinstance(key, str) and isinstance(value, str)
+            }
+            if isinstance(page_hashes, dict)
+            else {},
+        )
+    return None, set(), {}
+
+
+def _apply_page_continuity(
+    *,
+    report: object,
+    prior_page_hashes: dict[str, str],
+) -> dict[str, str]:
+    site = getattr(report, "site")
+    continuity = getattr(report, "continuity")
+    current = {page.url: page.content_hash for page in site.pages}
+    current_urls = set(current)
+    prior_urls = set(prior_page_hashes)
+    shared = current_urls & prior_urls
+    continuity.new_pages = sorted(current_urls - prior_urls)
+    continuity.removed_pages = sorted(prior_urls - current_urls)
+    continuity.changed_pages = sorted(
+        url for url in shared if current[url] != prior_page_hashes[url]
+    )
+    continuity.unchanged_page_count = sum(
+        current[url] == prior_page_hashes[url] for url in shared
+    )
+    return current
 
 
 async def _store_artifact(
@@ -154,7 +190,7 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
                     )
                 ).all()
             )
-            prior_report_id, prior_fingerprints = await _prior_report(
+            prior_report_id, prior_fingerprints, prior_page_hashes = await _prior_report(
                 session=session,
                 workspace_id=workspace_id,
                 source_id=source.id,
@@ -171,6 +207,10 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
                 ],
                 prior_report_id=prior_report_id,
                 prior_fingerprints=prior_fingerprints,
+            )
+            page_hashes = _apply_page_continuity(
+                report=report,
+                prior_page_hashes=prior_page_hashes,
             )
             report_json = report.model_dump_json(indent=2).encode()
             artifacts = {
@@ -239,14 +279,27 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
                 "continuity": report.continuity.model_dump(),
                 "executive_summary": report.executive_summary,
                 "finding_fingerprints": [finding.fingerprint for finding in report.findings],
+                "page_hashes": page_hashes,
                 "artifacts": artifacts,
                 "error": None,
             }
+            changed_page_count = (
+                len(report.continuity.new_pages)
+                + len(report.continuity.changed_pages)
+                + len(report.continuity.removed_pages)
+            )
             source.config = {
                 **dict(source.config),
                 "active_report_id": None,
                 "last_report_id": str(report_job.id),
                 "last_completed_at": datetime.now(UTC).isoformat(),
+                "last_change_summary": {
+                    "new_pages": len(report.continuity.new_pages),
+                    "changed_pages": len(report.continuity.changed_pages),
+                    "removed_pages": len(report.continuity.removed_pages),
+                    "resolved_findings": report.continuity.resolved_findings,
+                    "new_findings": report.continuity.new_findings,
+                },
             }
             session.add(
                 AuditEvent(
@@ -260,6 +313,9 @@ async def _run_service_visibility(report_id: uuid.UUID) -> None:
                         "page_count": len(report.site.pages),
                         "finding_count": len(report.findings),
                         "overall_score": report.scorecard.overall,
+                        "changed_page_count": changed_page_count,
+                        "new_findings": report.continuity.new_findings,
+                        "resolved_findings": report.continuity.resolved_findings,
                     },
                 )
             )
@@ -310,6 +366,11 @@ async def _monitor_service_visibility() -> None:
         for source in sources:
             config = dict(source.config)
             if config.get("monitoring_enabled") is not True or config.get("active_report_id"):
+                continue
+            # Signed WordPress bridge sources create a fresh report when the plugin
+            # completes each snapshot. Re-running the last stored snapshot here would
+            # create duplicate monitoring reports without observing a new site state.
+            if config.get("connection_mode") == "wordpress_bridge":
                 continue
             job = IngestionJob(
                 workspace_id=source.workspace_id,
