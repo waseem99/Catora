@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +20,7 @@ from catora_api.db.models.measurement import (
     MeasurementObservationRecord,
     MeasurementProviderAccount,
 )
+from catora_api.measurement.google import google_provider_from_reference
 from catora_api.measurement.models import (
     ChangeAnnotation,
     MeasurementAttribution,
@@ -27,7 +28,11 @@ from catora_api.measurement.models import (
     MeasurementProperty,
     MeasurementProviderCapability,
 )
-from catora_api.measurement.provider import SyntheticMeasurementProvider
+from catora_api.measurement.provider import (
+    MeasurementCapabilityUnavailable,
+    MeasurementProviderError,
+    SyntheticMeasurementProvider,
+)
 from catora_api.measurement.service import MeasurementService, MeasurementServiceError
 
 router = APIRouter(
@@ -52,6 +57,24 @@ class SyntheticMeasurementImportRequest(MeasurementApiModel):
 
 class SyntheticMeasurementImportResponse(MeasurementApiModel):
     account_id: uuid.UUID
+    properties: int
+    accepted: int
+    duplicate: int
+
+
+class GoogleMeasurementConnectRequest(MeasurementApiModel):
+    provider: Literal["google_search_console", "ga4"]
+    credential_reference: str = Field(
+        min_length=8,
+        max_length=120,
+        pattern=r"^env:[A-Z][A-Z0-9_]{2,100}$",
+    )
+    property_allowlist: tuple[str, ...] = Field(min_length=1, max_length=20)
+
+
+class GoogleMeasurementSyncResponse(MeasurementApiModel):
+    account_id: uuid.UUID
+    provider: Literal["google_search_console", "ga4"]
     properties: int
     accepted: int
     duplicate: int
@@ -160,6 +183,16 @@ def _account_response(account: MeasurementProviderAccount) -> MeasurementAccount
     )
 
 
+def _google_property_allowlist(account: MeasurementProviderAccount) -> tuple[str, ...]:
+    configuration = account.sync_checkpoint.get("configuration")
+    if not isinstance(configuration, dict):
+        raise MeasurementServiceError("Google measurement account configuration is unavailable")
+    raw = configuration.get("property_allowlist")
+    if not isinstance(raw, list) or not raw:
+        raise MeasurementServiceError("Google measurement property allowlist is unavailable")
+    return tuple(str(value) for value in raw if isinstance(value, str) and value)
+
+
 @router.post(
     "/import-synthetic",
     response_model=SyntheticMeasurementImportResponse,
@@ -222,6 +255,135 @@ async def import_synthetic_measurements(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return SyntheticMeasurementImportResponse(
         account_id=account.id,
+        properties=summary["properties"],
+        accepted=summary["accepted"],
+        duplicate=summary["duplicate"],
+    )
+
+
+@router.post(
+    "/connect-google",
+    response_model=GoogleMeasurementSyncResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def connect_google_measurements(
+    workspace_id: uuid.UUID,
+    payload: GoogleMeasurementConnectRequest,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> GoogleMeasurementSyncResponse:
+    _require_enabled()
+    role = await _role(
+        workspace_id=workspace_id,
+        session=session,
+        auth_service=auth_service,
+        context=context,
+    )
+    _require_runner(role)
+    service = MeasurementService()
+    try:
+        provider, external_account_id = await google_provider_from_reference(
+            provider=payload.provider,
+            credential_reference=payload.credential_reference,
+            property_allowlist=payload.property_allowlist,
+        )
+        capabilities = await provider.discover_capabilities()
+        account = await service.create_account(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            provider=payload.provider,
+            external_account_id=external_account_id,
+            credential_reference=payload.credential_reference,
+            capabilities=capabilities,
+            live_acceptance_confirmed=True,
+        )
+        account.sync_checkpoint = {
+            "configuration": {
+                "property_allowlist": list(payload.property_allowlist),
+            }
+        }
+        await session.commit()
+        summary = await service.sync_account(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            account_id=account.id,
+            provider=provider,
+        )
+    except MeasurementCapabilityUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except MeasurementProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except MeasurementServiceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return GoogleMeasurementSyncResponse(
+        account_id=account.id,
+        provider=payload.provider,
+        properties=summary["properties"],
+        accepted=summary["accepted"],
+        duplicate=summary["duplicate"],
+    )
+
+
+@router.post(
+    "/accounts/{account_id}/sync",
+    response_model=GoogleMeasurementSyncResponse,
+)
+async def sync_google_measurements(
+    workspace_id: uuid.UUID,
+    account_id: uuid.UUID,
+    session: SessionDependency,
+    auth_service: AuthServiceDependency,
+    context: CsrfContextDependency,
+) -> GoogleMeasurementSyncResponse:
+    _require_enabled()
+    role = await _role(
+        workspace_id=workspace_id,
+        session=session,
+        auth_service=auth_service,
+        context=context,
+    )
+    _require_runner(role)
+    account = await session.scalar(
+        select(MeasurementProviderAccount).where(
+            MeasurementProviderAccount.id == account_id,
+            MeasurementProviderAccount.workspace_id == workspace_id,
+            MeasurementProviderAccount.status == "ready",
+        )
+    )
+    if account is None:
+        raise HTTPException(status_code=404, detail="Measurement provider account not found")
+    if account.provider not in {"google_search_console", "ga4"}:
+        raise HTTPException(status_code=409, detail="Account is not a Google measurement provider")
+    try:
+        property_allowlist = _google_property_allowlist(account)
+        google_provider, external_account_id = await google_provider_from_reference(
+            provider=account.provider,
+            credential_reference=account.credential_reference,
+            property_allowlist=property_allowlist,
+        )
+        if external_account_id != account.external_account_id:
+            raise MeasurementServiceError(
+                "Managed Google credential no longer matches the connected account"
+            )
+        summary = await MeasurementService().sync_account(
+            session,
+            workspace_id=workspace_id,
+            actor_user_id=context.user.id,
+            account_id=account.id,
+            provider=google_provider,
+        )
+    except MeasurementCapabilityUnavailable as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except MeasurementProviderError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except MeasurementServiceError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return GoogleMeasurementSyncResponse(
+        account_id=account.id,
+        provider=account.provider,
         properties=summary["properties"],
         accepted=summary["accepted"],
         duplicate=summary["duplicate"],
