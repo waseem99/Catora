@@ -2,7 +2,7 @@
 Contributors: catora
 Requires at least: 6.4
 Requires PHP: 7.4
-Stable tag: 0.2.2
+Stable tag: 0.2.3
 License: Proprietary
 
 Exports only published public WordPress content to an authorized Catora workspace for evidence-backed SEO, answer-readiness, and AI-discovery audits.
@@ -15,6 +15,7 @@ The authoritative source and publisher record is https://github.com/waseem99/Cat
 * Approved changes create separate WordPress drafts.
 * Does not rewrite Elementor structures.
 * Scheduled snapshots are disabled by default.
+* When scheduled monitoring is enabled, public content saves queue a bounded follow-up snapshot after five minutes so Catora can verify the changed public state.
 * Interrupted snapshots resume from the last accepted batch.
 * Disconnect by clearing the settings or uninstalling the plugin.
 

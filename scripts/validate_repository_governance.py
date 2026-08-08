@@ -10,6 +10,7 @@ AUTHORITY_PATH = ROOT / "docs/governance/repository-authority.json"
 EXPECTED_REPOSITORY = "waseem99/Catora"
 EXPECTED_OWNER = "waseem99"
 EXPECTED_REPOSITORY_URL = "https://github.com/waseem99/Catora"
+EXPECTED_WORDPRESS_PLUGIN_VERSION = "0.2.3"
 EXPECTED_CONTINUITY_CONTROLS = {
     "administrator_bypass_failure_test",
     "backup_repository_administrator",
@@ -181,9 +182,15 @@ def main() -> int:
     plugin_readme = read("apps/wordpress-service-visibility/readme.txt")
     require(f"Plugin URI: {EXPECTED_REPOSITORY_URL}" in plugin, "WordPress Plugin URI is not canonical")
     require(f"Author URI: {EXPECTED_REPOSITORY_URL}" in plugin, "WordPress Author URI is not canonical")
-    require("Version: 0.2.2" in plugin, "WordPress plugin version must be 0.2.2")
+    require(
+        f"Version: {EXPECTED_WORDPRESS_PLUGIN_VERSION}" in plugin,
+        f"WordPress plugin version must be {EXPECTED_WORDPRESS_PLUGIN_VERSION}",
+    )
     require("Requires PHP: 7.4" in plugin, "WordPress plugin must declare PHP 7.4 support")
-    require("Stable tag: 0.2.2" in plugin_readme, "WordPress stable tag must be 0.2.2")
+    require(
+        f"Stable tag: {EXPECTED_WORDPRESS_PLUGIN_VERSION}" in plugin_readme,
+        f"WordPress stable tag must be {EXPECTED_WORDPRESS_PLUGIN_VERSION}",
+    )
     require(
         "Requires PHP: 7.4" in plugin_readme,
         "WordPress readme must declare PHP 7.4 support",

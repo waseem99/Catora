@@ -1,8 +1,8 @@
 # Catora Service Visibility WordPress bridge
 
-Current release: **0.2.2**.
+Current release: **0.2.3**.
 
-This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, resumable snapshots, connection health, optional scheduled snapshots, and approved draft delivery.
+This plugin is optional. Catora can run a zero-install audit from an authorized public WordPress sitemap, while the bridge provides deterministic page metadata, resumable snapshots, connection health, optional scheduled snapshots, approved draft delivery, and post-change verification scans.
 
 The authoritative source and repository-side publisher record is [`waseem99/Catora`](https://github.com/waseem99/Catora). That repository authority verifies plugin provenance; it does not replace permission from the owner or authorized representative of the WordPress site where the plugin is installed.
 
@@ -17,7 +17,7 @@ The authoritative source and repository-side publisher record is [`waseem99/Cato
 
 The token must be supplied through an approved secret channel. Once saved, it is not rendered back into the settings form. Rotate it in Catora if it is exposed.
 
-Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Interrupted uploads retain private temporary batch checkpoints outside the public WordPress web root and resume from the last batch accepted by Catora.
+Scheduled snapshots are disabled by default. Manual snapshots remain available; enable the daily schedule only after the site owner and Catora operator approve recurring monitoring. Once monitoring is enabled, saving published public content queues one bounded follow-up snapshot after five minutes. This lets Catora compare the new public state with the prior report and verify new, changed and removed pages as well as new and resolved findings. Interrupted uploads retain private temporary batch checkpoints outside the public WordPress web root and resume from the last batch accepted by Catora.
 
 ## PHP compatibility
 

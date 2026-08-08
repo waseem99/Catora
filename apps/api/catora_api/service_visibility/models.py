@@ -106,6 +106,10 @@ class ServiceVisibilityContinuity(ServiceVisibilityModel):
     new_findings: int = 0
     persisting_findings: int = 0
     resolved_findings: int = 0
+    new_pages: list[str] = Field(default_factory=list)
+    changed_pages: list[str] = Field(default_factory=list)
+    removed_pages: list[str] = Field(default_factory=list)
+    unchanged_page_count: int = 0
     prior_report_id: str | None = None
 
 
