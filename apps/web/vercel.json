@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "installCommand": "cd ../.. && npm ci --no-audit --no-fund",
-  "buildCommand": "cd ../.. && npm run build --workspace @catora/web"
+  "installCommand": "cd ../.. && npm install --package-lock-only --ignore-scripts --no-audit --no-fund && npm ci --no-audit --no-fund",
+  "buildCommand": "cd ../.. && cp package-lock.json apps/web/public/node-audit-lock.json && npm run build --workspace @catora/web"
 }
