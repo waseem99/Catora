@@ -152,8 +152,9 @@ def test_account_contract_rejects_raw_credentials_and_unaccepted_live_access() -
             provider="google_search_console",
             credential_reference="raw-token",
             capabilities=capabilities,
+            live_acceptance_confirmed=False,
         )
-    with pytest.raises(MeasurementServiceError, match="cannot be granted or tested"):
+    with pytest.raises(MeasurementServiceError, match="successful account-level acceptance"):
         service._validate_account_contract(  # noqa: SLF001
             provider="google_search_console",
             credential_reference="env:CATORA_GSC_TOKEN",
@@ -164,6 +165,7 @@ def test_account_contract_rejects_raw_credentials_and_unaccepted_live_access() -
                     tested_at=START,
                 ),
             ),
+            live_acceptance_confirmed=False,
         )
 
 
