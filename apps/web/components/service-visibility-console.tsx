@@ -6,6 +6,7 @@ import {
   createServiceVisibilitySource,
   listServiceVisibilityRuns,
   listServiceVisibilitySources,
+  rotateServiceVisibilitySource,
   runServiceVisibility,
   serviceVisibilityArtifactUrl,
   type ServiceVisibilityProvision,
@@ -90,6 +91,25 @@ export function ServiceVisibilityConsole({ workspaceId }: Props) {
     }
   }
 
+  async function rotate(source: ServiceVisibilitySource) {
+    if (busy) return;
+    const confirmed = window.confirm(
+      `Rotate the WordPress bridge credential for ${source.name}? The current credential will stop working immediately.`,
+    );
+    if (!confirmed) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const rotated = await rotateServiceVisibilitySource(workspaceId, source.id);
+      setProvision(rotated);
+      await refresh();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to rotate the bridge credential.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function run(sourceId: string) {
     setBusy(true);
     setError(null);
@@ -147,7 +167,12 @@ export function ServiceVisibilityConsole({ workspaceId }: Props) {
             {sources.length === 0 ? <p>No WordPress service sources yet.</p> : sources.map((source) => (
               <div className="service-source" key={source.id}>
                 <div><strong>{source.name}</strong><span>{source.site_url}</span><small>{source.connection_mode.replaceAll("_", " ")} · {source.status}</small></div>
-                <button disabled={busy || source.connection_mode === "wordpress_bridge" && source.status === "draft"} onClick={() => void run(source.id)} type="button">Run audit</button>
+                <nav className="service-source-actions" aria-label={`${source.name} actions`}>
+                  {source.connection_mode === "wordpress_bridge" ? (
+                    <button disabled={busy} onClick={() => void rotate(source)} type="button">Rotate credential</button>
+                  ) : null}
+                  <button disabled={busy || source.connection_mode === "wordpress_bridge" && source.status === "draft"} onClick={() => void run(source.id)} type="button">Run audit</button>
+                </nav>
               </div>
             ))}
           </div>

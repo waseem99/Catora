@@ -13,6 +13,7 @@
 .service-source { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .service-source div { display: grid; gap: 4px; min-width: 0; }
 .service-source span, .service-source small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
+.service-source-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .service-source button, .service-artifacts a { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: transparent; text-decoration: none; font-weight: 800; }
 .service-secret { display: grid; gap: 8px; padding: 14px; border: 1px solid rgba(92,225,173,.45); border-radius: 11px; }
 .service-secret code { overflow-wrap: anywhere; padding: 8px; background: var(--bg); }
@@ -24,4 +25,4 @@
 .service-metrics b { color: var(--text); font-size: 20px; }
 .service-artifacts { display: flex; flex-wrap: wrap; gap: 8px; }
 .service-error { padding: 13px; border: 1px solid #7f1d1d; border-radius: 10px; color: #fecaca; background: #3b1717; }
-@media (max-width: 850px) { .service-grid { grid-template-columns: 1fr; } .service-visibility-header { flex-direction: column; } .service-metrics { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 850px) { .service-grid { grid-template-columns: 1fr; } .service-visibility-header { flex-direction: column; } .service-metrics { grid-template-columns: repeat(2, 1fr); } .service-source { align-items: flex-start; flex-direction: column; } .service-source-actions { width: 100%; justify-content: flex-start; } }

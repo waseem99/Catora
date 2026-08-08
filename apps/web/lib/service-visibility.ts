@@ -69,6 +69,17 @@ export async function listServiceVisibilitySources(
   return z.array(ServiceVisibilitySourceSchema).parse(value);
 }
 
+export async function rotateServiceVisibilitySource(
+  workspaceId: string,
+  sourceId: string,
+): Promise<ServiceVisibilityProvision> {
+  const value = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/service-visibility/sources/${sourceId}/rotate`,
+    { method: "POST" },
+  );
+  return ServiceVisibilityProvisionSchema.parse(value);
+}
+
 export async function runServiceVisibility(
   workspaceId: string,
   sourceId: string,
