@@ -35,8 +35,15 @@ export function GoogleMeasurementPanel({ workspaceId }: Props) {
   }
 
   useEffect(() => {
-    void refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    void listMeasurementAccounts(workspaceId)
+      .then((nextAccounts) => {
+        if (!cancelled) setAccounts(nextAccounts);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [workspaceId]);
 
   async function connect(event: FormEvent<HTMLFormElement>) {
