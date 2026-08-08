@@ -23,6 +23,7 @@ from catora_api.db.models import (
 from catora_api.ingestion.factory import connector_for_source
 from catora_api.ingestion.service import IngestionService
 from catora_api.service_visibility.analysis import analyze_service_site
+from catora_api.service_visibility.models import ServiceVisibilityReport
 from catora_api.service_visibility.reporting import (
     build_content_brief_markdown,
     build_findings_csv,
@@ -92,21 +93,19 @@ async def _prior_report(
 
 def _apply_page_continuity(
     *,
-    report: object,
+    report: ServiceVisibilityReport,
     prior_page_hashes: dict[str, str],
 ) -> dict[str, str]:
-    site = getattr(report, "site")
-    continuity = getattr(report, "continuity")
-    current = {page.url: page.content_hash for page in site.pages}
+    current = {page.url: page.content_hash for page in report.site.pages}
     current_urls = set(current)
     prior_urls = set(prior_page_hashes)
     shared = current_urls & prior_urls
-    continuity.new_pages = sorted(current_urls - prior_urls)
-    continuity.removed_pages = sorted(prior_urls - current_urls)
-    continuity.changed_pages = sorted(
+    report.continuity.new_pages = sorted(current_urls - prior_urls)
+    report.continuity.removed_pages = sorted(prior_urls - current_urls)
+    report.continuity.changed_pages = sorted(
         url for url in shared if current[url] != prior_page_hashes[url]
     )
-    continuity.unchanged_page_count = sum(
+    report.continuity.unchanged_page_count = sum(
         current[url] == prior_page_hashes[url] for url in shared
     )
     return current
