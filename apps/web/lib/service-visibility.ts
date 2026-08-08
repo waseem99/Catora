@@ -39,9 +39,62 @@ export const ServiceVisibilityRunSchema = z.object({
   updated_at: z.string(),
 });
 
+export const ServiceVisibilityReportPageSchema = z.object({
+  url: z.string(),
+  title: z.string(),
+  meta_description: z.string(),
+  visible_text: z.string(),
+  headings: z.array(z.object({ level: z.string(), text: z.string() })),
+  wordpress: z.object({
+    post_id: z.number().int().positive(),
+    revision: z.string().min(1),
+    builder: z.string().optional(),
+  }).passthrough(),
+});
+
+export const ServiceVisibilityFindingSchema = z.object({
+  fingerprint: z.string(),
+  code: z.string(),
+  family: z.enum(["technical_seo", "aeo", "ai_discovery", "architecture"]),
+  severity: z.enum(["critical", "high", "medium", "low", "informational"]),
+  lifecycle: z.enum(["new", "persisting"]),
+  title: z.string(),
+  detail: z.string(),
+  recommendation: z.string(),
+  page_url: z.string().nullable(),
+  evidence: z.array(z.object({ url: z.string(), excerpt: z.string() })),
+});
+
+export const ServiceVisibilityReportSchema = z.object({
+  source_id: uuid,
+  site: z.object({
+    company_name: z.string(),
+    pages: z.array(ServiceVisibilityReportPageSchema),
+  }),
+  findings: z.array(ServiceVisibilityFindingSchema),
+});
+
+export const ServiceVisibilityDraftSchema = z.object({
+  id: uuid,
+  source_id: uuid,
+  report_id: uuid,
+  status: z.string(),
+  page_url: z.string(),
+  wordpress_post_id: z.number().int().positive(),
+  base_revision: z.string(),
+  proposal: z.record(z.string(), z.unknown()),
+  approved_at: z.string().nullable(),
+  remote_draft_id: z.number().int().positive().nullable(),
+  error: z.string().nullable(),
+});
+
 export type ServiceVisibilitySource = z.infer<typeof ServiceVisibilitySourceSchema>;
 export type ServiceVisibilityProvision = z.infer<typeof ServiceVisibilityProvisionSchema>;
 export type ServiceVisibilityRun = z.infer<typeof ServiceVisibilityRunSchema>;
+export type ServiceVisibilityReport = z.infer<typeof ServiceVisibilityReportSchema>;
+export type ServiceVisibilityFinding = z.infer<typeof ServiceVisibilityFindingSchema>;
+export type ServiceVisibilityReportPage = z.infer<typeof ServiceVisibilityReportPageSchema>;
+export type ServiceVisibilityDraft = z.infer<typeof ServiceVisibilityDraftSchema>;
 
 export async function createServiceVisibilitySource(
   workspaceId: string,
@@ -98,6 +151,48 @@ export async function listServiceVisibilityRuns(
     `/api/v1/workspaces/${workspaceId}/service-visibility/runs`,
   );
   return z.array(ServiceVisibilityRunSchema).parse(value);
+}
+
+export async function getServiceVisibilityReport(
+  workspaceId: string,
+  reportId: string,
+): Promise<ServiceVisibilityReport> {
+  const value = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/service-visibility/runs/${reportId}/artifacts/service_visibility_json`,
+  );
+  return ServiceVisibilityReportSchema.parse(value);
+}
+
+export async function createServiceVisibilityDraft(
+  workspaceId: string,
+  reportId: string,
+  input: {
+    page_url: string;
+    wordpress_post_id: number;
+    base_revision: string;
+    title?: string;
+    content?: string;
+    meta_title?: string;
+    meta_description?: string;
+  },
+): Promise<ServiceVisibilityDraft> {
+  const value = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/service-visibility/runs/${reportId}/drafts`,
+    { method: "POST", body: JSON.stringify(input) },
+  );
+  return ServiceVisibilityDraftSchema.parse(value);
+}
+
+export async function approveServiceVisibilityDraft(
+  workspaceId: string,
+  sourceId: string,
+  draftId: string,
+): Promise<ServiceVisibilityDraft> {
+  const value = await apiRequest<unknown>(
+    `/api/v1/workspaces/${workspaceId}/service-visibility/sources/${sourceId}/drafts/${draftId}/approve`,
+    { method: "POST" },
+  );
+  return ServiceVisibilityDraftSchema.parse(value);
 }
 
 export function serviceVisibilityArtifactUrl(
