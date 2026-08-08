@@ -6,15 +6,16 @@
 .service-panel h2 { margin: 0; }
 .service-form { display: grid; gap: 14px; }
 .service-form label { display: grid; gap: 7px; color: var(--muted); font-size: 13px; font-weight: 800; }
-.service-form input, .service-form select { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--bg); font: inherit; }
+.service-form input, .service-form select, .service-form textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 9px; color: var(--text); background: var(--bg); font: inherit; }
+.service-form textarea { resize: vertical; line-height: 1.5; }
 .service-form .service-check { grid-template-columns: 20px 1fr; align-items: start; padding: 10px; border: 1px solid var(--border); border-radius: 9px; }
 .service-form .service-check input { width: 17px; height: 17px; margin-top: 2px; }
-.service-list, .service-runs { display: grid; gap: 12px; }
+.service-list, .service-runs, .service-findings { display: grid; gap: 12px; }
 .service-source { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
 .service-source div { display: grid; gap: 4px; min-width: 0; }
 .service-source span, .service-source small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
 .service-source-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.service-source button, .service-artifacts a { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: transparent; text-decoration: none; font-weight: 800; }
+.service-source button, .service-artifacts a, .service-artifacts button, .service-finding button, .service-fix-header button, .service-draft-approval button { padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: transparent; text-decoration: none; font-weight: 800; }
 .service-secret { display: grid; gap: 8px; padding: 14px; border: 1px solid rgba(92,225,173,.45); border-radius: 11px; }
 .service-secret code { overflow-wrap: anywhere; padding: 8px; background: var(--bg); }
 .service-runs article { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
@@ -23,6 +24,22 @@
 .service-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .service-metrics span { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 12px; }
 .service-metrics b { color: var(--text); font-size: 20px; }
+.service-change-summary { display: flex; flex-wrap: wrap; gap: 8px; }
+.service-change-summary span { padding: 7px 9px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12px; }
+.service-change-summary b { color: var(--text); }
 .service-artifacts { display: flex; flex-wrap: wrap; gap: 8px; }
-.service-error { padding: 13px; border: 1px solid #7f1d1d; border-radius: 10px; color: #fecaca; background: #3b1717; }
-@media (max-width: 850px) { .service-grid { grid-template-columns: 1fr; } .service-visibility-header { flex-direction: column; } .service-metrics { grid-template-columns: repeat(2, 1fr); } .service-source { align-items: flex-start; flex-direction: column; } .service-source-actions { width: 100%; justify-content: flex-start; } }
+.service-error, .service-notice { padding: 13px; border: 1px solid var(--border); border-radius: 10px; }
+.service-error { color: #fecaca; background: #3b1717; border-color: #7f1d1d; }
+.service-notice { color: var(--text); background: var(--panel); }
+.service-fix-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.service-finding { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; }
+.service-finding header { display: flex; justify-content: space-between; gap: 12px; }
+.service-finding header span, .service-finding small { color: var(--muted); text-transform: capitalize; }
+.service-finding > a { overflow-wrap: anywhere; color: var(--text); }
+.service-finding p { margin: 0; }
+.service-recommendation { display: grid; gap: 5px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg); }
+.service-finding blockquote { margin: 0; padding-left: 12px; border-left: 2px solid var(--border); color: var(--muted); }
+.service-draft-editor > p { margin: 0; color: var(--muted); }
+.service-draft-approval { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--border); border-radius: 11px; }
+.service-draft-approval p { margin: 0; color: var(--muted); }
+@media (max-width: 850px) { .service-grid { grid-template-columns: 1fr; } .service-visibility-header, .service-fix-header { flex-direction: column; } .service-metrics { grid-template-columns: repeat(2, 1fr); } .service-source { align-items: flex-start; flex-direction: column; } .service-source-actions { width: 100%; justify-content: flex-start; } .service-finding header { flex-direction: column; } }
