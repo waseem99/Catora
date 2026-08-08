@@ -2,5 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "installCommand": "cd ../.. && npm ci --no-audit --no-fund",
-  "buildCommand": "cd ../.. && npm run build --workspace @catora/web"
+  "buildCommand": "cd ../.. && npm audit --audit-level=moderate && npm run build --workspace @catora/web"
 }
