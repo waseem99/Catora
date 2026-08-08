@@ -8,10 +8,11 @@ from collections.abc import AsyncIterator, Iterable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Literal, cast
-from urllib.parse import urlsplit
-from zoneinfo import ZoneInfo
+from urllib.parse import quote, urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
+from google.auth.exceptions import GoogleAuthError
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2 import service_account
 
@@ -78,11 +79,16 @@ async def resolve_google_service_account(
     info = _environment_secret(credential_reference)
 
     def refresh() -> GoogleResolvedCredential:
-        credentials = service_account.Credentials.from_service_account_info(
-            info,
-            scopes=tuple(scopes),
-        )
-        credentials.refresh(GoogleAuthRequest())
+        try:
+            credentials = service_account.Credentials.from_service_account_info(
+                info,
+                scopes=tuple(scopes),
+            )
+            credentials.refresh(GoogleAuthRequest())
+        except (GoogleAuthError, ValueError) as exc:
+            raise MeasurementCapabilityUnavailable(
+                "Google service-account authentication failed"
+            ) from exc
         if not credentials.token:
             raise MeasurementCapabilityUnavailable(
                 "Google service account did not return an access token"
@@ -167,6 +173,18 @@ def _canonical_origin(site_url: str) -> str | None:
     return None
 
 
+def _json_object(response: httpx.Response, *, provider_name: str) -> dict[str, Any]:
+    try:
+        value = response.json()
+    except ValueError as exc:
+        raise MeasurementProviderError(
+            f"{provider_name} returned a non-JSON response"
+        ) from exc
+    if not isinstance(value, dict):
+        raise MeasurementProviderError(f"{provider_name} returned an invalid response")
+    return cast(dict[str, Any], value)
+
+
 @dataclass(frozen=True, slots=True)
 class GoogleSearchConsoleProvider(MeasurementSourceProvider):
     access_token: str
@@ -190,10 +208,7 @@ class GoogleSearchConsoleProvider(MeasurementSourceProvider):
             raise MeasurementProviderError(
                 f"Search Console request failed with HTTP {response.status_code}"
             )
-        value = response.json()
-        if not isinstance(value, dict):
-            raise MeasurementProviderError("Search Console returned an invalid response")
-        return cast(dict[str, Any], value)
+        return _json_object(response, provider_name="Search Console")
 
     async def discover_capabilities(self) -> tuple[MeasurementProviderCapability, ...]:
         await self.discover_properties()
@@ -222,10 +237,14 @@ class GoogleSearchConsoleProvider(MeasurementSourceProvider):
             for item in rows
             if isinstance(item, dict) and item.get("siteUrl")
         }
-        missing = [item for item in self.property_allowlist if item not in accessible]
-        if missing:
+        unavailable = [
+            item
+            for item in self.property_allowlist
+            if item not in accessible or accessible.get(item) == "siteUnverifiedUser"
+        ]
+        if unavailable:
             raise MeasurementCapabilityUnavailable(
-                "Search Console service account lacks access to one or more allowlisted properties"
+                "Search Console service account lacks verified access to one or more allowlisted properties"
             )
         return tuple(
             MeasurementProperty(
@@ -237,7 +256,6 @@ class GoogleSearchConsoleProvider(MeasurementSourceProvider):
                 timezone="America/Los_Angeles",
             )
             for site_url in self.property_allowlist
-            if accessible.get(site_url) != "siteUnverifiedUser"
         )
 
     async def observations(
@@ -254,10 +272,6 @@ class GoogleSearchConsoleProvider(MeasurementSourceProvider):
         observed_at = datetime.now(UTC)
         total = 0
         while total < _MAX_ROWS:
-            encoded_site = httpx.URL(property.external_property_id).raw_path.decode()
-            # URL quoting via httpx.URL is unsuitable for sc-domain: values, so use quote below.
-            from urllib.parse import quote
-
             encoded_site = quote(property.external_property_id, safe="")
             value = await self._json(
                 "POST",
@@ -282,7 +296,12 @@ class GoogleSearchConsoleProvider(MeasurementSourceProvider):
                 keys = keys_value if isinstance(keys_value, list) else []
                 if len(keys) < 3:
                     continue
-                day = datetime.strptime(str(keys[0]), "%Y-%m-%d").date()
+                try:
+                    day = datetime.strptime(str(keys[0]), "%Y-%m-%d").date()
+                except ValueError as exc:
+                    raise MeasurementProviderError(
+                        "Search Console returned an invalid date dimension"
+                    ) from exc
                 window_start, window_end = _day_window(day, _SEARCH_CONSOLE_TZ)
                 dimensions = {
                     "date": day.isoformat(),
@@ -358,10 +377,7 @@ class GoogleAnalyticsProvider(MeasurementSourceProvider):
             raise MeasurementProviderError(
                 f"Google Analytics request failed with HTTP {response.status_code}"
             )
-        value = response.json()
-        if not isinstance(value, dict):
-            raise MeasurementProviderError("Google Analytics returned an invalid response")
-        return cast(dict[str, Any], value)
+        return _json_object(response, provider_name="Google Analytics")
 
     async def discover_capabilities(self) -> tuple[MeasurementProviderCapability, ...]:
         await self.discover_properties()
@@ -447,7 +463,7 @@ class GoogleAnalyticsProvider(MeasurementSourceProvider):
             raise MeasurementCapabilityUnavailable("GA4 property is outside the allowlist")
         try:
             tz = ZoneInfo(property.timezone)
-        except Exception:
+        except ZoneInfoNotFoundError:
             tz = ZoneInfo("UTC")
         start_date, end_date = _sync_dates(checkpoint, tz=tz)
         limit = 10_000
@@ -495,9 +511,10 @@ class GoogleAnalyticsProvider(MeasurementSourceProvider):
             metric_names = [
                 str(item.get("name")) for item in metric_headers if isinstance(item, dict)
             ]
+            metadata_value = response.get("metadata")
             data_loss = bool(
-                isinstance(response.get("metadata"), dict)
-                and cast(dict[str, Any], response["metadata"]).get("dataLossFromOtherRow")
+                isinstance(metadata_value, dict)
+                and metadata_value.get("dataLossFromOtherRow")
             )
             if not rows:
                 break
@@ -517,7 +534,9 @@ class GoogleAnalyticsProvider(MeasurementSourceProvider):
                 }
                 raw_date = raw_dimensions.get("date", "")
                 if len(raw_date) != 8 or not raw_date.isdigit():
-                    continue
+                    raise MeasurementProviderError(
+                        "Google Analytics returned an invalid date dimension"
+                    )
                 day = datetime.strptime(raw_date, "%Y%m%d").date()
                 window_start, window_end = _day_window(day, tz)
                 dimensions = {
