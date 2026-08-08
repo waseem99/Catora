@@ -44,11 +44,13 @@ class MeasurementService:
         external_account_id: str,
         credential_reference: str,
         capabilities: tuple[MeasurementProviderCapability, ...],
+        live_acceptance_confirmed: bool = False,
     ) -> MeasurementProviderAccount:
         self._validate_account_contract(
             provider=provider,
             credential_reference=credential_reference,
             capabilities=capabilities,
+            live_acceptance_confirmed=live_acceptance_confirmed,
         )
         capability_payload = {
             item.operation: item.model_dump(mode="json", exclude_none=True)
@@ -109,7 +111,7 @@ class MeasurementService:
         session: AsyncSession,
         *,
         workspace_id: uuid.UUID,
-        actor_user_id: uuid.UUID,
+        actor_user_id: uuid.UUID | None,
         account_id: uuid.UUID,
         provider: MeasurementSourceProvider,
     ) -> dict[str, int]:
@@ -119,6 +121,7 @@ class MeasurementService:
             account_id=account_id,
             lock=True,
         )
+        configuration = account.sync_checkpoint.get("configuration")
         properties = await provider.discover_properties()
         accepted = 0
         duplicate = 0
@@ -140,6 +143,7 @@ class MeasurementService:
                 checkpoint={
                     str(key): str(value)
                     for key, value in account.sync_checkpoint.items()
+                    if key != "configuration"
                 },
             ):
                 if observation.provider != account.provider:
@@ -163,12 +167,15 @@ class MeasurementService:
                     accepted += 1
                 else:
                     duplicate += 1
-        account.sync_checkpoint = {
+        next_checkpoint: dict[str, object] = {
             "last_synced_at": datetime.now(UTC).isoformat(),
             "property_count": property_count,
             "accepted_observations": accepted,
             "duplicate_observations": duplicate,
         }
+        if isinstance(configuration, dict):
+            next_checkpoint["configuration"] = configuration
+        account.sync_checkpoint = next_checkpoint
         summary = {
             "properties": property_count,
             "accepted": accepted,
@@ -413,6 +420,7 @@ class MeasurementService:
         provider: MeasurementProvider,
         credential_reference: str,
         capabilities: tuple[MeasurementProviderCapability, ...],
+        live_acceptance_confirmed: bool,
     ) -> None:
         if not credential_reference.startswith(_MANAGED_CREDENTIAL_PREFIXES):
             raise MeasurementServiceError(
@@ -423,13 +431,16 @@ class MeasurementService:
             raise MeasurementServiceError(
                 "Measurement capability operations must be unique"
             )
-        if provider != "synthetic" and any(
-            capability.state in {"granted", "tested"}
-            for capability in capabilities
+        if (
+            provider != "synthetic"
+            and not live_acceptance_confirmed
+            and any(
+                capability.state in {"granted", "tested"}
+                for capability in capabilities
+            )
         ):
             raise MeasurementServiceError(
-                "Live measurement provider capabilities cannot be granted or tested "
-                "before account-level acceptance"
+                "Live measurement capabilities require successful account-level acceptance"
             )
         if provider == "synthetic" and not credential_reference.startswith("synthetic:"):
             raise MeasurementServiceError(

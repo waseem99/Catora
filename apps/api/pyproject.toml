@@ -15,9 +15,11 @@ dependencies = [
   "celery==5.6.3",
   "cryptography==49.0.0",
   "fastapi==0.139.2",
+  "google-auth==2.56.0",
   "httpx==0.28.1",
   "pydantic-settings==2.10.1",
   "redis==5.3.1",
+  "requests==2.34.2",
   "sqlalchemy==2.0.51",
   "structlog==25.4.0",
   "uvicorn[standard]==0.35.0"
@@ -59,9 +61,19 @@ module = [
   "botocore",
   "botocore.*",
   "celery",
-  "celery.*"
+  "celery.*",
+  "google",
+  "google.*"
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "catora_api.measurement.google"
+disable_error_code = ["no-untyped-call"]
+
+[[tool.mypy.overrides]]
+module = "catora_api.api.measurement"
+disable_error_code = ["arg-type"]
 
 [[tool.mypy.overrides]]
 module = "catora_api.schemas.restaurant_bridge"
@@ -94,6 +106,7 @@ filterwarnings = [
 "alembic/versions/*.py" = ["E501"]
 "catora_api/authority/service.py" = ["F401"]
 "catora_api/db/models/operations_console.py" = ["E501", "I001"]
+"catora_api/measurement/google.py" = ["E501"]
 "catora_api/normalization/restaurant_bridge.py" = ["F401"]
 "catora_api/operations_console/reconciler.py" = ["E501", "B009"]
 "catora_api/schemas/restaurant_bridge.py" = ["UP040"]

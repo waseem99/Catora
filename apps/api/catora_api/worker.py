@@ -25,6 +25,7 @@ celery_app.conf.update(
         "catora_api.shopify.analysis_tasks",
         "catora_api.shopify.compliance_tasks",
         "catora_api.service_visibility.tasks",
+        "catora_api.measurement.tasks",
     ),
     beat_schedule={
         "shopify-incremental-reconciliation": {
@@ -38,6 +39,10 @@ celery_app.conf.update(
         "service-visibility-monitoring": {
             "task": "catora.service_visibility.monitor",
             "schedule": crontab(hour=3, minute=15),
+        },
+        "google-measurement-sync": {
+            "task": "catora.measurement.sync_google",
+            "schedule": crontab(hour=4, minute=15),
         },
     },
 )
