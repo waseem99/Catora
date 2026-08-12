@@ -1,0 +1,83 @@
+name: Portable production acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_url:
+        description: Replacement production frontend origin, without trailing slash
+        required: true
+        default: https://catora.codistan.org
+        type: string
+      api_url:
+        description: Replacement production API origin, without trailing slash
+        required: true
+        default: https://api.catora.codistan.org
+        type: string
+      expected_git_sha:
+        description: Exact certified Git SHA expected on web/API/worker
+        required: true
+        type: string
+      expected_web_digest:
+        description: Exact certified web sha256 digest
+        required: true
+        type: string
+      expected_api_digest:
+        description: Exact certified API sha256 digest
+        required: true
+        type: string
+      expected_worker_digest:
+        description: Exact certified worker sha256 digest
+        required: true
+        type: string
+      workspace_id:
+        description: Optional restored workspace ID to require for the smoke identity
+        required: false
+        type: string
+      min_products:
+        description: Minimum catalog product count required in the selected restored workspace
+        required: true
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Check out acceptance script
+        uses: actions/checkout@v6
+
+      - name: Run authenticated provider-neutral production acceptance
+        env:
+          CATORA_PORTABLE_SMOKE_FRONTEND_URL: ${{ inputs.frontend_url }}
+          CATORA_PORTABLE_SMOKE_API_URL: ${{ inputs.api_url }}
+          CATORA_PORTABLE_SMOKE_EXPECTED_GIT_SHA: ${{ inputs.expected_git_sha }}
+          CATORA_PORTABLE_SMOKE_EXPECTED_WEB_DIGEST: ${{ inputs.expected_web_digest }}
+          CATORA_PORTABLE_SMOKE_EXPECTED_API_DIGEST: ${{ inputs.expected_api_digest }}
+          CATORA_PORTABLE_SMOKE_EXPECTED_WORKER_DIGEST: ${{ inputs.expected_worker_digest }}
+          CATORA_PORTABLE_SMOKE_WORKSPACE_ID: ${{ inputs.workspace_id }}
+          CATORA_PORTABLE_SMOKE_MIN_PRODUCTS: ${{ inputs.min_products }}
+          CATORA_PORTABLE_SMOKE_EMAIL: ${{ secrets.CATORA_PRODUCTION_SMOKE_EMAIL }}
+          CATORA_PORTABLE_SMOKE_PASSWORD: ${{ secrets.CATORA_PRODUCTION_SMOKE_PASSWORD }}
+          CATORA_PORTABLE_SMOKE_REPORT_PATH: portable-production-smoke.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CATORA_PORTABLE_SMOKE_EMAIL}" ] || [ -z "${CATORA_PORTABLE_SMOKE_PASSWORD}" ]; then
+            echo "Production environment secrets CATORA_PRODUCTION_SMOKE_EMAIL and CATORA_PRODUCTION_SMOKE_PASSWORD are required." >&2
+            exit 2
+          fi
+          python scripts/smoke_portable_production.py
+
+      - name: Upload sanitized production acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: portable-production-acceptance-${{ github.run_id }}
+          path: portable-production-smoke.json
+          if-no-files-found: warn
+          retention-days: 30

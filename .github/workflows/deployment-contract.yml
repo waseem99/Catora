@@ -23,13 +23,53 @@ jobs:
       - name: Validate source-controlled deployment contract
         run: |
           python -m py_compile scripts/validate_deployment_contract.py
+          python -m py_compile scripts/validate_portable_production_contract.py
           python -m py_compile scripts/validate_staging_release_contract.py
           python -m py_compile scripts/smoke_hosted_demo.py
+          python -m py_compile scripts/smoke_portable_production.py
           python -m py_compile scripts/verify_shopify_live_change.py
           python -m py_compile scripts/staging_certify.py
           python -m py_compile scripts/staging_browser_certification.py
           python -m py_compile scripts/staging_visual_certification.py
           python -m py_compile apps/api/catora_api/release_identity.py
           python -m py_compile apps/api/scripts/seed_staging_certification.py
+          python scripts/validate_portable_production_contract.py
           python scripts/validate_deployment_contract.py
           python scripts/validate_staging_release_contract.py
+      - name: Parse managed and single-host portable production compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/catora-runtime.env <<'EOF'
+          CATORA_ENVIRONMENT=production
+          CATORA_DATABASE_URL=postgresql+asyncpg://example:example@example.invalid:5432/catora
+          CATORA_REDIS_URL=redis://example.invalid:6379/0
+          CATORA_S3_ENDPOINT_URL=https://storage.example.invalid
+          CATORA_S3_ACCESS_KEY=example
+          CATORA_S3_SECRET_KEY=example
+          CATORA_S3_BUCKET=catora
+          CATORA_AUTH_TOKEN_PEPPER=example
+          CATORA_FRONTEND_URL=https://catora.codistan.org
+          CATORA_CORS_ORIGINS=["https://catora.codistan.org"]
+          EOF
+          cat > /tmp/catora-compose.env <<'EOF'
+          CATORA_PRODUCTION_ENV_FILE=/tmp/catora-runtime.env
+          CATORA_PRODUCTION_RELEASE_GIT_SHA=1111111111111111111111111111111111111111
+          CATORA_PRODUCTION_RELEASE_CI_RUN_ID=1
+          CATORA_PRODUCTION_API_IMAGE_DIGEST=sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          CATORA_PRODUCTION_WORKER_IMAGE_DIGEST=sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          CATORA_PRODUCTION_WEB_IMAGE_DIGEST=sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+          CATORA_SELF_HOSTED_POSTGRES_PASSWORD=example
+          CATORA_SELF_HOSTED_S3_ACCESS_KEY=example
+          CATORA_SELF_HOSTED_S3_SECRET_KEY=example-example
+          CATORA_SELF_HOSTED_S3_BUCKET=catora
+          EOF
+          docker compose --env-file /tmp/catora-compose.env \
+            -f deploy/portable/docker-compose.production.yml \
+            config > /tmp/catora-production-managed.yml
+          docker compose --env-file /tmp/catora-compose.env \
+            -f deploy/portable/docker-compose.production.yml \
+            -f deploy/portable/docker-compose.dependencies.yml \
+            config > /tmp/catora-production-single-host.yml
+          test -s /tmp/catora-production-managed.yml
+          test -s /tmp/catora-production-single-host.yml
