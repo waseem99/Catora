@@ -136,18 +136,20 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
 
+          summary = Path(os.environ["GITHUB_STEP_SUMMARY"])
           path = Path("staging-certification-artifacts/staging-certification.json")
           if not path.exists():
-              with Path("$GITHUB_STEP_SUMMARY").open("a", encoding="utf-8") as handle:
+              with summary.open("a", encoding="utf-8") as handle:
                   handle.write("## Staging certification\n\n**BLOCKED** — no sanitized certification report was produced.\n")
               raise SystemExit(0)
           report = json.loads(path.read_text(encoding="utf-8"))
           decision = report.get("decision", "BLOCKED")
           detail = report.get("detail", "No detail")
           checks = report.get("checks", [])
-          with Path("$GITHUB_STEP_SUMMARY").open("a", encoding="utf-8") as handle:
+          with summary.open("a", encoding="utf-8") as handle:
               handle.write(f"## Staging certification\n\n**{decision}**\n\n{detail}\n\n")
               handle.write(f"Recorded checks: {len(checks) if isinstance(checks, list) else 0}\n")
           PY
