@@ -1,0 +1,197 @@
+name: catora-staging
+
+x-backend-environment: &backend-environment
+  CATORA_ENVIRONMENT: production
+  CATORA_LOG_LEVEL: INFO
+  CATORA_DATABASE_URL: postgresql+asyncpg://catora:${CATORA_STAGING_POSTGRES_PASSWORD:?required}@postgres:5432/catora
+  CATORA_REDIS_URL: redis://redis:6379/0
+  CATORA_S3_ENDPOINT_URL: http://minio:9000
+  CATORA_S3_ACCESS_KEY: catora-staging
+  CATORA_S3_SECRET_KEY: ${CATORA_STAGING_S3_SECRET_KEY:?required}
+  CATORA_S3_BUCKET: catora-staging
+  CATORA_AUTH_TOKEN_PEPPER: ${CATORA_STAGING_AUTH_TOKEN_PEPPER:?required}
+  CATORA_FRONTEND_URL: ${CATORA_STAGING_WEB_URL:?required}
+  CATORA_CORS_ORIGINS: '["${CATORA_STAGING_WEB_URL:?required}"]'
+  CATORA_TRUST_PROXY_HEADERS: "true"
+  CATORA_SMTP_HOST: mailpit
+  CATORA_SMTP_PORT: "1025"
+  CATORA_SMTP_FROM: Catora Staging <no-reply@staging.catora.local>
+  CATORA_ENRICHMENT_PROVIDER: disabled
+  CATORA_SERVICE_VISIBILITY_ENABLED: "true"
+  CATORA_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY: ${CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY:?required}
+  CATORA_SERVICE_VISIBILITY_DRAFTS_ENABLED: "false"
+  CATORA_SERVICE_VISIBILITY_MONITORING_ENABLED: "false"
+  CATORA_MEASUREMENT_CONNECTORS_ENABLED: "false"
+  CATORA_SHOPIFY_ENABLED: "false"
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: catora
+      POSTGRES_USER: catora
+      POSTGRES_PASSWORD: ${CATORA_STAGING_POSTGRES_PASSWORD:?required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U catora -d catora"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:8-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-07-23T15-54-02Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: catora-staging
+      MINIO_ROOT_PASSWORD: ${CATORA_STAGING_S3_SECRET_KEY:?required}
+    volumes:
+      - minio-data:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+
+  storage-init:
+    profiles: ["ops"]
+    image: ghcr.io/waseem99/catora-api@${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+    environment:
+      <<: *backend-environment
+    command:
+      - python
+      - -c
+      - |
+        import boto3
+        client = boto3.client(
+            "s3",
+            endpoint_url="http://minio:9000",
+            aws_access_key_id="catora-staging",
+            aws_secret_access_key="${CATORA_STAGING_S3_SECRET_KEY:?required}",
+        )
+        buckets = {item["Name"] for item in client.list_buckets().get("Buckets", [])}
+        if "catora-staging" not in buckets:
+            client.create_bucket(Bucket="catora-staging")
+    depends_on:
+      minio:
+        condition: service_started
+    restart: "no"
+
+  migrate:
+    profiles: ["ops"]
+    image: ghcr.io/waseem99/catora-api@${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+    environment:
+      <<: *backend-environment
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed-demo:
+    profiles: ["ops"]
+    image: ghcr.io/waseem99/catora-api@${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+    environment:
+      <<: *backend-environment
+      CATORA_DEMO_PASSWORD: ${CATORA_STAGING_DEMO_PASSWORD:?required}
+    command: ["python", "scripts/seed_enterprise_demo.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed-certification:
+    profiles: ["ops"]
+    image: ghcr.io/waseem99/catora-api@${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+    environment:
+      <<: *backend-environment
+      CATORA_STAGING_CERTIFICATION_SEED_CONFIRM: I_UNDERSTAND_THIS_IS_STAGING_ONLY
+      CATORA_STAGING_OWNER_EMAIL: ${CATORA_STAGING_OWNER_EMAIL:?required}
+      CATORA_STAGING_OWNER_PASSWORD: ${CATORA_STAGING_OWNER_PASSWORD:?required}
+      CATORA_STAGING_ADMIN_EMAIL: ${CATORA_STAGING_ADMIN_EMAIL:?required}
+      CATORA_STAGING_ADMIN_PASSWORD: ${CATORA_STAGING_ADMIN_PASSWORD:?required}
+      CATORA_STAGING_ANALYST_EMAIL: ${CATORA_STAGING_ANALYST_EMAIL:?required}
+      CATORA_STAGING_ANALYST_PASSWORD: ${CATORA_STAGING_ANALYST_PASSWORD:?required}
+      CATORA_STAGING_REVIEWER_EMAIL: ${CATORA_STAGING_REVIEWER_EMAIL:?required}
+      CATORA_STAGING_REVIEWER_PASSWORD: ${CATORA_STAGING_REVIEWER_PASSWORD:?required}
+      CATORA_STAGING_VIEWER_EMAIL: ${CATORA_STAGING_VIEWER_EMAIL:?required}
+      CATORA_STAGING_VIEWER_PASSWORD: ${CATORA_STAGING_VIEWER_PASSWORD:?required}
+      CATORA_STAGING_NO_MEMBERSHIP_EMAIL: ${CATORA_STAGING_NO_MEMBERSHIP_EMAIL:?required}
+      CATORA_STAGING_NO_MEMBERSHIP_PASSWORD: ${CATORA_STAGING_NO_MEMBERSHIP_PASSWORD:?required}
+    command: ["python", "scripts/seed_staging_certification.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: ghcr.io/waseem99/catora-api@${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      CATORA_RELEASE_GIT_SHA: ${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_STAGING_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-api:sha-${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_STAGING_API_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_STAGING_API_PREVIOUS_IMAGE:-none}
+    ports:
+      - "${CATORA_STAGING_API_BIND:-127.0.0.1}:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  worker:
+    image: ghcr.io/waseem99/catora-worker@${CATORA_STAGING_WORKER_IMAGE_DIGEST:?required}
+    restart: unless-stopped
+    environment:
+      <<: *backend-environment
+      CATORA_RELEASE_GIT_SHA: ${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_STAGING_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-worker:sha-${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_STAGING_WORKER_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_STAGING_WORKER_PREVIOUS_IMAGE:-none}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  web:
+    image: ghcr.io/waseem99/catora-web@${CATORA_STAGING_WEB_IMAGE_DIGEST:?required}
+    restart: unless-stopped
+    environment:
+      CATORA_API_URL: http://api:8000
+      CATORA_RELEASE_GIT_SHA: ${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_STAGING_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-web:sha-${CATORA_STAGING_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_STAGING_WEB_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_STAGING_WEB_PREVIOUS_IMAGE:-none}
+    ports:
+      - "${CATORA_STAGING_WEB_BIND:-127.0.0.1}:3000:3000"
+    depends_on:
+      api:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
