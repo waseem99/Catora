@@ -17,7 +17,7 @@ on:
 
 concurrency:
   group: catora-staging-deploy
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   actions: read
