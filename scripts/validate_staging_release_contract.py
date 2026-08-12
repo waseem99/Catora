@@ -156,7 +156,7 @@ def validate(root: Path) -> list[Check]:
             and "catora-staging-deployed" in workflow
             and "environment: staging" in workflow,
             "standalone staging certification supports controlled manual/external triggers",
-            "staging certification workflow must remain provider-neutral and recoverable",
+            "standalone staging certification workflow must remain provider-neutral and recoverable",
         ),
         _check(
             "staging.automatic_deploy_certify",
@@ -164,9 +164,12 @@ def validate(root: Path) -> list[Check]:
             and 'workflows: ["Immutable release images"]' in deploy
             and "catora-release-manifest-" in deploy
             and "python scripts/staging_certify.py" in deploy
-            and "environment: staging" in deploy,
-            "successful main release images automatically feed private staging certification",
-            "private staging deploy must consume release manifest and invoke certification",
+            and "runs-on: ubuntu-24.04" in deploy
+            and "Generate isolated ephemeral staging credentials" in deploy
+            and "CATORA_STAGING_WEB_URL: http://127.0.0.1:3000" in deploy
+            and "docker compose down -v --remove-orphans" in deploy,
+            "successful main release images feed isolated GitHub-hosted ephemeral staging certification",
+            "automatic staging must consume the release manifest, generate isolated credentials, certify exact artifacts and tear down",
         ),
         _check(
             "uat.explicit_human_boundary",
