@@ -286,6 +286,46 @@ def _run_browser(report_dir: Path, run_id: str) -> tuple[Check, dict[str, Any]]:
     )
 
 
+def _run_visual(report_dir: Path) -> tuple[Check, dict[str, Any]]:
+    visual_report = report_dir / "staging-visual-evidence.json"
+    env = dict(os.environ)
+    env["CATORA_STAGING_VISUAL_REPORT"] = str(visual_report)
+    result = subprocess.run(
+        [sys.executable, "scripts/staging_visual_certification.py"],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if not visual_report.exists():
+        if result.returncode == 2:
+            raise BlockedError("visual certification prerequisites are incomplete")
+        raise RuntimeError("visual certification produced no evidence report")
+    payload = json.loads(visual_report.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise RuntimeError("visual certification evidence is invalid")
+    visual_decision = payload.get("decision")
+    if visual_decision == "BLOCKED" or result.returncode == 2:
+        detail = payload.get("detail")
+        raise BlockedError(
+            str(detail) if isinstance(detail, str) else "VISUAL REVIEW REQUIRED"
+        )
+    if visual_decision != "PASS" or result.returncode != 0:
+        detail = payload.get("detail")
+        raise RuntimeError(
+            str(detail) if isinstance(detail, str) else "visual certification failed"
+        )
+    return (
+        Check(
+            "visual.playwright",
+            "PASS",
+            "approved desktop/mobile screenshot baselines matched",
+        ),
+        payload,
+    )
+
+
 def _write_html(path: Path, report: dict[str, Any]) -> None:
     rows = []
     for check in report.get("checks", []):
@@ -325,6 +365,7 @@ def main() -> int:
     checks: list[Check] = []
     identities: dict[str, dict[str, str]] = {}
     browser_evidence: dict[str, Any] | None = None
+    visual_evidence: dict[str, Any] | None = None
     decision = "FAILED"
     detail = "staging certification did not complete"
 
@@ -359,6 +400,8 @@ def main() -> int:
         )
         browser_check, browser_evidence = _run_browser(report_dir, run_id)
         checks.append(browser_check)
+        visual_check, visual_evidence = _run_visual(report_dir)
+        checks.append(visual_check)
         decision = "READY FOR UAT"
         detail = "all mandatory supported staging certification gates passed"
         exit_code = 0
@@ -384,6 +427,10 @@ def main() -> int:
         browser_checks = browser_evidence.get("checks")
         if isinstance(browser_checks, list):
             report["browser_check_count"] = len(browser_checks)
+    if visual_evidence is not None:
+        visual_checks = visual_evidence.get("checks")
+        if isinstance(visual_checks, list):
+            report["visual_check_count"] = len(visual_checks)
 
     json_path = report_dir / "staging-certification.json"
     html_path = report_dir / "staging-certification.html"
