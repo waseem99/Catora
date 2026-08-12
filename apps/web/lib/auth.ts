@@ -1,4 +1,4 @@
-const apiUrl = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
+import { backendApiPath } from "./backend-path";
 
 export type RoleName = "owner" | "admin" | "analyst" | "reviewer" | "viewer";
 
@@ -40,7 +40,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (csrf && init.method && !["GET", "HEAD", "OPTIONS"].includes(init.method.toUpperCase())) {
     headers.set("X-CSRF-Token", csrf);
   }
-  const response = await fetch(`${apiUrl}${path}`, {
+  const response = await fetch(backendApiPath(path), {
     ...init,
     headers,
     credentials: "include",
