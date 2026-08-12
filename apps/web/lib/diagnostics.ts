@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiRequest, csrfToken } from "./auth";
+import { backendApiPath } from "./backend-path";
 
-const apiUrl = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
 const uuid = z.string().uuid();
 
 export const DiagnosticStatusSchema = z.enum([
@@ -112,7 +112,7 @@ export async function uploadDiagnosticCsv(
   const csrf = csrfToken();
   if (csrf) headers.set("X-CSRF-Token", csrf);
   const response = await fetch(
-    `${apiUrl}/api/v1/prospect-diagnostics/${assessmentId}/catalog.csv`,
+    backendApiPath(`/api/v1/prospect-diagnostics/${assessmentId}/catalog.csv`),
     {
       method: "PUT",
       headers,
@@ -150,7 +150,7 @@ export async function deleteDiagnostic(assessmentId: string): Promise<void> {
 }
 
 export function diagnosticDownloadUrl(path: string): string {
-  return `${apiUrl}${path}`;
+  return backendApiPath(path);
 }
 
 export const DIAGNOSTIC_STAGES: ReadonlyArray<{

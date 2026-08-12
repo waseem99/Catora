@@ -23,6 +23,13 @@ jobs:
       - name: Validate source-controlled deployment contract
         run: |
           python -m py_compile scripts/validate_deployment_contract.py
+          python -m py_compile scripts/validate_staging_release_contract.py
           python -m py_compile scripts/smoke_hosted_demo.py
           python -m py_compile scripts/verify_shopify_live_change.py
+          python -m py_compile scripts/staging_certify.py
+          python -m py_compile scripts/staging_browser_certification.py
+          python -m py_compile scripts/staging_visual_certification.py
+          python -m py_compile apps/api/catora_api/release_identity.py
+          python -m py_compile apps/api/scripts/seed_staging_certification.py
           python scripts/validate_deployment_contract.py
+          python scripts/validate_staging_release_contract.py

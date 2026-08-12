@@ -1,0 +1,189 @@
+name: Immutable release images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      git_sha:
+        description: Exact commit SHA to publish; defaults to the selected workflow ref
+        required: false
+        type: string
+
+concurrency:
+  group: release-images-${{ inputs.git_sha || github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  validate:
+    name: Validate release source
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - name: Resolve immutable source SHA
+        id: source
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          sha="${REQUESTED_SHA:-${GITHUB_SHA}}"
+          if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "git_sha must be exactly 40 hexadecimal characters"
+            exit 2
+          fi
+          echo "sha=${sha,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.source.outputs.sha }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+
+      - name: Validate source-controlled deployment contract
+        run: |
+          python scripts/validate_deployment_contract.py
+          python scripts/validate_staging_release_contract.py
+          python -m py_compile scripts/staging_certify.py
+          python -m py_compile scripts/staging_browser_certification.py
+          python -m py_compile scripts/staging_visual_certification.py
+
+  build:
+    name: Build ${{ matrix.component }}
+    needs: validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: api
+            dockerfile: apps/api/Dockerfile
+          - component: worker
+            dockerfile: apps/worker/Dockerfile
+          - component: web
+            dockerfile: apps/web/Dockerfile
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.sha }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish immutable OCI image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/catora-${{ matrix.component }}:sha-${{ needs.validate.outputs.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.validate.outputs.sha }}
+            org.opencontainers.image.version=sha-${{ needs.validate.outputs.sha }}
+            io.catora.ci-run-id=${{ github.run_id }}
+          cache-from: type=gha,scope=catora-${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=catora-${{ matrix.component }}
+          provenance: mode=max
+          sbom: true
+
+      - name: Record immutable component manifest
+        shell: bash
+        env:
+          COMPONENT: ${{ matrix.component }}
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          component = os.environ["COMPONENT"]
+          sha = os.environ["RELEASE_SHA"]
+          digest = os.environ["IMAGE_DIGEST"]
+          if not digest.startswith("sha256:") or len(digest) != 71:
+              raise SystemExit("Build did not return a valid immutable sha256 digest")
+          payload = {
+              "component": component,
+              "git_sha": sha,
+              "ci_run_id": os.environ["GITHUB_RUN_ID"],
+              "image": f"ghcr.io/{os.environ['GITHUB_REPOSITORY_OWNER']}/catora-{component}",
+              "tag": f"sha-{sha}",
+              "digest": digest,
+          }
+          Path(f"release-{component}.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.component }}-${{ needs.validate.outputs.sha }}
+          path: release-${{ matrix.component }}.json
+          retention-days: 30
+
+  manifest:
+    name: Assemble immutable release manifest
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*-${{ needs.validate.outputs.sha }}
+          merge-multiple: true
+
+      - name: Assemble release manifest
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.validate.outputs.sha }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          components = {}
+          for path in sorted(Path(".").glob("release-*.json")):
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              components[payload["component"]] = payload
+          if set(components) != {"api", "worker", "web"}:
+              raise SystemExit(f"Incomplete release manifest: {sorted(components)}")
+          sha = os.environ["RELEASE_SHA"]
+          if any(item["git_sha"] != sha for item in components.values()):
+              raise SystemExit("Component release SHAs do not match")
+          manifest = {
+              "schema": "catora-oci-release/v1",
+              "git_sha": sha,
+              "ci_run_id": os.environ["GITHUB_RUN_ID"],
+              "components": components,
+          }
+          Path("catora-release-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(f"Published immutable Catora release {sha}")
+          for name, item in sorted(components.items()):
+              print(f"{name}: {item['image']}@{item['digest']}")
+          PY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: catora-release-manifest-${{ needs.validate.outputs.sha }}
+          path: catora-release-manifest.json
+          retention-days: 90

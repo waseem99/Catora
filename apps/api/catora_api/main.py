@@ -51,6 +51,7 @@ from catora_api.auth.service import (
 )
 from catora_api.config import Settings, get_settings
 from catora_api.database import check_database, engine
+from catora_api.release_identity import ReleaseIdentity, runtime_release_identity
 
 
 def configure_logging(settings: Settings) -> None:
@@ -163,6 +164,39 @@ async def liveness() -> dict[str, str]:
         "service": "catora-api",
         "version": __version__,
     }
+
+
+@app.get("/health/release", tags=["health"])
+async def release_identity() -> ReleaseIdentity:
+    return runtime_release_identity("api")
+
+
+def _worker_ping() -> dict[str, object]:
+    from catora_api.worker import celery_app
+
+    result = celery_app.send_task("catora.system.ping")
+    try:
+        payload = result.get(timeout=8)
+    finally:
+        result.forget()
+    if not isinstance(payload, dict):
+        raise RuntimeError("Worker ping returned an invalid payload")
+    return payload
+
+
+@app.get("/health/worker", tags=["health"])
+async def worker_health() -> JSONResponse:
+    try:
+        payload = await asyncio.to_thread(_worker_ping)
+        release = payload.get("release")
+        if payload.get("status") != "ok" or not isinstance(release, dict):
+            raise RuntimeError("Worker ping did not prove a running worker release")
+    except Exception as exc:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "not_ready", "detail": type(exc).__name__},
+        )
+    return JSONResponse(status_code=status.HTTP_200_OK, content=payload)
 
 
 async def _check_redis(settings: Settings) -> None:

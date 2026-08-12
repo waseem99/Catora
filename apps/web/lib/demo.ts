@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { backendApiPath } from "./backend-path";
 
 const uuid = z.string().uuid();
 const evidenceSchema = z.record(z.string(), z.unknown());
@@ -151,8 +152,7 @@ export function demoResetStatusPath(workspaceId: string, taskId: string): string
 }
 
 export function absoluteApiPath(path: string): string {
-  const base = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
-  return `${base}${path}`;
+  return backendApiPath(path);
 }
 
 export function formatBasisPoints(value: number): string {
