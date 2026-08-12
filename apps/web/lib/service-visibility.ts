@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { apiRequest } from "./auth";
+import { backendApiPath } from "./backend-path";
 
 const uuid = z.string().uuid();
-const apiUrl = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
 
 export const ServiceVisibilitySourceSchema = z.object({
   id: uuid,
@@ -200,5 +200,7 @@ export function serviceVisibilityArtifactUrl(
   reportId: string,
   artifactType: string,
 ): string {
-  return `${apiUrl}/api/v1/workspaces/${workspaceId}/service-visibility/runs/${reportId}/artifacts/${artifactType}`;
+  return backendApiPath(
+    `/api/v1/workspaces/${workspaceId}/service-visibility/runs/${reportId}/artifacts/${artifactType}`,
+  );
 }
