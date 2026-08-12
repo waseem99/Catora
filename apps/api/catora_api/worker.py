@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 
 from catora_api.config import get_settings
+from catora_api.release_identity import runtime_release_identity
 
 settings = get_settings()
 celery_app = Celery("catora", broker=settings.redis_url, backend=settings.redis_url)
@@ -49,5 +50,9 @@ celery_app.conf.update(
 
 
 @celery_app.task(name="catora.system.ping")  # type: ignore[misc]
-def ping() -> dict[str, str]:
-    return {"status": "ok", "worker": "catora"}
+def ping() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "worker": "catora",
+        "release": runtime_release_identity("worker"),
+    }
