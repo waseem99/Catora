@@ -29,4 +29,5 @@ jobs:
           python -m py_compile scripts/staging_browser_certification.py
           python -m py_compile scripts/staging_visual_certification.py
           python -m py_compile apps/api/catora_api/release_identity.py
+          python -m py_compile apps/api/scripts/seed_staging_certification.py
           python scripts/validate_deployment_contract.py
