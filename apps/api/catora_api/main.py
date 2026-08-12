@@ -51,7 +51,7 @@ from catora_api.auth.service import (
 )
 from catora_api.config import Settings, get_settings
 from catora_api.database import check_database, engine
-from catora_api.release_identity import runtime_release_identity
+from catora_api.release_identity import ReleaseIdentity, runtime_release_identity
 
 
 def configure_logging(settings: Settings) -> None:
@@ -167,7 +167,7 @@ async def liveness() -> dict[str, str]:
 
 
 @app.get("/health/release", tags=["health"])
-async def release_identity() -> dict[str, object]:
+async def release_identity() -> ReleaseIdentity:
     return runtime_release_identity("api")
 
 
