@@ -25,4 +25,7 @@ jobs:
           python -m py_compile scripts/validate_deployment_contract.py
           python -m py_compile scripts/smoke_hosted_demo.py
           python -m py_compile scripts/verify_shopify_live_change.py
+          python -m py_compile scripts/staging_certify.py
+          python -m py_compile scripts/staging_browser_certification.py
+          python -m py_compile apps/api/catora_api/release_identity.py
           python scripts/validate_deployment_contract.py
