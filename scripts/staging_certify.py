@@ -205,25 +205,23 @@ def _run_demo_smoke(
     *,
     web_url: str,
     api_url: str,
-    workspace_id: str,
     report_dir: Path,
 ) -> Check:
-    email = _required("CATORA_STAGING_OWNER_EMAIL")
-    password = _required("CATORA_STAGING_OWNER_PASSWORD")
+    password = _required("CATORA_STAGING_DEMO_PASSWORD")
     env = dict(os.environ)
     env.update(
         {
             "CATORA_SMOKE_FRONTEND_URL": web_url,
             "CATORA_SMOKE_API_URL": api_url,
-            "CATORA_SMOKE_EMAIL": email,
+            "CATORA_SMOKE_EMAIL": "demo@catora.local",
             "CATORA_SMOKE_PASSWORD": password,
-            "CATORA_SMOKE_WORKSPACE_ID": workspace_id,
             "CATORA_SMOKE_REPORT_PATH": str(report_dir / "hosted-demo-smoke.json"),
             "CATORA_SMOKE_REQUIRE_SHOPIFY": (
                 "true" if _enabled("CATORA_STAGING_REQUIRE_SHOPIFY") else "false"
             ),
         }
     )
+    env.pop("CATORA_SMOKE_WORKSPACE_ID", None)
     result = subprocess.run(
         [sys.executable, "scripts/smoke_hosted_demo.py"],
         env=env,
@@ -233,7 +231,8 @@ def _run_demo_smoke(
         check=False,
     )
     if result.returncode != 0:
-        raise RuntimeError("mandatory hosted demo smoke failed")
+        detail = (result.stderr.strip() or result.stdout.strip())[-2_000:]
+        raise RuntimeError(f"mandatory hosted demo smoke failed: {detail}")
     return Check(
         "product.hosted_demo",
         "PASS",
@@ -374,7 +373,7 @@ def main() -> int:
         api_url = _required_url("CATORA_STAGING_API_URL")
         expected_sha = _required("CATORA_STAGING_EXPECTED_GIT_SHA").lower()
         expected_ci_run_id = _required("CATORA_STAGING_EXPECTED_CI_RUN_ID")
-        workspace_id = _required("CATORA_STAGING_QA_WORKSPACE_ID")
+        _required("CATORA_STAGING_QA_WORKSPACE_ID")
         expected_digests = {
             "web": _required("CATORA_STAGING_WEB_IMAGE_DIGEST").lower(),
             "api": _required("CATORA_STAGING_API_IMAGE_DIGEST").lower(),
@@ -394,7 +393,6 @@ def main() -> int:
             _run_demo_smoke(
                 web_url=web_url,
                 api_url=api_url,
-                workspace_id=workspace_id,
                 report_dir=report_dir,
             )
         )
