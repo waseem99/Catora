@@ -4,6 +4,8 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/auth";
 
+const slugPattern = "[a-z0-9]([a-z0-9]|-){1,98}[a-z0-9]";
+
 export function BootstrapForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +46,7 @@ export function BootstrapForm() {
       </label>
       <label>
         Organization slug
-        <input name="organization_slug" required pattern="[a-z0-9][a-z0-9-]{1,98}[a-z0-9]" />
+        <input name="organization_slug" required pattern={slugPattern} />
       </label>
       <label>
         Workspace name
@@ -52,7 +54,7 @@ export function BootstrapForm() {
       </label>
       <label>
         Workspace slug
-        <input name="workspace_slug" required pattern="[a-z0-9][a-z0-9-]{1,98}[a-z0-9]" />
+        <input name="workspace_slug" required pattern={slugPattern} />
       </label>
       <label>
         Owner name
