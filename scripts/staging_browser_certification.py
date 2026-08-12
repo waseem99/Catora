@@ -51,13 +51,31 @@ def _base_url(name: str) -> str:
     return _required(name).rstrip("/")
 
 
-def _csrf(context: BrowserContext, api_url: str) -> str:
-    for cookie in context.cookies(api_url):
-        if cookie.get("name") == "catora_csrf":
-            value = cookie.get("value")
-            if isinstance(value, str) and value:
-                return value
-    raise RuntimeError("Authenticated browser context is missing the CSRF cookie")
+def _direct_api_headers(
+    context: BrowserContext,
+    web_url: str,
+    *,
+    include_csrf: bool = False,
+) -> dict[str, str]:
+    cookies = {
+        str(cookie.get("name")): str(cookie.get("value"))
+        for cookie in context.cookies(web_url)
+        if cookie.get("name") in {"catora_session", "catora_csrf"}
+    }
+    session = cookies.get("catora_session")
+    if not session:
+        raise RuntimeError("Authenticated browser context is missing the session cookie")
+    headers = {
+        "Cookie": "; ".join(
+            f"{name}={value}" for name, value in sorted(cookies.items())
+        )
+    }
+    if include_csrf:
+        csrf = cookies.get("catora_csrf")
+        if not csrf:
+            raise RuntimeError("Authenticated browser context is missing the CSRF cookie")
+        headers["X-CSRF-Token"] = csrf
+    return headers
 
 
 def _login(page: Page, web_url: str, email: str, password: str) -> None:
@@ -102,7 +120,12 @@ def _run_role(
     _login(page, web_url, email, password)
     checks.append(Check(f"{role}.login", "PASS", "UI login reached /workspaces"))
 
-    me = context.request.get(f"{api_url}/api/v1/auth/me", timeout=15_000)
+    direct_headers = _direct_api_headers(context, web_url)
+    me = context.request.get(
+        f"{api_url}/api/v1/auth/me",
+        headers=direct_headers,
+        timeout=15_000,
+    )
     if me.status != 200:
         raise RuntimeError(f"{role}: auth/me returned HTTP {me.status}")
     payload = me.json()
@@ -139,14 +162,13 @@ def _run_role(
                 "member-management controls are absent",
             )
         )
-        csrf = _csrf(context, api_url)
         denied = context.request.post(
             f"{api_url}/api/v1/workspaces/{workspace_id}/invitations",
             data={
                 "email": f"qa-denied-{run_id}@example.invalid",
                 "role": "viewer",
             },
-            headers={"X-CSRF-Token": csrf},
+            headers=_direct_api_headers(context, web_url, include_csrf=True),
             timeout=15_000,
         )
         if denied.status != 403:
@@ -162,7 +184,9 @@ def _run_role(
         )
 
     cross_workspace = context.request.get(
-        f"{api_url}/api/v1/workspaces/{denied_workspace_id}/members", timeout=15_000
+        f"{api_url}/api/v1/workspaces/{denied_workspace_id}/members",
+        headers=direct_headers,
+        timeout=15_000,
     )
     if cross_workspace.status != 403:
         raise RuntimeError(
@@ -180,12 +204,18 @@ def _run_role(
     page.goto(f"{web_url}/workspaces", wait_until="domcontentloaded")
     page.get_by_role("button", name="Sign out").click()
     page.wait_for_url("**/login", timeout=15_000)
-    after_logout = context.request.get(f"{api_url}/api/v1/auth/me", timeout=15_000)
+    after_logout = context.request.get(
+        f"{api_url}/api/v1/auth/me",
+        headers=direct_headers,
+        timeout=15_000,
+    )
     if after_logout.status != 401:
         raise RuntimeError(
-            f"{role}: auth/me returned HTTP {after_logout.status} after logout, expected 401"
+            f"{role}: revoked session returned HTTP {after_logout.status} after logout, expected 401"
         )
-    checks.append(Check(f"{role}.logout", "PASS", "session revoked after UI logout"))
+    checks.append(
+        Check(f"{role}.logout", "PASS", "pre-logout session token was revoked server-side")
+    )
     return checks
 
 
@@ -200,7 +230,12 @@ def _run_no_membership(
     password: str,
 ) -> list[Check]:
     _login(page, web_url, email, password)
-    me = context.request.get(f"{api_url}/api/v1/auth/me", timeout=15_000)
+    direct_headers = _direct_api_headers(context, web_url)
+    me = context.request.get(
+        f"{api_url}/api/v1/auth/me",
+        headers=direct_headers,
+        timeout=15_000,
+    )
     if me.status != 200:
         raise RuntimeError(f"no-membership identity: auth/me returned HTTP {me.status}")
     payload = me.json()
@@ -210,7 +245,9 @@ def _run_no_membership(
         raise RuntimeError("no-membership identity unexpectedly belongs to the QA workspace")
 
     direct_api = context.request.get(
-        f"{api_url}/api/v1/workspaces/{workspace_id}/members", timeout=15_000
+        f"{api_url}/api/v1/workspaces/{workspace_id}/members",
+        headers=direct_headers,
+        timeout=15_000,
     )
     if direct_api.status != 403:
         raise RuntimeError(
