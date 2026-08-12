@@ -65,7 +65,10 @@ def _request(
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:
         with opener.open(request, timeout=30) as response:
-            return response.status, response.read(), dict(response.headers.items())
+            response_headers = {
+                key.casefold(): value for key, value in response.headers.items()
+            }
+            return response.status, response.read(), response_headers
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"{method} {url} failed with {exc.code}: {detail}") from exc
@@ -341,7 +344,7 @@ def main() -> int:
     )
     report["pptx"] = _validate_pptx(
         pptx_payload,
-        pptx_headers.get("Content-Type", ""),
+        pptx_headers.get("content-type", ""),
     )
 
     _, csv_payload, csv_headers = _request(
@@ -351,7 +354,7 @@ def main() -> int:
     )
     report["operational_csv"] = _validate_csv(
         csv_payload,
-        csv_headers.get("Content-Type", ""),
+        csv_headers.get("content-type", ""),
     )
 
     if require_shopify:
@@ -373,7 +376,7 @@ def main() -> int:
         )
         if status != 200:
             raise RuntimeError(f"Frontend login returned status {status}")
-        if "text/html" not in frontend_headers.get("Content-Type", ""):
+        if "text/html" not in frontend_headers.get("content-type", ""):
             raise RuntimeError("Frontend login has an unexpected content type")
         if not frontend_payload.strip():
             raise RuntimeError("Frontend login returned an empty response")
