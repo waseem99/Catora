@@ -50,6 +50,7 @@ jobs:
       - name: Validate source-controlled deployment contract
         run: |
           python scripts/validate_deployment_contract.py
+          python scripts/validate_staging_release_contract.py
           python -m py_compile scripts/staging_certify.py
           python -m py_compile scripts/staging_browser_certification.py
           python -m py_compile scripts/staging_visual_certification.py
