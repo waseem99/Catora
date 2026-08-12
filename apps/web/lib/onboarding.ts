@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiRequest, csrfToken } from "./auth";
+import { backendApiPath } from "./backend-path";
 
-const apiUrl = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
 const uuid = z.string().uuid();
 
 export const CsvUploadSchema = z.object({
@@ -63,12 +63,15 @@ export async function uploadShopifyCsv(workspaceId: string, file: File) {
   const csrf = csrfToken();
   if (csrf) headers.set("X-CSRF-Token", csrf);
 
-  const response = await fetch(`${apiUrl}/api/v1/workspaces/${workspaceId}/catalog-uploads/csv`, {
-    method: "PUT",
-    headers,
-    body: file,
-    credentials: "include",
-  });
+  const response = await fetch(
+    backendApiPath(`/api/v1/workspaces/${workspaceId}/catalog-uploads/csv`),
+    {
+      method: "PUT",
+      headers,
+      body: file,
+      credentials: "include",
+    },
+  );
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { detail?: string } | null;
     throw new Error(body?.detail ?? `Upload failed with status ${response.status}`);
