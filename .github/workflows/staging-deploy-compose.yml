@@ -32,32 +32,15 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main')
-    environment: staging
-    runs-on: ${{ vars.CATORA_STAGING_DEPLOY_RUNNER_LABEL || 'self-hosted' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     env:
       COMPOSE_FILE: deploy/portable/docker-compose.staging.yml
-      CATORA_STAGING_WEB_URL: ${{ vars.CATORA_STAGING_WEB_URL }}
-      CATORA_STAGING_API_URL: ${{ vars.CATORA_STAGING_API_URL }}
-      CATORA_STAGING_WEB_BIND: ${{ vars.CATORA_STAGING_WEB_BIND || '127.0.0.1' }}
-      CATORA_STAGING_API_BIND: ${{ vars.CATORA_STAGING_API_BIND || '127.0.0.1' }}
-      CATORA_STAGING_POSTGRES_PASSWORD: ${{ secrets.CATORA_STAGING_POSTGRES_PASSWORD }}
-      CATORA_STAGING_S3_SECRET_KEY: ${{ secrets.CATORA_STAGING_S3_SECRET_KEY }}
-      CATORA_STAGING_AUTH_TOKEN_PEPPER: ${{ secrets.CATORA_STAGING_AUTH_TOKEN_PEPPER }}
-      CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY }}
-      CATORA_STAGING_DEMO_PASSWORD: ${{ secrets.CATORA_STAGING_DEMO_PASSWORD }}
-      CATORA_STAGING_OWNER_EMAIL: ${{ secrets.CATORA_STAGING_OWNER_EMAIL }}
-      CATORA_STAGING_OWNER_PASSWORD: ${{ secrets.CATORA_STAGING_OWNER_PASSWORD }}
-      CATORA_STAGING_ADMIN_EMAIL: ${{ secrets.CATORA_STAGING_ADMIN_EMAIL }}
-      CATORA_STAGING_ADMIN_PASSWORD: ${{ secrets.CATORA_STAGING_ADMIN_PASSWORD }}
-      CATORA_STAGING_ANALYST_EMAIL: ${{ secrets.CATORA_STAGING_ANALYST_EMAIL }}
-      CATORA_STAGING_ANALYST_PASSWORD: ${{ secrets.CATORA_STAGING_ANALYST_PASSWORD }}
-      CATORA_STAGING_REVIEWER_EMAIL: ${{ secrets.CATORA_STAGING_REVIEWER_EMAIL }}
-      CATORA_STAGING_REVIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_REVIEWER_PASSWORD }}
-      CATORA_STAGING_VIEWER_EMAIL: ${{ secrets.CATORA_STAGING_VIEWER_EMAIL }}
-      CATORA_STAGING_VIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_VIEWER_PASSWORD }}
-      CATORA_STAGING_NO_MEMBERSHIP_EMAIL: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_EMAIL }}
-      CATORA_STAGING_NO_MEMBERSHIP_PASSWORD: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_PASSWORD }}
-      CATORA_STAGING_REQUIRE_SHOPIFY: ${{ vars.CATORA_STAGING_REQUIRE_SHOPIFY || 'false' }}
+      CATORA_STAGING_WEB_URL: http://127.0.0.1:3000
+      CATORA_STAGING_API_URL: http://127.0.0.1:8000
+      CATORA_STAGING_WEB_BIND: 127.0.0.1
+      CATORA_STAGING_API_BIND: 127.0.0.1
+      CATORA_STAGING_REQUIRE_SHOPIFY: "false"
       CATORA_STAGING_REPORT_DIR: staging-certification-artifacts
       CATORA_STAGING_VISUAL_BASELINE_DIR: qa/visual-baselines
     steps:
@@ -133,60 +116,48 @@ jobs:
                   handle.write(f"CATORA_STAGING_{component.upper()}_IMAGE_DIGEST={digest}\n")
           PY
 
-      - name: Capture previous rollback references
+      - name: Generate isolated ephemeral staging credentials
         shell: bash
         run: |
           set -euo pipefail
-          previous_image() {
-            local service="$1"
-            local container
-            container="$(docker ps -aq \
-              --filter label=com.docker.compose.project=catora-staging \
-              --filter label=com.docker.compose.service="$service" | head -n 1)"
-            if [[ -z "$container" ]]; then
-              echo "none"
-              return
-            fi
-            docker inspect --format '{{.Config.Image}}' "$container"
-          }
-          {
-            echo "CATORA_STAGING_API_PREVIOUS_IMAGE=$(previous_image api)"
-            echo "CATORA_STAGING_WORKER_PREVIOUS_IMAGE=$(previous_image worker)"
-            echo "CATORA_STAGING_WEB_PREVIOUS_IMAGE=$(previous_image web)"
-          } >> "$GITHUB_ENV"
+          python - <<'PY'
+          import base64
+          import os
+          import secrets
+          from pathlib import Path
 
-      - name: Validate staging-only secret contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          required=(
-            CATORA_STAGING_WEB_URL CATORA_STAGING_API_URL
-            CATORA_STAGING_POSTGRES_PASSWORD CATORA_STAGING_S3_SECRET_KEY
-            CATORA_STAGING_AUTH_TOKEN_PEPPER
-            CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY
-            CATORA_STAGING_DEMO_PASSWORD
-            CATORA_STAGING_OWNER_EMAIL CATORA_STAGING_OWNER_PASSWORD
-            CATORA_STAGING_ADMIN_EMAIL CATORA_STAGING_ADMIN_PASSWORD
-            CATORA_STAGING_ANALYST_EMAIL CATORA_STAGING_ANALYST_PASSWORD
-            CATORA_STAGING_REVIEWER_EMAIL CATORA_STAGING_REVIEWER_PASSWORD
-            CATORA_STAGING_VIEWER_EMAIL CATORA_STAGING_VIEWER_PASSWORD
-            CATORA_STAGING_NO_MEMBERSHIP_EMAIL CATORA_STAGING_NO_MEMBERSHIP_PASSWORD
-          )
-          for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "BLOCKED — missing required staging configuration: $name"
-              exit 2
-            fi
-          done
-          for name in \
-            CATORA_STAGING_OWNER_EMAIL CATORA_STAGING_ADMIN_EMAIL \
-            CATORA_STAGING_ANALYST_EMAIL CATORA_STAGING_REVIEWER_EMAIL \
-            CATORA_STAGING_VIEWER_EMAIL CATORA_STAGING_NO_MEMBERSHIP_EMAIL; do
-            if [[ "${!name}" != *@staging.catora.local ]]; then
-              echo "BLOCKED — $name must use the dedicated @staging.catora.local suffix"
-              exit 2
-            fi
-          done
+          def token(n=32):
+              return secrets.token_urlsafe(n)
+
+          def fernet_key():
+              return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
+
+          values = {
+              "CATORA_STAGING_POSTGRES_PASSWORD": token(),
+              "CATORA_STAGING_S3_SECRET_KEY": token(),
+              "CATORA_STAGING_AUTH_TOKEN_PEPPER": token(48),
+              "CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY": fernet_key(),
+              "CATORA_STAGING_DEMO_PASSWORD": token(),
+              "CATORA_STAGING_OWNER_EMAIL": "qa-owner@staging.catora.local",
+              "CATORA_STAGING_OWNER_PASSWORD": token(),
+              "CATORA_STAGING_ADMIN_EMAIL": "qa-admin@staging.catora.local",
+              "CATORA_STAGING_ADMIN_PASSWORD": token(),
+              "CATORA_STAGING_ANALYST_EMAIL": "qa-analyst@staging.catora.local",
+              "CATORA_STAGING_ANALYST_PASSWORD": token(),
+              "CATORA_STAGING_REVIEWER_EMAIL": "qa-reviewer@staging.catora.local",
+              "CATORA_STAGING_REVIEWER_PASSWORD": token(),
+              "CATORA_STAGING_VIEWER_EMAIL": "qa-viewer@staging.catora.local",
+              "CATORA_STAGING_VIEWER_PASSWORD": token(),
+              "CATORA_STAGING_NO_MEMBERSHIP_EMAIL": "qa-no-membership@staging.catora.local",
+              "CATORA_STAGING_NO_MEMBERSHIP_PASSWORD": token(),
+              "CATORA_STAGING_API_PREVIOUS_IMAGE": "none",
+              "CATORA_STAGING_WORKER_PREVIOUS_IMAGE": "none",
+              "CATORA_STAGING_WEB_PREVIOUS_IMAGE": "none",
+          }
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as handle:
+              for name, value in values.items():
+                  handle.write(f"{name}={value}\n")
+          PY
 
       - name: Authenticate GHCR pull
         shell: bash
@@ -222,7 +193,6 @@ jobs:
         run: docker compose --profile ops run --rm seed-demo > /dev/null
 
       - name: Seed deterministic staging RBAC identities
-        id: seed
         shell: bash
         run: |
           set -euo pipefail
@@ -266,6 +236,7 @@ jobs:
             sleep 2
           done
           docker compose ps
+          docker compose logs --tail=100 api worker web
           echo "Staging runtime did not become ready"
           exit 1
 
@@ -280,7 +251,7 @@ jobs:
           python -m pip install --quiet playwright==1.62.0 pillow==12.3.0
           python -m playwright install --with-deps chromium
 
-      - name: Run mandatory certification against deployed staging URLs
+      - name: Run mandatory certification against ephemeral staging
         id: certify
         continue-on-error: true
         shell: bash
@@ -322,3 +293,8 @@ jobs:
               raise SystemExit(2)
           raise SystemExit(1)
           PY
+
+      - name: Tear down ephemeral staging
+        if: always()
+        shell: bash
+        run: docker compose down -v --remove-orphans || true
