@@ -932,8 +932,7 @@ def _run_demo_journey(page: Page, web_url: str, workspace_id: str) -> list[Check
     readiness.wait_for(state="visible", timeout=20_000)
     status = page.get_by_text("Ready to present", exact=True)
     fallback = page.get_by_text("Using verified fallback", exact=True)
-    if status.count() == 0 and fallback.count() == 0:
-        raise RuntimeError("presenter preflight produced no explicit readiness state")
+    status.or_(fallback).first.wait_for(state="visible", timeout=20_000)
     page.get_by_text("1,000 products", exact=False).first.wait_for(
         state="visible", timeout=20_000
     )
