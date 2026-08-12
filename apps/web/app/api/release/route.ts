@@ -28,7 +28,8 @@ export async function GET() {
         gitShaPattern.test(gitSha) &&
         ciRunId.length > 0 &&
         imageTag.length > 0 &&
-        digestPattern.test(imageDigest),
+        digestPattern.test(imageDigest) &&
+        previousImage.length > 0,
     },
     {
       headers: {
