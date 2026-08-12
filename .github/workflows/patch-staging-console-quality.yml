@@ -1,0 +1,77 @@
+name: One-shot staging console quality patch
+
+on:
+  push:
+    branches: [agent/diagnose-staging-console]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[console-quality-patched]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: agent/diagnose-staging-console
+          fetch-depth: 0
+      - name: Patch expected-rejection console handling
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('scripts/staging_browser_certification.py')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace(
+              'import json\nimport os\nimport time\nfrom dataclasses import asdict, dataclass\n',
+              'import json\nimport os\nimport re\nimport time\nfrom dataclasses import asdict, dataclass, field\n',
+              1,
+          )
+          text = text.replace(
+              '''class BrowserSignals:\n    console_errors: int = 0\n    page_errors: int = 0\n    failed_requests: int = 0\n    server_errors: int = 0\n''',
+              '''class BrowserSignals:\n    console_errors: int = 0\n    page_errors: int = 0\n    failed_requests: int = 0\n    server_errors: int = 0\n    console_error_samples: list[str] = field(default_factory=list)\n''',
+              1,
+          )
+          text = text.replace(
+              '''    def on_console(message: Any) -> None:\n        if getattr(message, "type", "") == "error":\n            signals.console_errors += 1\n''',
+              '''    def on_console(message: Any) -> None:\n        if getattr(message, "type", "") == "error":\n            signals.console_errors += 1\n            sample = str(getattr(message, "text", "")).replace("\\n", " ").strip()\n            if sample and len(signals.console_error_samples) < 8:\n                signals.console_error_samples.append(sample[:240])\n''',
+              1,
+          )
+
+          marker = '\n\ndef _assert_mobile_no_overflow(page: Page, label: str) -> Check:\n'
+          helper = '''\n\ndef _assert_expected_rejection_quality(\n    signals: BrowserSignals, prefix: str\n) -> list[Check]:\n    expected_network_error = re.compile(\n        r"^Failed to load resource: the server responded with a status of 4\\d\\d(?: |$)"\n    )\n    unexpected_console = [\n        sample\n        for sample in signals.console_error_samples\n        if not expected_network_error.match(sample)\n    ]\n    checks = [\n        Check(\n            f"{prefix}.expected_4xx_console",\n            "PASS" if not unexpected_console else "FAIL",\n            (\n                f"expected browser HTTP-rejection console count={signals.console_errors}"\n                if not unexpected_console\n                else f"unexpected console sample={unexpected_console[0]!r}"\n            ),\n        ),\n        Check(\n            f"{prefix}.pageerror",\n            "PASS" if signals.page_errors == 0 else "FAIL",\n            f"uncaught page error count={signals.page_errors}",\n        ),\n        Check(\n            f"{prefix}.requestfailed",\n            "PASS" if signals.failed_requests == 0 else "FAIL",\n            f"same-origin failed request count={signals.failed_requests}",\n        ),\n        Check(\n            f"{prefix}.http5xx",\n            "PASS" if signals.server_errors == 0 else "FAIL",\n            f"same-origin HTTP 5xx count={signals.server_errors}",\n        ),\n    ]\n    if unexpected_console or signals.page_errors or signals.failed_requests or signals.server_errors:\n        sample = unexpected_console[0] if unexpected_console else "none"\n        raise RuntimeError(\n            f"{prefix}: negative-security browser quality errors "\n            f"(unexpected_console={sample!r}, page={signals.page_errors}, "\n            f"failed_requests={signals.failed_requests}, http5xx={signals.server_errors})"\n        )\n    return checks\n'''
+          if helper.strip() not in text:
+              text = text.replace(marker, helper + marker, 1)
+
+          text = text.replace(
+              '_assert_quality(public_signals, f"{profile}.public")',
+              '_assert_expected_rejection_quality(public_signals, f"{profile}.public")',
+              1,
+          )
+          text = text.replace(
+              '''                            _assert_quality(\n                                signals,\n                                f"{profile}.no_membership.quality",\n                            )\n''',
+              '''                            _assert_expected_rejection_quality(\n                                signals,\n                                f"{profile}.no_membership.quality",\n                            )\n''',
+              1,
+          )
+
+          required = [
+              'console_error_samples: list[str] = field(default_factory=list)',
+              'def _assert_expected_rejection_quality(',
+              'expected_4xx_console',
+              '_assert_expected_rejection_quality(public_signals',
+              'f"{profile}.no_membership.quality"',
+          ]
+          missing = [item for item in required if item not in text]
+          if missing:
+              raise SystemExit(f'Patch incomplete: {missing}')
+          path.write_text(text, encoding='utf-8')
+          PY
+          rm .github/workflows/patch-staging-console-quality.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add scripts/staging_browser_certification.py .github/workflows/patch-staging-console-quality.yml
+          git commit -m 'Classify expected browser 4xx console messages [console-quality-patched]'
+          git push origin HEAD:agent/diagnose-staging-console
