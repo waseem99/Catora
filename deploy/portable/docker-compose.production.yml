@@ -1,0 +1,66 @@
+name: catora-production
+
+x-app-env: &app-env
+  env_file:
+    - ${CATORA_PRODUCTION_ENV_FILE:-.env.production}
+
+services:
+  migrate:
+    profiles: ["ops"]
+    image: ghcr.io/waseem99/catora-api@${CATORA_PRODUCTION_API_IMAGE_DIGEST:?required}
+    <<: *app-env
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    image: ghcr.io/waseem99/catora-api@${CATORA_PRODUCTION_API_IMAGE_DIGEST:?required}
+    <<: *app-env
+    restart: unless-stopped
+    environment:
+      CATORA_RELEASE_GIT_SHA: ${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_PRODUCTION_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-api:sha-${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_PRODUCTION_API_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_PRODUCTION_API_PREVIOUS_IMAGE:-none}
+    ports:
+      - "${CATORA_PRODUCTION_API_BIND:-127.0.0.1}:8000:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import json,urllib.request;
+          data=json.load(urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=5));
+          raise SystemExit(0 if data.get('status')=='ready' else 1)
+      interval: 15s
+      timeout: 8s
+      retries: 10
+      start_period: 20s
+
+  worker:
+    image: ghcr.io/waseem99/catora-worker@${CATORA_PRODUCTION_WORKER_IMAGE_DIGEST:?required}
+    <<: *app-env
+    restart: unless-stopped
+    environment:
+      CATORA_RELEASE_GIT_SHA: ${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_PRODUCTION_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-worker:sha-${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_PRODUCTION_WORKER_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_PRODUCTION_WORKER_PREVIOUS_IMAGE:-none}
+
+  web:
+    image: ghcr.io/waseem99/catora-web@${CATORA_PRODUCTION_WEB_IMAGE_DIGEST:?required}
+    restart: unless-stopped
+    environment:
+      CATORA_API_URL: ${CATORA_PRODUCTION_INTERNAL_API_URL:-http://api:8000}
+      CATORA_RELEASE_GIT_SHA: ${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_CI_RUN_ID: ${CATORA_PRODUCTION_RELEASE_CI_RUN_ID:?required}
+      CATORA_RELEASE_IMAGE_TAG: ghcr.io/waseem99/catora-web:sha-${CATORA_PRODUCTION_RELEASE_GIT_SHA:?required}
+      CATORA_RELEASE_IMAGE_DIGEST: ${CATORA_PRODUCTION_WEB_IMAGE_DIGEST:?required}
+      CATORA_RELEASE_PREVIOUS_IMAGE: ${CATORA_PRODUCTION_WEB_PREVIOUS_IMAGE:-none}
+    ports:
+      - "${CATORA_PRODUCTION_WEB_BIND:-127.0.0.1}:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
