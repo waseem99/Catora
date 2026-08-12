@@ -290,7 +290,7 @@ def _run_forgot_password_enumeration(
             wait_until="domcontentloaded",
             timeout=30_000,
         )
-        page.get_by_role("heading", name="Reset your password.").wait_for(
+        page.get_by_role("heading", name="Reset your password").wait_for(
             state="visible", timeout=15_000
         )
         page.get_by_label("Work email").fill(email)
