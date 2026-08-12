@@ -33,6 +33,7 @@ def runtime_release_identity(component: str) -> ReleaseIdentity:
         and bool(ci_run_id)
         and bool(image_tag)
         and bool(_IMAGE_DIGEST_RE.fullmatch(image_digest))
+        and bool(previous_image)
     )
     return {
         "component": component,
