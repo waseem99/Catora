@@ -1,7 +1,7 @@
 name: catora-staging
 
 x-backend-environment: &backend-environment
-  CATORA_ENVIRONMENT: production
+  CATORA_ENVIRONMENT: ${CATORA_STAGING_RUNTIME_ENVIRONMENT:-production}
   CATORA_LOG_LEVEL: INFO
   CATORA_DATABASE_URL: postgresql+asyncpg://catora:${CATORA_STAGING_POSTGRES_PASSWORD:?required}@postgres:5432/catora
   CATORA_REDIS_URL: redis://redis:6379/0

@@ -33,13 +33,14 @@ jobs:
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'main')
     environment: staging
-    runs-on: ${{ vars.CATORA_STAGING_DEPLOY_RUNNER_LABEL || 'self-hosted' }}
+    runs-on: ${{ vars.CATORA_STAGING_DEPLOY_RUNNER_LABEL || 'ubuntu-latest' }}
     env:
       COMPOSE_FILE: deploy/portable/docker-compose.staging.yml
-      CATORA_STAGING_WEB_URL: ${{ vars.CATORA_STAGING_WEB_URL }}
-      CATORA_STAGING_API_URL: ${{ vars.CATORA_STAGING_API_URL }}
+      CATORA_STAGING_WEB_URL: ${{ vars.CATORA_STAGING_WEB_URL || 'http://127.0.0.1:3000' }}
+      CATORA_STAGING_API_URL: ${{ vars.CATORA_STAGING_API_URL || 'http://127.0.0.1:8000' }}
       CATORA_STAGING_WEB_BIND: ${{ vars.CATORA_STAGING_WEB_BIND || '127.0.0.1' }}
       CATORA_STAGING_API_BIND: ${{ vars.CATORA_STAGING_API_BIND || '127.0.0.1' }}
+      CATORA_STAGING_RUNTIME_ENVIRONMENT: ${{ vars.CATORA_STAGING_RUNTIME_ENVIRONMENT || 'development' }}
       CATORA_STAGING_POSTGRES_PASSWORD: ${{ secrets.CATORA_STAGING_POSTGRES_PASSWORD }}
       CATORA_STAGING_S3_SECRET_KEY: ${{ secrets.CATORA_STAGING_S3_SECRET_KEY }}
       CATORA_STAGING_AUTH_TOKEN_PEPPER: ${{ secrets.CATORA_STAGING_AUTH_TOKEN_PEPPER }}
@@ -154,6 +155,57 @@ jobs:
             echo "CATORA_STAGING_WORKER_PREVIOUS_IMAGE=$(previous_image worker)"
             echo "CATORA_STAGING_WEB_PREVIOUS_IMAGE=$(previous_image web)"
           } >> "$GITHUB_ENV"
+
+      - name: Initialize ephemeral staging configuration when secrets are absent
+        shell: bash
+        run: |
+          python - <<'PY'
+          import base64
+          import os
+          import secrets
+          from pathlib import Path
+
+          values: dict[str, str] = {}
+          emails = {
+              "CATORA_STAGING_OWNER_EMAIL": "owner@staging.catora.local",
+              "CATORA_STAGING_ADMIN_EMAIL": "admin@staging.catora.local",
+              "CATORA_STAGING_ANALYST_EMAIL": "analyst@staging.catora.local",
+              "CATORA_STAGING_REVIEWER_EMAIL": "reviewer@staging.catora.local",
+              "CATORA_STAGING_VIEWER_EMAIL": "viewer@staging.catora.local",
+              "CATORA_STAGING_NO_MEMBERSHIP_EMAIL": "no-membership@staging.catora.local",
+          }
+          for name, value in emails.items():
+              if not os.getenv(name, "").strip():
+                  values[name] = value
+
+          token_names = (
+              "CATORA_STAGING_POSTGRES_PASSWORD",
+              "CATORA_STAGING_S3_SECRET_KEY",
+              "CATORA_STAGING_AUTH_TOKEN_PEPPER",
+              "CATORA_STAGING_DEMO_PASSWORD",
+              "CATORA_STAGING_OWNER_PASSWORD",
+              "CATORA_STAGING_ADMIN_PASSWORD",
+              "CATORA_STAGING_ANALYST_PASSWORD",
+              "CATORA_STAGING_REVIEWER_PASSWORD",
+              "CATORA_STAGING_VIEWER_PASSWORD",
+              "CATORA_STAGING_NO_MEMBERSHIP_PASSWORD",
+          )
+          for name in token_names:
+              if not os.getenv(name, "").strip():
+                  values[name] = secrets.token_urlsafe(32)
+
+          encryption_name = "CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY"
+          if not os.getenv(encryption_name, "").strip():
+              values[encryption_name] = base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii")
+
+          if values:
+              with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as handle:
+                  for name, value in values.items():
+                      handle.write(f"{name}={value}\n")
+              print(f"Initialized {len(values)} ephemeral staging-only configuration values.")
+          else:
+              print("Using configured staging environment secrets.")
+          PY
 
       - name: Validate staging-only secret contract
         shell: bash
