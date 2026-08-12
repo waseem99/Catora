@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,7 @@ class BrowserSignals:
     page_errors: int = 0
     failed_requests: int = 0
     server_errors: int = 0
+    console_error_samples: list[str] = field(default_factory=list)
 
 
 def _required(name: str) -> str:
@@ -70,6 +72,9 @@ def _attach_quality_signals(page: Page, web_url: str) -> BrowserSignals:
     def on_console(message: Any) -> None:
         if getattr(message, "type", "") == "error":
             signals.console_errors += 1
+            sample = str(getattr(message, "text", "")).replace("\n", " ").strip()
+            if sample and len(signals.console_error_samples) < 8:
+                signals.console_error_samples.append(sample[:240])
 
     def on_page_error(_: Any) -> None:
         signals.page_errors += 1
@@ -127,6 +132,53 @@ def _assert_quality(signals: BrowserSignals, prefix: str) -> list[Check]:
         raise RuntimeError(
             f"{prefix}: browser quality errors "
             f"(console={signals.console_errors}, page={signals.page_errors}, "
+            f"failed_requests={signals.failed_requests}, http5xx={signals.server_errors})"
+        )
+    return checks
+
+
+def _assert_expected_rejection_quality(
+    signals: BrowserSignals, prefix: str
+) -> list[Check]:
+    expected_network_error = re.compile(
+        r"^Failed to load resource: the server responded with a status of 4\d\d(?: |$)"
+    )
+    unexpected_console = [
+        sample
+        for sample in signals.console_error_samples
+        if not expected_network_error.match(sample)
+    ]
+    checks = [
+        Check(
+            f"{prefix}.expected_4xx_console",
+            "PASS" if not unexpected_console else "FAIL",
+            (
+                f"expected browser HTTP-rejection console count={signals.console_errors}"
+                if not unexpected_console
+                else f"unexpected console sample={unexpected_console[0]!r}"
+            ),
+        ),
+        Check(
+            f"{prefix}.pageerror",
+            "PASS" if signals.page_errors == 0 else "FAIL",
+            f"uncaught page error count={signals.page_errors}",
+        ),
+        Check(
+            f"{prefix}.requestfailed",
+            "PASS" if signals.failed_requests == 0 else "FAIL",
+            f"same-origin failed request count={signals.failed_requests}",
+        ),
+        Check(
+            f"{prefix}.http5xx",
+            "PASS" if signals.server_errors == 0 else "FAIL",
+            f"same-origin HTTP 5xx count={signals.server_errors}",
+        ),
+    ]
+    if unexpected_console or signals.page_errors or signals.failed_requests or signals.server_errors:
+        sample = unexpected_console[0] if unexpected_console else "none"
+        raise RuntimeError(
+            f"{prefix}: negative-security browser quality errors "
+            f"(unexpected_console={sample!r}, page={signals.page_errors}, "
             f"failed_requests={signals.failed_requests}, http5xx={signals.server_errors})"
         )
     return checks
@@ -1216,7 +1268,7 @@ def main() -> int:
                                 _assert_mobile_no_overflow(public_page, "login")
                             )
                         checks.extend(
-                            _assert_quality(public_signals, f"{profile}.public")
+                            _assert_expected_rejection_quality(public_signals, f"{profile}.public")
                         )
                     finally:
                         public_context.close()
@@ -1279,7 +1331,7 @@ def main() -> int:
                             for check in no_member_checks
                         )
                         checks.extend(
-                            _assert_quality(
+                            _assert_expected_rejection_quality(
                                 signals,
                                 f"{profile}.no_membership.quality",
                             )
