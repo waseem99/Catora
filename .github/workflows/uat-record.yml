@@ -1,0 +1,117 @@
+name: Record human UAT decision
+
+on:
+  workflow_dispatch:
+    inputs:
+      certification_run_id:
+        description: GitHub Actions run ID that produced READY FOR UAT
+        required: true
+        type: string
+      certification_run_attempt:
+        description: Certification run attempt number
+        required: true
+        default: "1"
+        type: string
+      uat_result:
+        description: Explicit human UAT result
+        required: true
+        type: choice
+        options:
+          - PASS
+          - FAIL
+      notes:
+        description: Optional non-sensitive UAT notes
+        required: false
+        type: string
+
+concurrency:
+  group: catora-uat-${{ inputs.certification_run_id }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  record:
+    name: Record exact-artifact UAT decision
+    environment: uat
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate evidence locator
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.certification_run_id }}" =~ ^[0-9]+$ ]]
+          [[ "${{ inputs.certification_run_attempt }}" =~ ^[0-9]+$ ]]
+
+      - name: Download staging certification evidence
+        uses: actions/download-artifact@v8
+        with:
+          name: staging-certification-${{ inputs.certification_run_id }}-${{ inputs.certification_run_attempt }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.certification_run_id }}
+          path: certified-evidence
+
+      - name: Verify READY FOR UAT and record human decision
+        shell: bash
+        env:
+          UAT_RESULT: ${{ inputs.uat_result }}
+          UAT_NOTES: ${{ inputs.notes }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          report_path = Path("certified-evidence/staging-certification.json")
+          report = json.loads(report_path.read_text(encoding="utf-8"))
+          if report.get("decision") != "READY FOR UAT":
+              raise SystemExit("UAT cannot be recorded: staging certification was not READY FOR UAT")
+          identities = report.get("identities")
+          if not isinstance(identities, dict) or set(identities) != {"api", "worker", "web"}:
+              raise SystemExit("UAT cannot be recorded: release identities are incomplete")
+          git_shas = {item.get("git_sha") for item in identities.values() if isinstance(item, dict)}
+          if len(git_shas) != 1:
+              raise SystemExit("UAT cannot be recorded: component SHAs differ")
+          result = os.environ["UAT_RESULT"]
+          if result not in {"PASS", "FAIL"}:
+              raise SystemExit("UAT result must be PASS or FAIL")
+          attestation = {
+              "schema": "catora-human-uat/v1",
+              "uat_result": result,
+              "approved_for_production_promotion": result == "PASS",
+              "recorded_at": datetime.now(UTC).isoformat(),
+              "recorded_by_github_actor": os.environ["GITHUB_ACTOR"],
+              "source_certification_run_id": os.environ["CERTIFICATION_RUN_ID"],
+              "source_qa_run_id": report.get("qa_run_id"),
+              "git_sha": next(iter(git_shas)),
+              "identities": identities,
+              "notes": os.environ.get("UAT_NOTES", "")[:2000],
+          }
+          Path("catora-uat-attestation.json").write_text(
+              json.dumps(attestation, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(f"Human UAT decision recorded: {result}")
+          print(f"Git SHA: {attestation['git_sha']}")
+          PY
+        env:
+          CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: catora-uat-attestation-${{ inputs.certification_run_id }}-${{ github.run_id }}
+          path: catora-uat-attestation.json
+          retention-days: 90
+
+      - name: Enforce human UAT result
+        shell: bash
+        run: |
+          if [[ "${{ inputs.uat_result }}" != "PASS" ]]; then
+            echo "Human UAT did not pass. Production promotion remains blocked."
+            exit 1
+          fi
+          echo "Human UAT PASS recorded. This workflow does not deploy production."
