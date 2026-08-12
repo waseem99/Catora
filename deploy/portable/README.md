@@ -13,7 +13,7 @@ The production deploy must promote the exact web/API/worker image digests that p
 
 - `docker-compose.production.yml` — application-only deployment for managed PostgreSQL, Redis and S3-compatible storage.
 - `docker-compose.dependencies.yml` — optional PostgreSQL 17 + Redis + MinIO recovery overlay for a single Docker host.
-- `.env.production.example` — variable names only. Copy it to a protected `.env.production`; never commit the populated file.
+- `.env.production.example` — variable names only. Copy it beside the compose files as a protected `.env.production`; never commit the populated file.
 
 ## Mandatory data recovery before cutover
 
@@ -56,11 +56,11 @@ The three digests must come from the same certified Git SHA/CI release. `CATORA_
 
 Use this when PostgreSQL, Redis and S3-compatible storage are supplied by the chosen hosting provider.
 
-1. Create a protected runtime file:
+1. Create a protected runtime file beside the portable compose files:
 
    ```bash
-   cp deploy/portable/.env.production.example .env.production
-   chmod 600 .env.production
+   cp deploy/portable/.env.production.example deploy/portable/.env.production
+   chmod 600 deploy/portable/.env.production
    ```
 
 2. Populate it through the provider secret manager or another approved secret channel. Required canonical values include:
@@ -76,17 +76,17 @@ Use this when PostgreSQL, Redis and S3-compatible storage are supplied by the ch
 4. Validate and pull exact images:
 
    ```bash
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml config
 
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml pull
    ```
 
 5. Run the schema migration exactly once:
 
    ```bash
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml \
      --profile ops run --rm migrate
    ```
@@ -94,7 +94,7 @@ Use this when PostgreSQL, Redis and S3-compatible storage are supplied by the ch
 6. Start the exact API, worker and web images:
 
    ```bash
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml \
      up -d api worker web
    ```
@@ -117,7 +117,7 @@ This is the emergency path when no managed dependencies are available.
 2. Start dependencies:
 
    ```bash
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml \
      -f deploy/portable/docker-compose.dependencies.yml \
      up -d postgres redis minio
@@ -126,7 +126,7 @@ This is the emergency path when no managed dependencies are available.
 3. Initialize the MinIO bucket:
 
    ```bash
-   docker compose --env-file .env.production \
+   docker compose --env-file deploy/portable/.env.production \
      -f deploy/portable/docker-compose.production.yml \
      -f deploy/portable/docker-compose.dependencies.yml \
      --profile ops run --rm storage-init
