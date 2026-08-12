@@ -1,0 +1,175 @@
+name: Staging certification
+
+on:
+  workflow_dispatch:
+    inputs:
+      web_url:
+        description: Staging web origin
+        required: true
+        type: string
+      api_url:
+        description: Staging API origin
+        required: true
+        type: string
+      expected_git_sha:
+        description: Exact 40-character Git SHA deployed to staging
+        required: true
+        type: string
+      expected_ci_run_id:
+        description: GitHub Actions release/image build run ID
+        required: true
+        type: string
+      web_image_digest:
+        description: Immutable sha256 digest for the running web image
+        required: true
+        type: string
+      api_image_digest:
+        description: Immutable sha256 digest for the running API image
+        required: true
+        type: string
+      worker_image_digest:
+        description: Immutable sha256 digest for the running worker image
+        required: true
+        type: string
+      qa_workspace_id:
+        description: Deterministic seeded QA workspace UUID
+        required: true
+        type: string
+      denied_workspace_id:
+        description: Existing workspace UUID that QA role identities must not access
+        required: true
+        type: string
+      require_shopify:
+        description: Require the configured staging Shopify test-store acceptance path
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [catora-staging-deployed]
+
+concurrency:
+  group: staging-certification-${{ github.event.client_payload.git_sha || inputs.expected_git_sha || github.sha }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Certify immutable staging candidate
+    environment: staging
+    runs-on: ${{ vars.CATORA_STAGING_RUNNER_LABEL || 'ubuntu-latest' }}
+    env:
+      CATORA_STAGING_WEB_URL: ${{ github.event.client_payload.web_url || inputs.web_url }}
+      CATORA_STAGING_API_URL: ${{ github.event.client_payload.api_url || inputs.api_url }}
+      CATORA_STAGING_EXPECTED_GIT_SHA: ${{ github.event.client_payload.git_sha || inputs.expected_git_sha }}
+      CATORA_STAGING_EXPECTED_CI_RUN_ID: ${{ github.event.client_payload.ci_run_id || inputs.expected_ci_run_id }}
+      CATORA_STAGING_WEB_IMAGE_DIGEST: ${{ github.event.client_payload.web_image_digest || inputs.web_image_digest }}
+      CATORA_STAGING_API_IMAGE_DIGEST: ${{ github.event.client_payload.api_image_digest || inputs.api_image_digest }}
+      CATORA_STAGING_WORKER_IMAGE_DIGEST: ${{ github.event.client_payload.worker_image_digest || inputs.worker_image_digest }}
+      CATORA_STAGING_QA_WORKSPACE_ID: ${{ github.event.client_payload.qa_workspace_id || inputs.qa_workspace_id }}
+      CATORA_STAGING_DENIED_WORKSPACE_ID: ${{ github.event.client_payload.denied_workspace_id || inputs.denied_workspace_id }}
+      CATORA_STAGING_REQUIRE_SHOPIFY: ${{ github.event.client_payload.require_shopify || inputs.require_shopify || false }}
+      CATORA_STAGING_QA_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+      CATORA_STAGING_REPORT_DIR: staging-certification-artifacts
+      CATORA_STAGING_OWNER_EMAIL: ${{ secrets.CATORA_STAGING_OWNER_EMAIL }}
+      CATORA_STAGING_OWNER_PASSWORD: ${{ secrets.CATORA_STAGING_OWNER_PASSWORD }}
+      CATORA_STAGING_ADMIN_EMAIL: ${{ secrets.CATORA_STAGING_ADMIN_EMAIL }}
+      CATORA_STAGING_ADMIN_PASSWORD: ${{ secrets.CATORA_STAGING_ADMIN_PASSWORD }}
+      CATORA_STAGING_ANALYST_EMAIL: ${{ secrets.CATORA_STAGING_ANALYST_EMAIL }}
+      CATORA_STAGING_ANALYST_PASSWORD: ${{ secrets.CATORA_STAGING_ANALYST_PASSWORD }}
+      CATORA_STAGING_REVIEWER_EMAIL: ${{ secrets.CATORA_STAGING_REVIEWER_EMAIL }}
+      CATORA_STAGING_REVIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_REVIEWER_PASSWORD }}
+      CATORA_STAGING_VIEWER_EMAIL: ${{ secrets.CATORA_STAGING_VIEWER_EMAIL }}
+      CATORA_STAGING_VIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_VIEWER_PASSWORD }}
+      CATORA_STAGING_NO_MEMBERSHIP_EMAIL: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_EMAIL }}
+      CATORA_STAGING_NO_MEMBERSHIP_PASSWORD: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_PASSWORD }}
+    steps:
+      - name: Validate candidate input
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$CATORA_STAGING_EXPECTED_GIT_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Expected Git SHA must be exactly 40 hexadecimal characters."
+            exit 2
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.CATORA_STAGING_EXPECTED_GIT_SHA }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install Playwright certification runtime
+        shell: bash
+        run: |
+          python -m pip install --quiet playwright==1.62.0
+          python -m playwright install --with-deps chromium
+
+      - name: Validate certification scripts
+        shell: bash
+        run: |
+          python -m py_compile scripts/staging_certify.py
+          python -m py_compile scripts/staging_browser_certification.py
+
+      - name: Run mandatory staging certification
+        id: certification
+        continue-on-error: true
+        shell: bash
+        run: python scripts/staging_certify.py
+
+      - name: Upload sanitized staging evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: staging-certification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: staging-certification-artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Publish certification summary
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("staging-certification-artifacts/staging-certification.json")
+          if not path.exists():
+              with Path("$GITHUB_STEP_SUMMARY").open("a", encoding="utf-8") as handle:
+                  handle.write("## Staging certification\n\n**BLOCKED** — no sanitized certification report was produced.\n")
+              raise SystemExit(0)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          decision = report.get("decision", "BLOCKED")
+          detail = report.get("detail", "No detail")
+          checks = report.get("checks", [])
+          with Path("$GITHUB_STEP_SUMMARY").open("a", encoding="utf-8") as handle:
+              handle.write(f"## Staging certification\n\n**{decision}**\n\n{detail}\n\n")
+              handle.write(f"Recorded checks: {len(checks) if isinstance(checks, list) else 0}\n")
+          PY
+
+      - name: Enforce staging release gate
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("staging-certification-artifacts/staging-certification.json")
+          if not path.exists():
+              print("BLOCKED")
+              raise SystemExit(2)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          decision = report.get("decision")
+          print(decision)
+          if decision == "READY FOR UAT":
+              raise SystemExit(0)
+          if decision == "BLOCKED":
+              raise SystemExit(2)
+          raise SystemExit(1)
+          PY
