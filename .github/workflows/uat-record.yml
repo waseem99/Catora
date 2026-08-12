@@ -57,6 +57,7 @@ jobs:
       - name: Verify READY FOR UAT and record human decision
         shell: bash
         env:
+          CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
           UAT_RESULT: ${{ inputs.uat_result }}
           UAT_NOTES: ${{ inputs.notes }}
         run: |
@@ -98,8 +99,6 @@ jobs:
           print(f"Human UAT decision recorded: {result}")
           print(f"Git SHA: {attestation['git_sha']}")
           PY
-        env:
-          CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
 
       - uses: actions/upload-artifact@v7
         with:
