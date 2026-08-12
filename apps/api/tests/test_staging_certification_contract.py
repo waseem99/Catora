@@ -59,3 +59,49 @@ def test_identity_gate_blocks_incomplete_runtime_evidence() -> None:
             expected_ci_run_id="42",
             expected_digest="sha256:" + "b" * 64,
         )
+
+
+def test_browser_certification_keeps_required_real_product_coverage() -> None:
+    browser = (ROOT / "scripts" / "staging_browser_certification.py").read_text(
+        encoding="utf-8"
+    )
+    required_markers = {
+        '"desktop-chromium"': "desktop Chromium profile",
+        '"mobile-chromium"': "mobile Chromium profile",
+        "authentication.protected_route": "unauthenticated route guard",
+        "authentication.invalid_login": "invalid login",
+        "authentication.forgot_password_enumeration": "forgot-password enumeration defense",
+        "authentication.reset_invalid_token": "invalid password reset token",
+        "authentication.invitation_invalid_token": "invalid invitation token",
+        "member_manage_api": "server-side member-management denial",
+        "identity_manage_api": "server-side identity-management denial",
+        "cross_workspace_api": "cross-workspace API isolation",
+        "cross_workspace_browser": "cross-workspace browser isolation",
+        "no_membership.api": "no-membership API isolation",
+        "catalog.search": "catalog search",
+        "catalog.warning_filter": "catalog warning filter",
+        "catalog.clean_filter": "catalog clean filter",
+        "catalog.pagination": "catalog pagination",
+        "catalog.product_detail": "product detail and provenance",
+        "demo.presenter_preflight": "presenter preflight",
+        "onboarding.authorization_gate": "catalog onboarding authorization gate",
+        "processing.persisted_status": "persisted processing status",
+        "service_visibility.authorization_gate": "Service Visibility authorization gate",
+        "measurement.managed_credential_reference": "managed Google credential reference",
+        "mobile.layout.": "mobile overflow checks",
+        ".pageerror": "uncaught browser page errors",
+        ".requestfailed": "failed browser requests",
+        ".http5xx": "browser-observed HTTP 5xx responses",
+    }
+    missing = [
+        description
+        for marker, description in required_markers.items()
+        if marker not in browser
+    ]
+    assert not missing, f"Mandatory staging browser coverage removed: {', '.join(missing)}"
+
+    for role in ("OWNER", "ADMIN", "ANALYST", "REVIEWER", "VIEWER"):
+        assert f"CATORA_STAGING_{role}_EMAIL" in browser
+        assert f"CATORA_STAGING_{role}_PASSWORD" in browser
+    assert "CATORA_STAGING_NO_MEMBERSHIP_EMAIL" in browser
+    assert "CATORA_STAGING_NO_MEMBERSHIP_PASSWORD" in browser
