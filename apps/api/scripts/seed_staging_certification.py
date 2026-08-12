@@ -5,6 +5,7 @@ import json
 import os
 
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from catora_api.auth.security import PasswordService
 from catora_api.database import SessionFactory
@@ -43,7 +44,7 @@ def _staging_email(name: str) -> str:
 
 async def _upsert_user(
     *,
-    session,  # type: ignore[no-untyped-def]
+    session: AsyncSession,
     email: str,
     password: str,
     display_name: str,
