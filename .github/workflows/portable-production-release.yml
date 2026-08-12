@@ -1,0 +1,180 @@
+name: Prepare portable production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      certification_run_id:
+        description: GitHub Actions run ID whose staging certification reached READY FOR UAT
+        required: true
+        type: string
+      expected_git_sha:
+        description: Optional exact Git SHA expected in the certification evidence
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out deployment bundle
+        uses: actions/checkout@v6
+
+      - name: Download certified staging evidence
+        uses: actions/download-artifact@v7
+        with:
+          run-id: ${{ inputs.certification_run_id }}
+          pattern: staging-certification-*
+          merge-multiple: true
+          path: certified-staging
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate functional certification and assemble exact production release
+        env:
+          CERTIFICATION_RUN_ID: ${{ inputs.certification_run_id }}
+          EXPECTED_GIT_SHA: ${{ inputs.expected_git_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import shutil
+          from pathlib import Path
+
+          source = Path("certified-staging/staging-certification.json")
+          if not source.exists():
+              raise SystemExit("staging-certification.json was not present in the selected run")
+
+          report = json.loads(source.read_text(encoding="utf-8"))
+          if report.get("decision") != "READY FOR UAT":
+              raise SystemExit(
+                  f"selected certification is not READY FOR UAT: {report.get('decision')!r}"
+              )
+
+          checks = report.get("checks")
+          if not isinstance(checks, list):
+              raise SystemExit("certification evidence has no check list")
+          mandatory = [
+              item
+              for item in checks
+              if isinstance(item, dict) and item.get("status") != "ADVISORY"
+          ]
+          failed = [item for item in mandatory if item.get("status") != "PASS"]
+          if not mandatory or failed:
+              raise SystemExit(f"mandatory certification checks are not all PASS: {failed}")
+
+          identities = report.get("identities")
+          if not isinstance(identities, dict):
+              raise SystemExit("certification evidence has no release identities")
+
+          components = {}
+          sha_re = re.compile(r"^[0-9a-f]{40}$")
+          digest_re = re.compile(r"^sha256:[0-9a-f]{64}$")
+          for component in ("web", "api", "worker"):
+              identity = identities.get(component)
+              if not isinstance(identity, dict):
+                  raise SystemExit(f"missing {component} release identity")
+              git_sha = str(identity.get("git_sha", "")).lower()
+              ci_run_id = str(identity.get("ci_run_id", ""))
+              digest = str(identity.get("image_digest", "")).lower()
+              if not sha_re.fullmatch(git_sha):
+                  raise SystemExit(f"invalid {component} Git SHA")
+              if not ci_run_id.isdigit():
+                  raise SystemExit(f"invalid {component} CI run ID")
+              if not digest_re.fullmatch(digest):
+                  raise SystemExit(f"invalid {component} image digest")
+              components[component] = {
+                  "git_sha": git_sha,
+                  "ci_run_id": ci_run_id,
+                  "image_digest": digest,
+                  "image_tag": str(identity.get("image_tag", "")),
+              }
+
+          git_shas = {value["git_sha"] for value in components.values()}
+          ci_runs = {value["ci_run_id"] for value in components.values()}
+          if len(git_shas) != 1 or len(ci_runs) != 1:
+              raise SystemExit("web/API/worker identities do not come from one immutable release")
+
+          git_sha = next(iter(git_shas))
+          ci_run_id = next(iter(ci_runs))
+          expected = os.getenv("EXPECTED_GIT_SHA", "").strip().lower()
+          if expected and expected != git_sha:
+              raise SystemExit(
+                  f"certified Git SHA {git_sha} does not match requested SHA {expected}"
+              )
+
+          out = Path("portable-production-release")
+          out.mkdir(parents=True, exist_ok=True)
+          for path in (
+              "deploy/portable/docker-compose.production.yml",
+              "deploy/portable/docker-compose.dependencies.yml",
+              "deploy/portable/.env.production.example",
+              "deploy/portable/README.md",
+          ):
+              src = Path(path)
+              shutil.copy2(src, out / src.name)
+          shutil.copy2(source, out / "staging-certification.json")
+
+          release_env = "\n".join(
+              [
+                  f"CATORA_PRODUCTION_RELEASE_GIT_SHA={git_sha}",
+                  f"CATORA_PRODUCTION_RELEASE_CI_RUN_ID={ci_run_id}",
+                  f"CATORA_PRODUCTION_API_IMAGE_DIGEST={components['api']['image_digest']}",
+                  f"CATORA_PRODUCTION_WORKER_IMAGE_DIGEST={components['worker']['image_digest']}",
+                  f"CATORA_PRODUCTION_WEB_IMAGE_DIGEST={components['web']['image_digest']}",
+                  "CATORA_PRODUCTION_API_PREVIOUS_IMAGE=",
+                  "CATORA_PRODUCTION_WORKER_PREVIOUS_IMAGE=",
+                  "CATORA_PRODUCTION_WEB_PREVIOUS_IMAGE=",
+                  "",
+              ]
+          )
+          (out / "certified-release.env").write_text(release_env, encoding="utf-8")
+
+          promotion = {
+              "schema": "catora-portable-production-release/v1",
+              "source_certification_run_id": os.environ["CERTIFICATION_RUN_ID"],
+              "qa_run_id": report.get("qa_run_id"),
+              "decision": report.get("decision"),
+              "git_sha": git_sha,
+              "release_ci_run_id": ci_run_id,
+              "browser_check_count": report.get("browser_check_count"),
+              "components": components,
+          }
+          (out / "production-promotion.json").write_text(
+              json.dumps(promotion, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
+          checksum_lines = []
+          for path in sorted(out.iterdir()):
+              if path.name == "SHA256SUMS" or not path.is_file():
+                  continue
+              checksum = hashlib.sha256(path.read_bytes()).hexdigest()
+              checksum_lines.append(f"{checksum}  {path.name}")
+          (out / "SHA256SUMS").write_text(
+              "\n".join(checksum_lines) + "\n",
+              encoding="utf-8",
+          )
+
+          print(f"Certified Git SHA: {git_sha}")
+          print(f"Immutable release run: {ci_run_id}")
+          print(f"Functional browser checks: {report.get('browser_check_count')}")
+          print("Portable production release prepared without production secrets.")
+          PY
+
+      - name: Upload provider-neutral production release
+        uses: actions/upload-artifact@v7
+        with:
+          name: portable-production-release-${{ inputs.certification_run_id }}
+          path: portable-production-release
+          if-no-files-found: error
+          retention-days: 30
