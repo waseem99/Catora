@@ -201,6 +201,8 @@ jobs:
           if values:
               with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as handle:
                   for name, value in values.items():
+                      if "EMAIL" not in name:
+                          print(f"::add-mask::{value}")
                       handle.write(f"{name}={value}\n")
               print(f"Initialized {len(values)} ephemeral staging-only configuration values.")
           else:

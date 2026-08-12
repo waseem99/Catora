@@ -105,3 +105,16 @@ def test_browser_certification_keeps_required_real_product_coverage() -> None:
         assert f"CATORA_STAGING_{role}_PASSWORD" in browser
     assert "CATORA_STAGING_NO_MEMBERSHIP_EMAIL" in browser
     assert "CATORA_STAGING_NO_MEMBERSHIP_PASSWORD" in browser
+
+
+def test_staging_demo_smoke_uses_seeded_demo_identity_and_masks_ephemeral_secrets() -> None:
+    certify = (ROOT / "scripts" / "staging_certify.py").read_text(encoding="utf-8")
+    workflow = (
+        ROOT / ".github" / "workflows" / "staging-deploy-compose.yml"
+    ).read_text(encoding="utf-8")
+
+    assert '"CATORA_SMOKE_EMAIL": "demo@catora.local"' in certify
+    assert '_required("CATORA_STAGING_DEMO_PASSWORD")' in certify
+    assert 'env.pop("CATORA_SMOKE_WORKSPACE_ID", None)' in certify
+    assert '"CATORA_SMOKE_WORKSPACE_ID": workspace_id' not in certify
+    assert 'print(f"::add-mask::{value}")' in workflow
