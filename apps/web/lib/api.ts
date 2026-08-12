@@ -1,9 +1,15 @@
 import { HealthResponseSchema, type HealthResponse } from "@catora/contracts";
 
-const apiUrl = process.env.NEXT_PUBLIC_CATORA_API_URL ?? "http://localhost:8000";
+function runtimeApiUrl(): string {
+  return (
+    process.env.CATORA_API_URL?.trim() ||
+    process.env.NEXT_PUBLIC_CATORA_API_URL?.trim() ||
+    "http://localhost:8000"
+  ).replace(/\/+$/, "");
+}
 
 export async function fetchApiHealth(fetcher: typeof fetch = fetch): Promise<HealthResponse> {
-  const response = await fetcher(`${apiUrl}/health/live`, { cache: "no-store" });
+  const response = await fetcher(`${runtimeApiUrl()}/health/live`, { cache: "no-store" });
   if (!response.ok) {
     throw new Error(`Catora API health request failed with status ${response.status}`);
   }
