@@ -107,6 +107,18 @@ def test_browser_certification_keeps_required_real_product_coverage() -> None:
     assert "CATORA_STAGING_NO_MEMBERSHIP_PASSWORD" in browser
 
 
+def test_browser_auth_errors_target_catora_form_errors_not_framework_announcers() -> None:
+    browser = (ROOT / "scripts" / "staging_browser_certification.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'page.locator(\'p.form-error[role="alert"]\')' in browser
+    assert '_form_error(page, label="invalid login")' in browser
+    assert '_form_error(page, label="invalid password-reset token")' in browser
+    assert '_form_error(page, label="invalid invitation token")' in browser
+    assert 'page.get_by_role("alert")' not in browser
+
+
 def test_staging_demo_smoke_uses_seeded_demo_identity_and_masks_ephemeral_secrets() -> None:
     certify = (ROOT / "scripts" / "staging_certify.py").read_text(encoding="utf-8")
     workflow = (
