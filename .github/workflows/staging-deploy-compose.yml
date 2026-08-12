@@ -1,0 +1,324 @@
+name: Deploy and certify private staging
+
+on:
+  workflow_run:
+    workflows: ["Immutable release images"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful Immutable release images workflow run ID
+        required: true
+        type: string
+      git_sha:
+        description: Exact 40-character release Git SHA
+        required: true
+        type: string
+
+concurrency:
+  group: catora-staging-deploy
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  packages: read
+
+jobs:
+  deploy-and-certify:
+    name: Deploy exact artifacts and certify
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    environment: staging
+    runs-on: ${{ vars.CATORA_STAGING_DEPLOY_RUNNER_LABEL || 'self-hosted' }}
+    env:
+      COMPOSE_FILE: deploy/portable/docker-compose.staging.yml
+      CATORA_STAGING_WEB_URL: ${{ vars.CATORA_STAGING_WEB_URL }}
+      CATORA_STAGING_API_URL: ${{ vars.CATORA_STAGING_API_URL }}
+      CATORA_STAGING_WEB_BIND: ${{ vars.CATORA_STAGING_WEB_BIND || '127.0.0.1' }}
+      CATORA_STAGING_API_BIND: ${{ vars.CATORA_STAGING_API_BIND || '127.0.0.1' }}
+      CATORA_STAGING_POSTGRES_PASSWORD: ${{ secrets.CATORA_STAGING_POSTGRES_PASSWORD }}
+      CATORA_STAGING_S3_SECRET_KEY: ${{ secrets.CATORA_STAGING_S3_SECRET_KEY }}
+      CATORA_STAGING_AUTH_TOKEN_PEPPER: ${{ secrets.CATORA_STAGING_AUTH_TOKEN_PEPPER }}
+      CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY: ${{ secrets.CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY }}
+      CATORA_STAGING_DEMO_PASSWORD: ${{ secrets.CATORA_STAGING_DEMO_PASSWORD }}
+      CATORA_STAGING_OWNER_EMAIL: ${{ secrets.CATORA_STAGING_OWNER_EMAIL }}
+      CATORA_STAGING_OWNER_PASSWORD: ${{ secrets.CATORA_STAGING_OWNER_PASSWORD }}
+      CATORA_STAGING_ADMIN_EMAIL: ${{ secrets.CATORA_STAGING_ADMIN_EMAIL }}
+      CATORA_STAGING_ADMIN_PASSWORD: ${{ secrets.CATORA_STAGING_ADMIN_PASSWORD }}
+      CATORA_STAGING_ANALYST_EMAIL: ${{ secrets.CATORA_STAGING_ANALYST_EMAIL }}
+      CATORA_STAGING_ANALYST_PASSWORD: ${{ secrets.CATORA_STAGING_ANALYST_PASSWORD }}
+      CATORA_STAGING_REVIEWER_EMAIL: ${{ secrets.CATORA_STAGING_REVIEWER_EMAIL }}
+      CATORA_STAGING_REVIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_REVIEWER_PASSWORD }}
+      CATORA_STAGING_VIEWER_EMAIL: ${{ secrets.CATORA_STAGING_VIEWER_EMAIL }}
+      CATORA_STAGING_VIEWER_PASSWORD: ${{ secrets.CATORA_STAGING_VIEWER_PASSWORD }}
+      CATORA_STAGING_NO_MEMBERSHIP_EMAIL: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_EMAIL }}
+      CATORA_STAGING_NO_MEMBERSHIP_PASSWORD: ${{ secrets.CATORA_STAGING_NO_MEMBERSHIP_PASSWORD }}
+      CATORA_STAGING_REQUIRE_SHOPIFY: ${{ vars.CATORA_STAGING_REQUIRE_SHOPIFY || 'false' }}
+      CATORA_STAGING_REPORT_DIR: staging-certification-artifacts
+      CATORA_STAGING_VISUAL_BASELINE_DIR: qa/visual-baselines
+    steps:
+      - name: Resolve immutable candidate
+        id: candidate
+        shell: bash
+        env:
+          MANUAL_RUN_ID: ${{ inputs.release_run_id }}
+          MANUAL_SHA: ${{ inputs.git_sha }}
+          AUTOMATIC_RUN_ID: ${{ github.event.workflow_run.id }}
+          AUTOMATIC_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          run_id="${MANUAL_RUN_ID:-${AUTOMATIC_RUN_ID}}"
+          sha="${MANUAL_SHA:-${AUTOMATIC_SHA}}"
+          if [[ ! "$run_id" =~ ^[0-9]+$ ]]; then
+            echo "Release workflow run ID must be numeric"
+            exit 2
+          fi
+          if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "Release Git SHA must be exactly 40 hexadecimal characters"
+            exit 2
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "sha=${sha,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.candidate.outputs.sha }}
+
+      - name: Download immutable release manifest
+        uses: actions/download-artifact@v8
+        with:
+          name: catora-release-manifest-${{ steps.candidate.outputs.sha }}
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.candidate.outputs.run_id }}
+          path: release-manifest
+
+      - name: Validate release manifest and export digests
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ steps.candidate.outputs.sha }}
+          EXPECTED_RUN_ID: ${{ steps.candidate.outputs.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("release-manifest/catora-release-manifest.json")
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          sha = os.environ["EXPECTED_SHA"].lower()
+          run_id = os.environ["EXPECTED_RUN_ID"]
+          if payload.get("schema") != "catora-oci-release/v1":
+              raise SystemExit("Unexpected release manifest schema")
+          if payload.get("git_sha") != sha or str(payload.get("ci_run_id")) != run_id:
+              raise SystemExit("Release manifest does not match the requested source/run")
+          components = payload.get("components")
+          if not isinstance(components, dict) or set(components) != {"api", "worker", "web"}:
+              raise SystemExit("Release manifest must contain api, worker and web")
+          env_path = Path(os.environ["GITHUB_ENV"])
+          with env_path.open("a", encoding="utf-8") as handle:
+              handle.write(f"CATORA_STAGING_RELEASE_GIT_SHA={sha}\n")
+              handle.write(f"CATORA_STAGING_RELEASE_CI_RUN_ID={run_id}\n")
+              for component in ("api", "worker", "web"):
+                  item = components[component]
+                  digest = item.get("digest")
+                  if not isinstance(digest, str) or not digest.startswith("sha256:") or len(digest) != 71:
+                      raise SystemExit(f"Invalid {component} digest")
+                  if item.get("git_sha") != sha or str(item.get("ci_run_id")) != run_id:
+                      raise SystemExit(f"{component} provenance does not match release manifest")
+                  handle.write(f"CATORA_STAGING_{component.upper()}_IMAGE_DIGEST={digest}\n")
+          PY
+
+      - name: Capture previous rollback references
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_image() {
+            local service="$1"
+            local container
+            container="$(docker ps -aq \
+              --filter label=com.docker.compose.project=catora-staging \
+              --filter label=com.docker.compose.service="$service" | head -n 1)"
+            if [[ -z "$container" ]]; then
+              echo "none"
+              return
+            fi
+            docker inspect --format '{{.Config.Image}}' "$container"
+          }
+          {
+            echo "CATORA_STAGING_API_PREVIOUS_IMAGE=$(previous_image api)"
+            echo "CATORA_STAGING_WORKER_PREVIOUS_IMAGE=$(previous_image worker)"
+            echo "CATORA_STAGING_WEB_PREVIOUS_IMAGE=$(previous_image web)"
+          } >> "$GITHUB_ENV"
+
+      - name: Validate staging-only secret contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            CATORA_STAGING_WEB_URL CATORA_STAGING_API_URL
+            CATORA_STAGING_POSTGRES_PASSWORD CATORA_STAGING_S3_SECRET_KEY
+            CATORA_STAGING_AUTH_TOKEN_PEPPER
+            CATORA_STAGING_SERVICE_VISIBILITY_CREDENTIAL_ENCRYPTION_KEY
+            CATORA_STAGING_DEMO_PASSWORD
+            CATORA_STAGING_OWNER_EMAIL CATORA_STAGING_OWNER_PASSWORD
+            CATORA_STAGING_ADMIN_EMAIL CATORA_STAGING_ADMIN_PASSWORD
+            CATORA_STAGING_ANALYST_EMAIL CATORA_STAGING_ANALYST_PASSWORD
+            CATORA_STAGING_REVIEWER_EMAIL CATORA_STAGING_REVIEWER_PASSWORD
+            CATORA_STAGING_VIEWER_EMAIL CATORA_STAGING_VIEWER_PASSWORD
+            CATORA_STAGING_NO_MEMBERSHIP_EMAIL CATORA_STAGING_NO_MEMBERSHIP_PASSWORD
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "BLOCKED — missing required staging configuration: $name"
+              exit 2
+            fi
+          done
+          for name in \
+            CATORA_STAGING_OWNER_EMAIL CATORA_STAGING_ADMIN_EMAIL \
+            CATORA_STAGING_ANALYST_EMAIL CATORA_STAGING_REVIEWER_EMAIL \
+            CATORA_STAGING_VIEWER_EMAIL CATORA_STAGING_NO_MEMBERSHIP_EMAIL; do
+            if [[ "${!name}" != *@staging.catora.local ]]; then
+              echo "BLOCKED — $name must use the dedicated @staging.catora.local suffix"
+              exit 2
+            fi
+          done
+
+      - name: Authenticate GHCR pull
+        shell: bash
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Pull exact immutable artifacts and dependencies
+        shell: bash
+        run: docker compose pull
+
+      - name: Start private staging dependencies
+        shell: bash
+        run: docker compose up -d postgres redis minio mailpit
+
+      - name: Initialize staging object storage
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if docker compose --profile ops run --rm storage-init; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Object-storage initialization did not become ready"
+          exit 1
+
+      - name: Run schema migrations exactly once
+        shell: bash
+        run: docker compose --profile ops run --rm migrate
+
+      - name: Reset deterministic enterprise QA fixture
+        shell: bash
+        run: docker compose --profile ops run --rm seed-demo > /dev/null
+
+      - name: Seed deterministic staging RBAC identities
+        id: seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose --profile ops run --rm seed-certification > staging-seed-output.txt
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          lines = Path("staging-seed-output.txt").read_text(encoding="utf-8").splitlines()
+          start = next((index for index, line in enumerate(lines) if line.strip().startswith("{")), None)
+          if start is None:
+              raise SystemExit("Staging seed did not return fixture identifiers")
+          payload = json.loads("\n".join(lines[start:]))
+          qa_workspace_id = payload.get("qa_workspace_id")
+          denied_workspace_id = payload.get("denied_workspace_id")
+          if not isinstance(qa_workspace_id, str) or not isinstance(denied_workspace_id, str):
+              raise SystemExit("Staging seed returned invalid fixture identifiers")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as handle:
+              handle.write(f"CATORA_STAGING_QA_WORKSPACE_ID={qa_workspace_id}\n")
+              handle.write(f"CATORA_STAGING_DENIED_WORKSPACE_ID={denied_workspace_id}\n")
+          PY
+          rm -f staging-seed-output.txt
+
+      - name: Start exact API, worker and web artifacts
+        shell: bash
+        run: docker compose up -d api worker web
+
+      - name: Wait for local runtime readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            api_ok=0
+            web_ok=0
+            curl --fail --silent --show-error http://127.0.0.1:8000/health/ready >/dev/null && api_ok=1 || true
+            curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null && web_ok=1 || true
+            if [[ "$api_ok" == 1 && "$web_ok" == 1 ]]; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose ps
+          echo "Staging runtime did not become ready"
+          exit 1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Install browser certification runtime
+        shell: bash
+        run: |
+          python -m pip install --quiet playwright==1.62.0 pillow==12.3.0
+          python -m playwright install --with-deps chromium
+
+      - name: Run mandatory certification against deployed staging URLs
+        id: certify
+        continue-on-error: true
+        shell: bash
+        run: |
+          export CATORA_STAGING_EXPECTED_GIT_SHA="$CATORA_STAGING_RELEASE_GIT_SHA"
+          export CATORA_STAGING_EXPECTED_CI_RUN_ID="$CATORA_STAGING_RELEASE_CI_RUN_ID"
+          export CATORA_STAGING_QA_RUN_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/staging_certify.py
+
+      - name: Upload sanitized staging certification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-certification-${{ github.run_id }}-${{ github.run_attempt }}
+          path: staging-certification-artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Enforce READY FOR UAT gate
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path("staging-certification-artifacts/staging-certification.json")
+          if not path.exists():
+              print("BLOCKED")
+              raise SystemExit(2)
+          report = json.loads(path.read_text(encoding="utf-8"))
+          decision = report.get("decision")
+          detail = report.get("detail")
+          print(decision)
+          print(detail)
+          if decision == "READY FOR UAT":
+              raise SystemExit(0)
+          if decision == "BLOCKED":
+              raise SystemExit(2)
+          raise SystemExit(1)
+          PY
