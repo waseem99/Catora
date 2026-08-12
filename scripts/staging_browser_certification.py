@@ -206,6 +206,15 @@ def _membership_role(payload: dict[str, Any], workspace_id: str) -> str | None:
     return None
 
 
+def _form_error(page: Page, *, label: str) -> str:
+    error = page.locator('p.form-error[role="alert"]')
+    error.wait_for(state="visible", timeout=15_000)
+    message = error.inner_text().strip()
+    if not message:
+        raise RuntimeError(f"{label} displayed an empty Catora form error")
+    return message
+
+
 def _run_unauthenticated_guard(
     page: Page,
     web_url: str,
@@ -234,10 +243,7 @@ def _run_invalid_login(page: Page, web_url: str, run_id: str) -> Check:
     page.get_by_label("Work email").fill(f"invalid-{run_id}@example.invalid")
     page.get_by_label("Password").fill("not-a-real-staging-password")
     page.get_by_role("button", name="Sign in").click()
-    alert = page.get_by_role("alert")
-    alert.wait_for(state="visible", timeout=15_000)
-    if not alert.inner_text().strip():
-        raise RuntimeError("invalid login displayed an empty error")
+    _form_error(page, label="invalid login")
     if "/login" not in page.url:
         raise RuntimeError("invalid login navigated away from /login")
     return Check(
@@ -331,7 +337,7 @@ def _run_token_fail_closed(page: Page, web_url: str, run_id: str) -> list[Check]
     )
     page.get_by_label("New password").fill("Staging-only-invalid-password-123")
     page.get_by_role("button", name="Reset password").click()
-    page.get_by_role("alert").wait_for(state="visible", timeout=15_000)
+    _form_error(page, label="invalid password-reset token")
     if "/reset-password" not in page.url:
         raise RuntimeError("invalid password-reset token unexpectedly navigated away")
     checks.append(
@@ -366,7 +372,7 @@ def _run_token_fail_closed(page: Page, web_url: str, run_id: str) -> list[Check]
     page.get_by_label("Display name").fill("Invalid Invite Test")
     page.get_by_label("New password").fill("Staging-only-invalid-password-123")
     page.get_by_role("button", name="Accept invitation").click()
-    page.get_by_role("alert").wait_for(state="visible", timeout=15_000)
+    _form_error(page, label="invalid invitation token")
     if "/accept-invitation" not in page.url:
         raise RuntimeError("invalid invitation token unexpectedly navigated away")
     checks.append(
