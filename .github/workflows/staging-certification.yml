@@ -106,7 +106,7 @@ jobs:
       - name: Install Playwright certification runtime
         shell: bash
         run: |
-          python -m pip install --quiet playwright==1.62.0
+          python -m pip install --quiet playwright==1.62.0 pillow==12.3.0
           python -m playwright install --with-deps chromium
 
       - name: Validate certification scripts
@@ -114,6 +114,7 @@ jobs:
         run: |
           python -m py_compile scripts/staging_certify.py
           python -m py_compile scripts/staging_browser_certification.py
+          python -m py_compile scripts/staging_visual_certification.py
 
       - name: Run mandatory staging certification
         id: certification
