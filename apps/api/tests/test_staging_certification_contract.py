@@ -118,3 +118,13 @@ def test_staging_demo_smoke_uses_seeded_demo_identity_and_masks_ephemeral_secret
     assert 'env.pop("CATORA_SMOKE_WORKSPACE_ID", None)' in certify
     assert '"CATORA_SMOKE_WORKSPACE_ID": workspace_id' not in certify
     assert 'print(f"::add-mask::{value}")' in workflow
+
+
+def test_hosted_demo_smoke_normalizes_response_header_names() -> None:
+    smoke = (ROOT / "scripts" / "smoke_hosted_demo.py").read_text(encoding="utf-8")
+
+    assert "key.casefold(): value" in smoke
+    assert 'pptx_headers.get("content-type", "")' in smoke
+    assert 'csv_headers.get("content-type", "")' in smoke
+    assert 'frontend_headers.get("content-type", "")' in smoke
+    assert '.get("Content-Type", "")' not in smoke
