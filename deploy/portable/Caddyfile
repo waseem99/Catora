@@ -1,0 +1,9 @@
+catora.codistan.org {
+    encode zstd gzip
+    reverse_proxy web:3000
+}
+
+api.catora.codistan.org {
+    encode zstd gzip
+    reverse_proxy api:8000
+}

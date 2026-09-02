@@ -36,7 +36,7 @@ jobs:
           python scripts/validate_portable_production_contract.py
           python scripts/validate_deployment_contract.py
           python scripts/validate_staging_release_contract.py
-      - name: Parse managed and single-host portable production compose
+      - name: Parse managed, single-host and personal-server production compose
         shell: bash
         run: |
           set -euo pipefail
@@ -48,9 +48,10 @@ jobs:
           CATORA_S3_ACCESS_KEY=example
           CATORA_S3_SECRET_KEY=example
           CATORA_S3_BUCKET=catora
-          CATORA_AUTH_TOKEN_PEPPER=example
+          CATORA_AUTH_TOKEN_PEPPER=example-example-example-example-example
           CATORA_FRONTEND_URL=https://catora.codistan.org
           CATORA_CORS_ORIGINS=["https://catora.codistan.org"]
+          CATORA_TRUST_PROXY_HEADERS=true
           EOF
           cat > /tmp/catora-compose.env <<'EOF'
           CATORA_PRODUCTION_ENV_FILE=/tmp/catora-runtime.env
@@ -71,5 +72,11 @@ jobs:
             -f deploy/portable/docker-compose.production.yml \
             -f deploy/portable/docker-compose.dependencies.yml \
             config > /tmp/catora-production-single-host.yml
+          docker compose --env-file /tmp/catora-compose.env \
+            -f deploy/portable/docker-compose.production.yml \
+            -f deploy/portable/docker-compose.dependencies.yml \
+            -f deploy/portable/docker-compose.edge.yml \
+            config > /tmp/catora-production-personal-server.yml
           test -s /tmp/catora-production-managed.yml
           test -s /tmp/catora-production-single-host.yml
+          test -s /tmp/catora-production-personal-server.yml

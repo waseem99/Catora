@@ -35,8 +35,15 @@ def _blank_env_template(text: str) -> bool:
 def validate(root: Path) -> list[Check]:
     production = _text(root, "deploy/portable/docker-compose.production.yml")
     dependencies = _text(root, "deploy/portable/docker-compose.dependencies.yml")
+    edge = _text(root, "deploy/portable/docker-compose.edge.yml")
+    caddyfile = _text(root, "deploy/portable/Caddyfile")
     env = _text(root, "deploy/portable/.env.production.example")
+    personal_env = _text(root, "deploy/portable/.env.personal-server.example")
     runbook = _text(root, "deploy/portable/README.md")
+    personal_runbook = _text(root, "deploy/portable/PERSONAL_SERVER.md")
+    prepare_env = _text(root, "deploy/portable/prepare-personal-server-env.sh")
+    preflight = _text(root, "deploy/portable/preflight-personal-server.sh")
+    bootstrap_owner = _text(root, "deploy/portable/bootstrap-owner.sh")
     release_workflow = _text(root, ".github/workflows/portable-production-release.yml")
     acceptance_workflow = _text(root, ".github/workflows/portable-production-smoke.yml")
     smoke = _text(root, "scripts/smoke_portable_production.py")
@@ -50,6 +57,11 @@ def validate(root: Path) -> list[Check]:
             "apps/web/Dockerfile",
         )
     )
+
+    certified_sha = "71c06e3258f1c2198b7b622b432b18b62a5409e7"
+    certified_api = "sha256:e32255d9226aa8efd5cc7ff6d2a9c5d65f7e25bcffea7184bc365708afde4bd7"
+    certified_worker = "sha256:6fe123a7d91423f8157946b0393e7d2f2b833be72500f516f393f7141f16678d"
+    certified_web = "sha256:91ee43927d6bb18fd309acf1ab8ad97b02f442dabf11b4d18ba6ba22467353d4"
 
     checks = [
         _check(
@@ -130,6 +142,68 @@ def validate(root: Path) -> list[Check]:
             and "Hilarious continuity" in runbook,
             "database/object storage recovery and Hilarious continuity are documented",
             "portable deployment must recover existing state before cutover",
+        ),
+        _check(
+            "portable.personal_edge",
+            "caddy:" in edge
+            and '"80:80"' in edge
+            and '"443:443"' in edge
+            and "./Caddyfile:/etc/caddy/Caddyfile:ro" in edge
+            and "catora.codistan.org" in caddyfile
+            and "reverse_proxy web:3000" in caddyfile
+            and "api.catora.codistan.org" in caddyfile
+            and "reverse_proxy api:8000" in caddyfile,
+            "personal-server overlay terminates TLS and proxies canonical web/API domains",
+            "personal-server production requires a source-controlled TLS reverse-proxy overlay",
+        ),
+        _check(
+            "portable.personal_certified_release",
+            certified_sha in personal_env
+            and certified_api in personal_env
+            and certified_worker in personal_env
+            and certified_web in personal_env
+            and "CATORA_PRODUCTION_API_PREVIOUS_IMAGE=none" in personal_env,
+            "personal-server template pins the functionally certified immutable first release",
+            "personal-server bootstrap must pin all three certified application digests",
+        ),
+        _check(
+            "portable.personal_feature_scope",
+            "CATORA_SERVICE_VISIBILITY_ENABLED=true" in personal_env
+            and "CATORA_SERVICE_VISIBILITY_DRAFTS_ENABLED=true" in personal_env
+            and "CATORA_SERVICE_VISIBILITY_MONITORING_ENABLED=true" in personal_env
+            and "CATORA_MEASUREMENT_CONNECTORS_ENABLED=true" in personal_env
+            and "CATORA_SHOPIFY_ENABLED=false" in personal_env,
+            "personal-server template enables the Hilarious closed-loop capabilities without unrelated connectors",
+            "clean production must explicitly enable Service Visibility/measurement and avoid accidental unrelated integrations",
+        ),
+        _check(
+            "portable.personal_secret_generation",
+            "secrets.token_urlsafe(48)" in prepare_env
+            and "secrets.token_bytes(32)" in prepare_env
+            and "0o600" in prepare_env
+            and "refusing to overwrite" in prepare_env
+            and "print(" not in prepare_env.split("PY\n", 1)[0],
+            "personal-server secrets are generated locally into a protected non-overwritten file",
+            "personal-server secret bootstrap must generate strong secrets without printing or overwriting them",
+        ),
+        _check(
+            "portable.personal_preflight",
+            "x86_64" in preflight
+            and "docker compose version" in preflight
+            and "TCP port $port is available" in preflight
+            and "8 GiB is recommended" in preflight,
+            "personal-server preflight checks image architecture, Docker/Compose and edge prerequisites",
+            "personal-server deployment must fail early on incompatible architecture or missing Docker prerequisites",
+        ),
+        _check(
+            "portable.clean_bootstrap",
+            "/api/v1/auth/bootstrap" in bootstrap_owner
+            and "Owner password (12+ characters)" in bootstrap_owner
+            and "Do not use any demo or staging seed script" in personal_runbook
+            and "old Railway production state is unrecoverable" in personal_runbook
+            and "bash deploy/portable/bootstrap-owner.sh" in personal_runbook,
+            "clean production uses the real one-time owner bootstrap flow and explicitly avoids demo/staging seeds",
+            "unrecoverable Railway state must use clean auth bootstrap, never demo/staging seeds",
         ),
         _check(
             "portable.certified_bundle",
