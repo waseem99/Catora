@@ -1,0 +1,40 @@
+name: Refresh Next security lock
+
+on:
+  push:
+    branches: [security/next-16.3.3]
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: security/next-16.3.3
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.13.0'
+          cache: npm
+      - name: Force-refresh patched nanoid lock entry
+        run: npm update nanoid --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify locked install and audit
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm audit --audit-level=moderate
+      - name: Commit lockfile only when changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- package-lock.json; then
+            echo "package-lock.json did not change"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          git commit -m "Refresh nanoid lock entry to 3.3.18"
+          git push origin HEAD:security/next-16.3.3
