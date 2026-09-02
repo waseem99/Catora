@@ -5,11 +5,9 @@ COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/browser-intelligence/package.json packages/browser-intelligence/package.json
 COPY packages/catalog-bridge/package.json packages/catalog-bridge/package.json
-RUN npm ci --ignore-scripts --no-audit --no-fund
+RUN npm ci --no-audit --no-fund
 
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+FROM deps AS build
 COPY . .
 RUN npm run build --workspace @catora/web
 
