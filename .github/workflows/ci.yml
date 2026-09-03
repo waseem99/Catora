@@ -229,9 +229,17 @@ jobs:
         shell: bash
         env:
           CURRENT_SHA: ${{ github.sha }}
+          PREVIOUS_SHA: ${{ github.event.before }}
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "pull_request" ]; then
+            docker run --rm \
+              -v "$PWD:/repo" \
+              ghcr.io/gitleaks/gitleaks:v8.30.1 \
+              dir /repo \
+              --redact \
+              --no-banner
+          elif [ "$PREVIOUS_SHA" = "0000000000000000000000000000000000000000" ]; then
             docker run --rm \
               -v "$PWD:/repo" \
               ghcr.io/gitleaks/gitleaks:v8.30.1 \
@@ -243,7 +251,7 @@ jobs:
               -v "$PWD:/repo" \
               ghcr.io/gitleaks/gitleaks:v8.30.1 \
               git /repo \
-              --log-opts="${CURRENT_SHA}" \
+              --log-opts="${PREVIOUS_SHA}..${CURRENT_SHA}" \
               --redact \
               --no-banner
           fi
