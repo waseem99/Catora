@@ -1,10 +1,11 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json ./
+COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/browser-intelligence/package.json packages/browser-intelligence/package.json
-RUN npm install --no-audit --no-fund
+COPY packages/catalog-bridge/package.json packages/catalog-bridge/package.json
+RUN npm ci --no-audit --no-fund
 
 FROM node:22-alpine AS build
 WORKDIR /app
