@@ -58,10 +58,10 @@ def validate(root: Path) -> list[Check]:
         )
     )
 
-    certified_sha = "71c06e3258f1c2198b7b622b432b18b62a5409e7"
-    certified_api = "sha256:e32255d9226aa8efd5cc7ff6d2a9c5d65f7e25bcffea7184bc365708afde4bd7"
-    certified_worker = "sha256:6fe123a7d91423f8157946b0393e7d2f2b833be72500f516f393f7141f16678d"
-    certified_web = "sha256:91ee43927d6bb18fd309acf1ab8ad97b02f442dabf11b4d18ba6ba22467353d4"
+    certified_sha = "ad44e5d36dc00e75e8d06884ea70e8d37ca27e8b"
+    certified_api = "sha256:e97288e821a6bedfb28872f2af92523fef74a919ee20af0ad40fb23a5a37190e"
+    certified_worker = "sha256:24285be8126db5c7e99760efff97229c03e1be8fc3884926cc82c7ce9d4a04ae"
+    certified_web = "sha256:2515e06268168ba2296d146210e4bd6ce372cdaab6df950d93882cc28698d7b3"
 
     checks = [
         _check(

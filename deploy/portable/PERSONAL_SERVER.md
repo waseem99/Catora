@@ -2,13 +2,13 @@
 
 This runbook is for the current recovery decision: the old Railway production state is unrecoverable, so the personal server starts from an empty PostgreSQL database and a new object store. Do **not** run demo/staging seed scripts.
 
-The application release below is the immutable candidate that passed staging run `33661114470`; all mandatory supported staging certification gates passed and the decision was `READY FOR UAT`:
+The application release below is the immutable candidate that passed staging run `33714503493`; all mandatory supported staging certification gates passed and the decision was `READY FOR UAT`:
 
-- Git SHA: `71c06e3258f1c2198b7b622b432b18b62a5409e7`
-- release build run: `33660809014`
-- API: `sha256:e32255d9226aa8efd5cc7ff6d2a9c5d65f7e25bcffea7184bc365708afde4bd7`
-- worker: `sha256:6fe123a7d91423f8157946b0393e7d2f2b833be72500f516f393f7141f16678d`
-- web: `sha256:91ee43927d6bb18fd309acf1ab8ad97b02f442dabf11b4d18ba6ba22467353d4`
+- Git SHA: `ad44e5d36dc00e75e8d06884ea70e8d37ca27e8b`
+- release build run: `33714417570`
+- API: `sha256:e97288e821a6bedfb28872f2af92523fef74a919ee20af0ad40fb23a5a37190e`
+- worker: `sha256:24285be8126db5c7e99760efff97229c03e1be8fc3884926cc82c7ce9d4a04ae`
+- web: `sha256:2515e06268168ba2296d146210e4bd6ce372cdaab6df950d93882cc28698d7b3`
 
 The portable deployment tooling can live on a newer Git commit; do not rebuild the certified application images just because the runbook changes.
 
@@ -83,7 +83,6 @@ docker compose --env-file deploy/portable/.env.production \
   -f deploy/portable/docker-compose.dependencies.yml \
   -f deploy/portable/docker-compose.edge.yml \
   config
-
 docker compose --env-file deploy/portable/.env.production \
   -f deploy/portable/docker-compose.production.yml \
   -f deploy/portable/docker-compose.dependencies.yml \
@@ -107,7 +106,6 @@ docker compose --env-file deploy/portable/.env.production \
   -f deploy/portable/docker-compose.production.yml \
   -f deploy/portable/docker-compose.dependencies.yml \
   up -d postgres redis minio
-
 docker compose --env-file deploy/portable/.env.production \
   -f deploy/portable/docker-compose.production.yml \
   -f deploy/portable/docker-compose.dependencies.yml \
